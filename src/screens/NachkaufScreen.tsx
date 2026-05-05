@@ -27,6 +27,7 @@ import { useMedikamente } from '../context/MedikamentContext';
 import { MedikamentRow } from '../database/Database';
 import { nachkaufErfassen } from '../database/PackungController';
 import { parseDeFloat } from '../utils/FloatUtils';
+import { announceChange } from '../utils/AccessibilityHelpers';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Nachkauf'>;
 
@@ -77,6 +78,7 @@ export default function NachkaufScreen({ route, navigation }: Props) {
         ? `${groesseFloat} Stück von "${ersatzName.trim()}" hinzugefügt.`
         : `${groesseFloat} Stück hinzugefügt.`;
 
+      announceChange('Nachkauf wurde gespeichert');
       Alert.alert(
         'Nachkauf gespeichert',
         msg,

@@ -35,7 +35,7 @@ export default function HomeScreen({ navigation }: Props) {
           accessibilityRole="button"
           accessibilityLabel="Einstellungen öffnen"
         >
-          <Text style={styles.settingsButtonText}>⚙️</Text>
+          <Text style={styles.settingsButtonText} accessibilityElementsHidden>⚙️</Text>
         </TouchableOpacity>
       ),
     });

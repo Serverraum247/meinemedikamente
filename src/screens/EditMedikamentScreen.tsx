@@ -22,6 +22,7 @@ import type { RootStackParamList } from '../navigation/AppNavigator';
 import { useMedikamente } from '../context/MedikamentContext';
 import { MedikamentRow } from '../database/Database';
 import { parseDeFloat } from '../utils/FloatUtils';
+import { announceChange } from '../utils/AccessibilityHelpers';
 import {
   EinnahmeSlot,
   TageszeitSlot,
@@ -124,6 +125,7 @@ export default function EditMedikamentScreen({ route, navigation }: Props) {
         auto_abzug_aktiv: autoAbzugAktiv ? 1 : 0,
       });
 
+      announceChange('Änderungen wurden gespeichert');
       Alert.alert(
         'Gespeichert',
         `"${name.trim()}" wurde aktualisiert.`,
@@ -291,7 +293,7 @@ export default function EditMedikamentScreen({ route, navigation }: Props) {
                       }}
                       activeOpacity={0.7}
                     >
-                      <Text style={styles.tageszeitEmoji}>{meta.emoji}</Text>
+                      <Text style={styles.tageszeitEmoji} accessibilityElementsHidden>{meta.emoji}</Text>
                       <View style={{ flex: 1 }}>
                         <Text style={[styles.tageszeitLabel, isActive && styles.tageszeitLabelActive]}>
                           {meta.label}

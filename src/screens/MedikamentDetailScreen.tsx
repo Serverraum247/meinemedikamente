@@ -33,6 +33,7 @@ import {
   getAktuelleTageszeit,
   type EinnahmeSlot,
 } from '../utils/Einnahmeplan';
+import { announceChange } from '../utils/AccessibilityHelpers';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'MedikamentDetail'>;
 
@@ -88,6 +89,7 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
             try {
               const neuerBestand = await bestätigeEinnahme(medikament.id);
               await loadData(); // Historie refreshen
+              announceChange(`${medikament.name} wurde als eingenommen markiert`);
               Alert.alert(
                 'Eingenommen',
                 `Neuer Bestand: ${neuerBestand} ${medikament.einheit}`

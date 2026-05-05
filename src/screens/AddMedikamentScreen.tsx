@@ -22,6 +22,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 import { useMedikamente } from '../context/MedikamentContext';
 import { parseDeFloat } from '../utils/FloatUtils';
+import { announceChange } from '../utils/AccessibilityHelpers';
 import { Switch } from 'react-native';
 import {
   EinnahmeSlot,
@@ -108,6 +109,7 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
         auto_abzug_aktiv: autoAbzugAktiv ? 1 : 0,
       });
 
+      announceChange('Medikament wurde gespeichert');
       Alert.alert(
         'Gespeichert',
         `"${name.trim()}" wurde hinzugefuegt.`,
@@ -300,7 +302,7 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
                       accessibilityLabel={`${meta.label} ${isActive ? 'aktiviert' : 'deaktiviert'}`}
                       accessibilityState={{ checked: isActive }}
                     >
-                      <Text style={styles.tageszeitEmoji}>{meta.emoji}</Text>
+                      <Text style={styles.tageszeitEmoji} accessibilityElementsHidden>{meta.emoji}</Text>
                       <View style={{ flex: 1 }}>
                         <Text style={[
                           styles.tageszeitLabel,

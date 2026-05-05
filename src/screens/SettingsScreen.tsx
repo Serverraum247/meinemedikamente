@@ -25,6 +25,7 @@ import {
   resetDefaultUhrzeiten,
   type TageszeitSlot,
 } from '../utils/Einnahmeplan';
+import { announceChange } from '../utils/AccessibilityHelpers';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
 
@@ -75,6 +76,7 @@ export default function SettingsScreen({ navigation }: Props) {
         await setDefaultUhrzeit(slot, uhrzeit);
       }
       setGeaendert(new Set());
+      announceChange('Einstellungen gespeichert');
       Alert.alert('Gespeichert', 'Standard-Uhrzeiten wurden aktualisiert.');
     } catch (e) {
       Alert.alert('Fehler', 'Uhrzeiten konnten nicht gespeichert werden.');
@@ -121,7 +123,7 @@ export default function SettingsScreen({ navigation }: Props) {
             return (
               <View key={slot} style={styles.uhrzeitRow}>
                 <View style={styles.uhrzeitLabelContainer}>
-                  <Text style={styles.uhrzeitEmoji}>{meta.emoji}</Text>
+                  <Text style={styles.uhrzeitEmoji} accessibilityElementsHidden>{meta.emoji}</Text>
                   <Text style={styles.uhrzeitLabel}>{meta.label}</Text>
                 </View>
                 <TextInput
