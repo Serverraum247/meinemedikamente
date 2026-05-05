@@ -9,7 +9,7 @@
  * Einnahme-Eintrag in der Datenbank.
  */
 
-import { database } from '../database/Database';
+import { database, getDatabase } from '../database/Database';
 import { reduceBestand } from '../utils/FloatUtils';
 
 export interface AutoAbzugResult {
@@ -27,7 +27,7 @@ export interface AutoAbzugResult {
 export async function fuehreAutoAbzugDurch(
   medikamentId: string
 ): Promise<AutoAbzugResult> {
-  const db = database.getDatabase();
+  const db = await getDatabase();
 
   try {
     // Medikament laden
@@ -85,7 +85,7 @@ export async function fuehreAutoAbzugDurch(
  * (für z.B. einen Background-Fetch oder App-Start-Check)
  */
 export async function getMedikamenteMitAutoAbzug(): Promise<string[]> {
-  const db = database.getDatabase();
+  const db = await getDatabase();
 
   try {
     const result = await db.executeSql(

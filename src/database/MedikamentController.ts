@@ -5,7 +5,7 @@
  * halbe Tabletten (0.5) korrekt verarbeitet werden.
  */
 
-import { database, MedikamentRow } from './Database';
+import { database, getDatabase, MedikamentRow } from './Database';
 
 /**
  * Neues Medikament anlegen
@@ -14,7 +14,7 @@ import { database, MedikamentRow } from './Database';
 export async function createMedikament(
   medikament: Omit<MedikamentRow, 'created_at' | 'updated_at'>
 ): Promise<string> {
-  const db = database.getDatabase();
+  const db = await getDatabase();
   const id = medikament.id || generateUUID();
 
   await db.executeSql(
@@ -43,7 +43,7 @@ export async function createMedikament(
  * Alle Medikamente abrufen
  */
 export async function getAllMedikamente(): Promise<MedikamentRow[]> {
-  const db = database.getDatabase();
+  const db = await getDatabase();
   const results = await db.executeSql(
     `SELECT * FROM medikamente ORDER BY name ASC`
   );
@@ -61,7 +61,7 @@ export async function getAllMedikamente(): Promise<MedikamentRow[]> {
  * Einzelnes Medikament per ID abrufen
  */
 export async function getMedikamentById(id: string): Promise<MedikamentRow | null> {
-  const db = database.getDatabase();
+  const db = await getDatabase();
   const results = await db.executeSql(
     `SELECT * FROM medikamente WHERE id = ?`,
     [id]
@@ -84,7 +84,7 @@ export async function updateBestand(
   id: string,
   neuerBestand: number // Float – IMPORTANT: Caller computes this
 ): Promise<void> {
-  const db = database.getDatabase();
+  const db = await getDatabase();
   await db.executeSql(
     `UPDATE medikamente
      SET aktueller_bestand = ?, updated_at = datetime('now')
@@ -120,7 +120,7 @@ export async function logEinnahme(
   medikamentId: string,
   menge: number // Float
 ): Promise<void> {
-  const db = database.getDatabase();
+  const db = await getDatabase();
   await db.executeSql(
     `INSERT INTO einnahmen (id, medikament_id, menge, timestamp)
      VALUES (?, ?, ?, datetime('now'))`,
@@ -135,7 +135,7 @@ export async function updateMedikament(
   id: string,
   updates: Partial<Omit<MedikamentRow, 'id' | 'created_at'>>
 ): Promise<void> {
-  const db = database.getDatabase();
+  const db = await getDatabase();
   const fields: string[] = [];
   const values: (string | number)[] = [];
 
@@ -166,7 +166,7 @@ export async function updateMedikament(
  * Medikament löschen (Cascade löscht auch Einnahmen)
  */
 export async function deleteMedikament(id: string): Promise<void> {
-  const db = database.getDatabase();
+  const db = await getDatabase();
   // Erst Einnahmen löschen
   await db.executeSql(`DELETE FROM einnahmen WHERE medikament_id = ?`, [id]);
   // Dann Medikament
@@ -177,7 +177,7 @@ export async function deleteMedikament(id: string): Promise<void> {
  * Prüfen, welche Medikamente unter der Warnungsschwelle sind
  */
 export async function getMedikamenteUnterSchwelle(): Promise<MedikamentRow[]> {
-  const db = database.getDatabase();
+  const db = await getDatabase();
   const results = await db.executeSql(
     `SELECT * FROM medikamente WHERE aktueller_bestand <= warnung_ab_bestand ORDER BY aktueller_bestand ASC`
   );

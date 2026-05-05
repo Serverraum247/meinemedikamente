@@ -5,7 +5,7 @@
  * Logik: Leer-Datum <= Urlaubs-Ende + 3 Tage → WARNUNG
  */
 
-import { database, ArztUrlaubRow, MedikamentRow } from './Database';
+import { database, getDatabase, ArztUrlaubRow, MedikamentRow } from './Database';
 import { getMedikamenteUnterSchwelle, getAllMedikamente } from './MedikamentController';
 import { parseEinnahmeplan, tagesdosisBerechnen } from '../utils/Einnahmeplan';
 
@@ -25,7 +25,7 @@ export type { ArztUrlaubRow };
 export async function createArztUrlaub(
   urlaub: Omit<ArztUrlaubRow, 'created_at'>
 ): Promise<string> {
-  const db = database.getDatabase();
+  const db = await getDatabase();
   const id = urlaub.id || generateUUID();
 
   await db.executeSql(
@@ -41,7 +41,7 @@ export async function createArztUrlaub(
  * Alle Arzt-Urlaube abrufen
  */
 export async function getAllArztUrlaube(): Promise<ArztUrlaubRow[]> {
-  const db = database.getDatabase();
+  const db = await getDatabase();
   const results = await db.executeSql(
     `SELECT * FROM arzt_urlaub ORDER BY urlaub_start ASC`
   );
@@ -59,7 +59,7 @@ export async function getAllArztUrlaube(): Promise<ArztUrlaubRow[]> {
  * Arzt-Urlaub löschen
  */
 export async function deleteArztUrlaub(id: string): Promise<void> {
-  const db = database.getDatabase();
+  const db = await getDatabase();
   await db.executeSql(`DELETE FROM arzt_urlaub WHERE id = ?`, [id]);
 }
 

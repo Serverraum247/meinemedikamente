@@ -6,7 +6,7 @@
  * Bestand-Änderungen werden in menge_verbleibend pro Packung nachverfolgt.
  */
 
-import { database, PackungRow } from './Database';
+import { database, getDatabase, PackungRow } from './Database';
 import { updateBestand, getMedikamentById } from './MedikamentController';
 
 /**
@@ -19,7 +19,7 @@ export async function nachkaufErfassen(
   istErsatzprodukt: boolean,
   ersatzName?: string,
 ): Promise<PackungRow> {
-  const db = database.getDatabase();
+  const db = await getDatabase();
   const id = generateUUID();
   const med = await getMedikamentById(medikamentId);
   if (!med) throw new Error(`Medikament ${medikamentId} nicht gefunden`);
@@ -51,7 +51,7 @@ export async function nachkaufErfassen(
  * Letzte Packung eines Medikaments abrufen (für "Letzte Packung: X Stück" Anzeige)
  */
 export async function getLetztePackung(medikamentId: string): Promise<PackungRow | null> {
-  const db = database.getDatabase();
+  const db = await getDatabase();
   const results = await db.executeSql(
     `SELECT * FROM packungen WHERE medikament_id = ? ORDER BY gekauft_am DESC LIMIT 1`,
     [medikamentId],
@@ -70,7 +70,7 @@ export async function getLetztePackung(medikamentId: string): Promise<PackungRow
  * Alle Packungen eines Medikaments (für Historie)
  */
 export async function getPackungenByMedikament(medikamentId: string): Promise<PackungRow[]> {
-  const db = database.getDatabase();
+  const db = await getDatabase();
   const results = await db.executeSql(
     `SELECT * FROM packungen WHERE medikament_id = ? ORDER BY gekauft_am DESC`,
     [medikamentId],
@@ -89,7 +89,7 @@ export async function getPackungenByMedikament(medikamentId: string): Promise<Pa
  * Anzahl offener Packungen (menge_verbleibend > 0)
  */
 export async function getOffenePackungenCount(medikamentId: string): Promise<number> {
-  const db = database.getDatabase();
+  const db = await getDatabase();
   const results = await db.executeSql(
     `SELECT COUNT(*) as count FROM packungen WHERE medikament_id = ? AND menge_verbleibend > 0`,
     [medikamentId],
@@ -108,7 +108,7 @@ export async function getOffenePackungenCount(medikamentId: string): Promise<num
  * Packungen eines Medikaments löschen (bei Medikament-Löschung)
  */
 export async function deletePackungenByMedikament(medikamentId: string): Promise<void> {
-  const db = database.getDatabase();
+  const db = await getDatabase();
   await db.executeSql(`DELETE FROM packungen WHERE medikament_id = ?`, [medikamentId]);
 }
 

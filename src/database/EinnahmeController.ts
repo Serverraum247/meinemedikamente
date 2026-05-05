@@ -2,7 +2,7 @@
  * EinnahmeController.ts – Einnahme-Historie abfragen
  */
 
-import { database, EinnahmeRow } from './Database';
+import { database, getDatabase, EinnahmeRow } from './Database';
 
 export interface EinnahmeWithDate extends EinnahmeRow {
   datum_formatted: string; // Lesbares Datum für die Anzeige
@@ -16,7 +16,7 @@ export async function getEinnahmenByMedikament(
   medikamentId: string,
   limit: number = 30
 ): Promise<EinnahmeWithDate[]> {
-  const db = database.getDatabase();
+  const db = await getDatabase();
   const results = await db.executeSql(
     `SELECT * FROM einnahmen
      WHERE medikament_id = ?
@@ -53,7 +53,7 @@ export async function getEinnahmenByMedikament(
 export async function getRecentEinnahmen(
   limit: number = 20
 ): Promise<EinnahmeWithDate[]> {
-  const db = database.getDatabase();
+  const db = await getDatabase();
   const results = await db.executeSql(
     `SELECT * FROM einnahmen
      ORDER BY timestamp DESC
