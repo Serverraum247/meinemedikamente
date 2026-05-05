@@ -19,7 +19,7 @@ import PremiumScreen from '../screens/PremiumScreen';
 export type RootStackParamList = {
   Home: undefined;
   MedikamentDetail: { medikamentId: string };
-  AddMedikament: { scannedPZN?: string } | undefined;
+  AddMedikament: { scannedPZN?: string; suggestedName?: string } | undefined;
   EditMedikament: { medikamentId: string };
   BarcodeScanner: undefined;
   Nachkauf: { medikamentId: string };

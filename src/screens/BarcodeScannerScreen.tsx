@@ -23,11 +23,14 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 import { validatePZN } from '../services/BarcodeScannerService';
 import { canScanBarcode, recordBarcodeScan } from '../services/PremiumService';
+import { lookupPzn } from '../services/PznLookupService';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'BarcodeScanner'>;
 
 export default function BarcodeScannerScreen({ navigation }: Props) {
   const [pznInput, setPznInput] = useState('');
+  const [isLookingUp, setIsLookingUp] = useState(false);
+  const [lookupResult, setLookupResult] = useState<string | null>(null);
 
   const handleUebernehmen = async () => {
     const trimmed = pznInput.trim();
@@ -36,7 +39,7 @@ export default function BarcodeScannerScreen({ navigation }: Props) {
       return;
     }
 
-    // Premium-Gate: Barcode-Scan-Limit prüfen
+    // Premium-Gate: Barcode-Scan-Limit pruefen
     const { allowed } = await canScanBarcode();
     if (!allowed) {
       Alert.alert(
@@ -54,12 +57,12 @@ export default function BarcodeScannerScreen({ navigation }: Props) {
     // PZN-Validierung (optional – nur Hinweis)
     if (/^\d{7,8}$/.test(trimmed) && !validatePZN(trimmed)) {
       Alert.alert(
-        'Prüfziffer falsch',
-        'Die eingegebene PZN scheint ungültig zu sein. Trotzdem übernehmen?',
+        'Pruefziffer falsch',
+        'Die eingegebene PZN scheint ungueltig zu sein. Trotzdem uebernehmen?',
         [
           { text: 'Abbrechen', style: 'cancel' },
           {
-            text: 'Trotzdem übernehmen',
+            text: 'Trotzdem uebernehmen',
             onPress: () => {
               navigation.navigate('AddMedikament', { scannedPZN: trimmed });
             },
@@ -69,7 +72,49 @@ export default function BarcodeScannerScreen({ navigation }: Props) {
       return;
     }
 
-    navigation.navigate('AddMedikament', { scannedPZN: trimmed });
+    // PZN-Lookup: Versuche den Medikamentennamen herauszufinden
+    setIsLookingUp(true);
+    setLookupResult(null);
+    try {
+      const result = await lookupPzn(trimmed);
+      setIsLookingUp(false);
+
+      if (result.found && result.name) {
+        setLookupResult(result.name);
+        // Automatisch zum AddMedikament-Screen weiterleiten mit Name + PZN
+        Alert.alert(
+          'Medikament erkannt',
+          `${result.name}${result.hersteller ? '\nHersteller: ' + result.hersteller : ''}${result.darreichungsform ? '\nForm: ' + result.darreichungsform : ''}`,
+          [
+            {
+              text: 'Uebernehmen',
+              onPress: () => {
+                navigation.navigate('AddMedikament', {
+                  scannedPZN: trimmed,
+                  suggestedName: result.name,
+                });
+              },
+            },
+            {
+              text: 'Aendern',
+              style: 'cancel',
+              onPress: () => {
+                navigation.navigate('AddMedikament', {
+                  scannedPZN: trimmed,
+                });
+              },
+            },
+          ]
+        );
+      } else {
+        // PZN nicht gefunden – normal weiter ohne Name
+        navigation.navigate('AddMedikament', { scannedPZN: trimmed });
+      }
+    } catch {
+      setIsLookingUp(false);
+      // Fallback: ohne Lookup weiter
+      navigation.navigate('AddMedikament', { scannedPZN: trimmed });
+    }
   };
 
   return (
@@ -104,14 +149,27 @@ export default function BarcodeScannerScreen({ navigation }: Props) {
         </View>
 
         <TouchableOpacity
-          style={styles.uebernehmenButton}
+          style={[
+            styles.uebernehmenButton,
+            isLookingUp && styles.uebernehmenButtonDisabled,
+          ]}
           onPress={handleUebernehmen}
           activeOpacity={0.7}
           accessibilityRole="button"
-          accessibilityLabel="PZN übernehmen"
+          accessibilityLabel={isLookingUp ? 'Suche Medikament...' : 'PZN uebernehmen'}
+          disabled={isLookingUp}
         >
-          <Text style={styles.uebernehmenButtonText}>Übernehmen</Text>
+          <Text style={styles.uebernehmenButtonText}>
+            {isLookingUp ? 'Suche Medikament...' : 'Uebernehmen'}
+          </Text>
         </TouchableOpacity>
+
+        {lookupResult && !isLookingUp && (
+          <View style={styles.lookupResult}>
+            <Text style={styles.lookupResultLabel}>Gefunden:</Text>
+            <Text style={styles.lookupResultName}>{lookupResult}</Text>
+          </View>
+        )}
       </View>
 
       <TouchableOpacity
@@ -191,10 +249,32 @@ const styles = StyleSheet.create({
     minHeight: 64,
     justifyContent: 'center',
   },
+  uebernehmenButtonDisabled: {
+    backgroundColor: '#95e6b5',
+  },
   uebernehmenButtonText: {
     fontSize: 24,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+  lookupResult: {
+    marginTop: 16,
+    padding: 16,
+    backgroundColor: '#e8f8e8',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#27ae60',
+  },
+  lookupResultLabel: {
+    fontSize: 16,
+    color: '#27ae60',
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  lookupResultName: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#1a1a2e',
   },
   cancelButton: {
     backgroundColor: '#e74c3c',

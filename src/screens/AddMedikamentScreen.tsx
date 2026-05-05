@@ -70,10 +70,14 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
   }, []);
   React.useEffect(() => {
     const scannedPZN = route.params?.scannedPZN;
+    const suggestedName = route.params?.suggestedName;
     if (scannedPZN && !pzn) {
       setPzn(scannedPZN);
     }
-  }, [route.params?.scannedPZN]);
+    if (suggestedName && !name) {
+      setName(suggestedName);
+    }
+  }, [route.params?.scannedPZN, route.params?.suggestedName]);
 
   const handleSave = async () => {
     if (!name.trim()) {
