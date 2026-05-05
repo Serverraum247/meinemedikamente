@@ -84,6 +84,7 @@ export default function EditMedikamentScreen({ route, navigation }: Props) {
         pzn: pzn.trim(),
         packungsgroesse: isNaN(packungsFloat) ? 0 : packungsFloat,
         warnung_ab_bestand: isNaN(warnungFloat) ? 7 : warnungFloat,
+        sync_status: 1, // Aenderung ausstehend
       });
 
       Alert.alert(

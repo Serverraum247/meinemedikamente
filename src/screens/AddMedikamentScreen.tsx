@@ -1,8 +1,10 @@
 /**
  * AddMedikamentScreen.tsx – Neues Medikament anlegen
  *
- * Alle Zahlenfelder unterstützen Float-Eingabe (für halbe Tabletten).
- * Senioren-freundlich: Große Eingabefelder, klare Labels.
+ * Senioren-optimiert: Ein-Spalten-Layout, sehr grosse Textfelder,
+ * klare Abschnitte, 44x44+ Touch-Ziele, WCAG AA Kontrast.
+ *
+ * Alle Zahlenfelder unterstuetzen Float (halbe Tabletten = 0.5).
  */
 
 import React, { useState } from 'react';
@@ -22,7 +24,7 @@ import { useMedikamente } from '../context/MedikamentContext';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AddMedikament'>;
 
-export default function AddMedikamentScreen({ navigation }: Props) {
+export default function AddMedikamentScreen({ navigation, route }: Props) {
   const { addMedikament } = useMedikamente();
 
   const [name, setName] = useState('');
@@ -33,8 +35,15 @@ export default function AddMedikamentScreen({ navigation }: Props) {
   const [packungsgroesse, setPackungsgroesse] = useState('');
   const [warnungAb, setWarnungAb] = useState('7');
 
+  // Gescannte PZN aus BarcodeScanner uebernehmen
+  React.useEffect(() => {
+    const scannedPZN = route.params?.scannedPZN;
+    if (scannedPZN && !pzn) {
+      setPzn(scannedPZN);
+    }
+  }, [route.params?.scannedPZN]);
+
   const handleSave = async () => {
-    // Validierung
     if (!name.trim()) {
       Alert.alert('Pflichtfeld', 'Bitte gib den Namen des Medikaments ein.');
       return;
@@ -46,12 +55,11 @@ export default function AddMedikamentScreen({ navigation }: Props) {
     const warnungFloat = parseFloat(warnungAb) || 7;
 
     if (bestandFloat < 0) {
-      Alert.alert('Ungültig', 'Bestand darf nicht negativ sein.');
+      Alert.alert('Ungueltig', 'Bestand darf nicht negativ sein.');
       return;
     }
-
     if (dosisFloat <= 0) {
-      Alert.alert('Ungültig', 'Einzeldosis muss größer als 0 sein.');
+      Alert.alert('Ungueltig', 'Einzeldosis muss groesser als 0 sein.');
       return;
     }
 
@@ -60,17 +68,18 @@ export default function AddMedikamentScreen({ navigation }: Props) {
       await addMedikament({
         id,
         name: name.trim(),
-        aktueller_bestand: bestandFloat,  // Float: z.B. 28.5
-        einzeldosis: dosisFloat,          // Float: z.B. 0.5
+        aktueller_bestand: bestandFloat,
+        einzeldosis: dosisFloat,
         einheit,
         pzn: pzn.trim(),
-        packungsgroesse: packungsFloat,   // Float
-        warnung_ab_bestand: warnungFloat, // Float
+        packungsgroesse: packungsFloat,
+        warnung_ab_bestand: warnungFloat,
+        sync_status: 0, // lokal, noch nicht synchronisiert
       });
 
       Alert.alert(
-        'Gespeichert ✓',
-        `"${name.trim()}" wurde hinzugefügt.`,
+        'Gespeichert',
+        `"${name.trim()}" wurde hinzugefuegt.`,
         [{ text: 'OK', onPress: () => navigation.goBack() }]
       );
     } catch (error) {
@@ -81,7 +90,13 @@ export default function AddMedikamentScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* === ABSCHNITT: Medikament === */}
+        <Text style={styles.sectionTitle}>Medikament</Text>
+
         {/* Name */}
         <View style={styles.fieldGroup}>
           <Text style={styles.label}>Name des Medikaments *</Text>
@@ -89,25 +104,37 @@ export default function AddMedikamentScreen({ navigation }: Props) {
             style={styles.input}
             value={name}
             onChangeText={setName}
-            placeholder="z.B. Aspirin"
+            placeholder="z.B. Aspirin 100"
             placeholderTextColor="#999"
             autoFocus
           />
         </View>
 
-        {/* Bestand */}
+        {/* PZN / Barcode */}
         <View style={styles.fieldGroup}>
-          <Text style={styles.label}>Aktueller Bestand</Text>
-          <TextInput
-            style={styles.input}
-            value={bestand}
-            onChangeText={setBestand}
-            placeholder="z.B. 28.5 (für halbe Tabletten)"
-            placeholderTextColor="#999"
-            keyboardType="decimal-pad"
-          />
-          <Text style={styles.hint}>Tipp: Halbe Tabletten als 0.5 eingeben</Text>
+          <Text style={styles.label}>PZN / Barcode</Text>
+          <View style={styles.pznRow}>
+            <TextInput
+              style={[styles.input, styles.pznInput]}
+              value={pzn}
+              onChangeText={setPzn}
+              placeholder="Optional"
+              placeholderTextColor="#999"
+              keyboardType="number-pad"
+            />
+            {/* Scanner-Button – wird in Phase 3 aktiviert */}
+            <TouchableOpacity
+              style={styles.scanButton}
+              onPress={() => navigation.navigate('BarcodeScanner')}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.scanButtonText}>Scan</Text>
+            </TouchableOpacity>
+          </View>
         </View>
+
+        {/* === ABSCHNITT: Dosierung === */}
+        <Text style={styles.sectionTitle}>Dosierung</Text>
 
         {/* Einzeldosis */}
         <View style={styles.fieldGroup}>
@@ -116,17 +143,18 @@ export default function AddMedikamentScreen({ navigation }: Props) {
             style={styles.input}
             value={einzeldosis}
             onChangeText={setEinzeldosis}
-            placeholder="z.B. 0.5"
+            placeholder="z.B. 0.5 fuer halbe Tablette"
             placeholderTextColor="#999"
             keyboardType="decimal-pad"
           />
+          <Text style={styles.hint}>Halbe Tabletten als 0.5 eingeben</Text>
         </View>
 
         {/* Einheit */}
         <View style={styles.fieldGroup}>
           <Text style={styles.label}>Einheit</Text>
           <View style={styles.einheitRow}>
-            {['Tabletten', 'Kapseln', 'Tropfen', 'Stück'].map(e => (
+            {['Tabletten', 'Kapseln', 'Tropfen', 'Stueck'].map(e => (
               <TouchableOpacity
                 key={e}
                 style={[styles.einheitButton, einheit === e && styles.einheitActive]}
@@ -141,9 +169,25 @@ export default function AddMedikamentScreen({ navigation }: Props) {
           </View>
         </View>
 
-        {/* Packungsgröße */}
+        {/* === ABSCHNITT: Bestand === */}
+        <Text style={styles.sectionTitle}>Bestand</Text>
+
+        {/* Aktueller Bestand */}
         <View style={styles.fieldGroup}>
-          <Text style={styles.label}>Packungsgröße</Text>
+          <Text style={styles.label}>Aktueller Bestand</Text>
+          <TextInput
+            style={styles.input}
+            value={bestand}
+            onChangeText={setBestand}
+            placeholder="z.B. 28.5"
+            placeholderTextColor="#999"
+            keyboardType="decimal-pad"
+          />
+        </View>
+
+        {/* Packungsgroesse */}
+        <View style={styles.fieldGroup}>
+          <Text style={styles.label}>Packungsgroesse</Text>
           <TextInput
             style={styles.input}
             value={packungsgroesse}
@@ -165,19 +209,7 @@ export default function AddMedikamentScreen({ navigation }: Props) {
             placeholderTextColor="#999"
             keyboardType="decimal-pad"
           />
-        </View>
-
-        {/* PZN */}
-        <View style={styles.fieldGroup}>
-          <Text style={styles.label}>PZN / Barcode</Text>
-          <TextInput
-            style={styles.input}
-            value={pzn}
-            onChangeText={setPzn}
-            placeholder="Optional – kann später gescannt werden"
-            placeholderTextColor="#999"
-            keyboardType="number-pad"
-          />
+          <Text style={styles.hint}>Warnung wenn Bestand darunter faellt</Text>
         </View>
 
         {/* Speichern */}
@@ -201,81 +233,121 @@ function generateUUID(): string {
   });
 }
 
-// --- Styles ---
+// --- Styles (Senioren-optimiert) ---
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#f8f8f6',
   },
   content: {
-    padding: 16,
-    paddingBottom: 40,
+    padding: 20,
+    paddingBottom: 60,
   },
+
+  // Abschnitts-Ueberschriften
+  sectionTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#1a1a2e',
+    marginTop: 16,
+    marginBottom: 12,
+    paddingBottom: 8,
+    borderBottomWidth: 2,
+    borderBottomColor: '#1a1a2e',
+  },
+
+  // Feld-Gruppen
   fieldGroup: {
-    marginBottom: 20,
+    marginBottom: 24,
   },
   label: {
-    fontSize: 18,
+    fontSize: 22,
     fontWeight: '600',
     color: '#1a1a2e',
-    marginBottom: 8,
+    marginBottom: 10,
   },
   input: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 18,
+    borderRadius: 14,
+    padding: 18,
+    fontSize: 24,
     color: '#1a1a2e',
-    borderWidth: 1,
-    borderColor: '#ddd',
-    // Mindesthöhe für Senioren
-    minHeight: 52,
+    borderWidth: 2,
+    borderColor: '#ccc',
+    minHeight: 64, // Grosse Touch-Ziele fuer Senioren
   },
   hint: {
-    fontSize: 14,
-    color: '#888',
-    marginTop: 4,
+    fontSize: 18,
+    color: '#777',
+    marginTop: 6,
   },
+
+  // PZN mit Scanner-Button
+  pznRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  pznInput: {
+    flex: 1,
+  },
+  scanButton: {
+    backgroundColor: '#1a1a2e',
+    borderRadius: 14,
+    minWidth: 80,
+    minHeight: 64,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scanButtonText: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+
+  // Einheit-Auswahl
   einheitRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: 10,
   },
   einheitButton: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    // Min 44x44 Touch
-    minHeight: 48,
+    borderRadius: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderWidth: 2,
+    borderColor: '#ccc',
+    minHeight: 56, // 56px Touch-Ziel
     justifyContent: 'center',
+    alignItems: 'center',
   },
   einheitActive: {
     backgroundColor: '#1a1a2e',
     borderColor: '#1a1a2e',
   },
   einheitText: {
-    fontSize: 16,
+    fontSize: 20,
     color: '#555',
   },
   einheitTextActive: {
     color: '#FFFFFF',
-    fontWeight: '600',
+    fontWeight: '700',
   },
+
+  // Speichern-Button
   saveButton: {
     backgroundColor: '#1a1a2e',
     borderRadius: 16,
-    padding: 20,
+    padding: 22,
     alignItems: 'center',
-    marginTop: 8,
-    minHeight: 56,
+    marginTop: 16,
+    minHeight: 64,
     justifyContent: 'center',
   },
   saveButtonText: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: '700',
     color: '#FFFFFF',
   },
