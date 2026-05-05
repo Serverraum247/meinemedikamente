@@ -18,8 +18,8 @@ export async function createMedikament(
   const id = medikament.id || generateUUID();
 
   await db.executeSql(
-    `INSERT INTO medikamente (id, name, aktueller_bestand, einzeldosis, einheit, pzn, packungsgroesse, warnung_ab_bestand)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO medikamente (id, name, aktueller_bestand, einzeldosis, einheit, pzn, packungsgroesse, warnung_ab_bestand, sync_status, erinnerung_aktiv, einnahme_uhrzeiten, auto_abzug_aktiv)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       medikament.name,
@@ -29,6 +29,10 @@ export async function createMedikament(
       medikament.pzn,
       medikament.packungsgroesse,    // Float
       medikament.warnung_ab_bestand, // Float
+      medikament.sync_status ?? 0,
+      medikament.erinnerung_aktiv ?? 0,
+      medikament.einnahme_uhrzeiten ?? '[]',
+      medikament.auto_abzug_aktiv ?? 0,
     ]
   );
 
@@ -142,6 +146,10 @@ export async function updateMedikament(
   if (updates.pzn !== undefined) { fields.push('pzn = ?'); values.push(updates.pzn); }
   if (updates.packungsgroesse !== undefined) { fields.push('packungsgroesse = ?'); values.push(updates.packungsgroesse); }
   if (updates.warnung_ab_bestand !== undefined) { fields.push('warnung_ab_bestand = ?'); values.push(updates.warnung_ab_bestand); }
+  if (updates.sync_status !== undefined) { fields.push('sync_status = ?'); values.push(updates.sync_status); }
+  if (updates.erinnerung_aktiv !== undefined) { fields.push('erinnerung_aktiv = ?'); values.push(updates.erinnerung_aktiv); }
+  if (updates.einnahme_uhrzeiten !== undefined) { fields.push('einnahme_uhrzeiten = ?'); values.push(updates.einnahme_uhrzeiten); }
+  if (updates.auto_abzug_aktiv !== undefined) { fields.push('auto_abzug_aktiv = ?'); values.push(updates.auto_abzug_aktiv); }
 
   fields.push("updated_at = datetime('now')");
   values.push(id);

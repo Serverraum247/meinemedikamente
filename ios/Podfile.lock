@@ -1820,6 +1820,11 @@ PODS:
   - ReactNativeDependencies (0.85.2)
   - RNCalendarEvents (2.2.0):
     - React
+  - RNNotifee (9.1.8):
+    - React-Core
+    - RNNotifee/NotifeeCore (= 9.1.8)
+  - RNNotifee/NotifeeCore (9.1.8):
+    - React-Core
   - RNScreens (4.24.0):
     - hermes-engine
     - RCTRequired
@@ -1946,6 +1951,7 @@ DEPENDENCIES:
   - ReactCommon/turbomodule/core (from `../node_modules/react-native/ReactCommon`)
   - ReactNativeDependencies (from `../node_modules/react-native/third-party-podspecs/ReactNativeDependencies.podspec`)
   - RNCalendarEvents (from `../node_modules/react-native-calendar-events`)
+  - "RNNotifee (from `../node_modules/@notifee/react-native`)"
   - RNScreens (from `../node_modules/react-native-screens`)
   - Yoga (from `../node_modules/react-native/ReactCommon/yoga`)
 
@@ -2101,6 +2107,8 @@ EXTERNAL SOURCES:
     :podspec: "../node_modules/react-native/third-party-podspecs/ReactNativeDependencies.podspec"
   RNCalendarEvents:
     :path: "../node_modules/react-native-calendar-events"
+  RNNotifee:
+    :path: "../node_modules/@notifee/react-native"
   RNScreens:
     :path: "../node_modules/react-native-screens"
   Yoga:
@@ -2182,6 +2190,7 @@ SPEC CHECKSUMS:
   ReactCommon: 376f3a275bcf5e59a360e0b1762beb3bd41495ce
   ReactNativeDependencies: f66d99f36b5f1db1c40a3793ac0a0bf92937c000
   RNCalendarEvents: 7e65eb4a94f53c1744d1e275f7fafcfaa619f7a3
+  RNNotifee: 4a6ee5c7deaf00e005050052d73ee6315dff7ec9
   RNScreens: d189c39b054ed8da71f8860431f06e39a1f84d19
   Yoga: 945c8d41a2be22b01123cff3de6fd34837e44760
 

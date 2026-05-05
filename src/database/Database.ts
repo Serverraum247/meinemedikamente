@@ -12,7 +12,7 @@ SQLite.DEBUG(true);
 SQLite.enablePromise(true);
 
 const DATABASE_NAME = 'meine_medikamente.db';
-const DATABASE_VERSION = 2; // V2: sync_status für Cloud-Backup
+const DATABASE_VERSION = 3; // V3: Erinnerung + Auto-Abzug
 
 export interface MedikamentRow {
   id: string;
@@ -24,6 +24,10 @@ export interface MedikamentRow {
   packungsgroesse: number;   // Float – Anzahl Tabletten pro Packung
   warnung_ab_bestand: number; // Float – Schwelle für Nachbestell-Warnung
   sync_status: number;       // 0=lokal, 1=änderung ausstehend, 2=synchronisiert
+  // Erinnerung & Auto-Abzug (V3)
+  erinnerung_aktiv: number;     // 0=aus, 1=an
+  einnahme_uhrzeiten: string;   // JSON-Array, z.B. '["08:00","20:00"]'
+  auto_abzug_aktiv: number;     // 0=aus, 1=an – Bestand automatisch pro Einnahme abziehen
   created_at: string;
   updated_at: string;
 }
@@ -82,6 +86,9 @@ class Database {
         packungsgroesse   REAL NOT NULL DEFAULT 0,
         warnung_ab_bestand REAL NOT NULL DEFAULT 7.0,
         sync_status        INTEGER NOT NULL DEFAULT 0,
+        erinnerung_aktiv   INTEGER NOT NULL DEFAULT 0,
+        einnahme_uhrzeiten TEXT NOT NULL DEFAULT '[]',
+        auto_abzug_aktiv   INTEGER NOT NULL DEFAULT 0,
         created_at        TEXT NOT NULL DEFAULT (datetime('now')),
         updated_at        TEXT NOT NULL DEFAULT (datetime('now'))
       );
@@ -122,8 +129,10 @@ class Database {
       `CREATE INDEX IF NOT EXISTS idx_medikamente_sync ON medikamente(sync_status);`
     );
 
-    // Migration V1 -> V2: sync_status Spalte hinzufuegen falls noch nicht vorhanden
+    // Migration V1 -> V2: sync_status Spalte
     await this.migrateV1toV2();
+    // Migration V2 -> V3: Erinnerung + Auto-Abzug
+    await this.migrateV2toV3();
   }
 
   /**
@@ -151,6 +160,40 @@ class Database {
       }
     } catch (error) {
       console.warn('[DB] Migration V1->V2 Pruefung:', error);
+    }
+  }
+
+  /**
+   * Migration V2 -> V3: Erinnerung + Auto-Abzug Felder
+   */
+  private async migrateV2toV3(): Promise<void> {
+    if (!this.db) return;
+
+    try {
+      const result = await this.db.executeSql(
+        `PRAGMA table_info(medikamente);`
+      );
+      const columns = result[0];
+      const cols = columns.rows.raw().map((col: any) => col.name);
+
+      if (!cols.includes('erinnerung_aktiv')) {
+        await this.db.executeSql(
+          `ALTER TABLE medikamente ADD COLUMN erinnerung_aktiv INTEGER NOT NULL DEFAULT 0;`
+        );
+      }
+      if (!cols.includes('einnahme_uhrzeiten')) {
+        await this.db.executeSql(
+          `ALTER TABLE medikamente ADD COLUMN einnahme_uhrzeiten TEXT NOT NULL DEFAULT '[]';`
+        );
+      }
+      if (!cols.includes('auto_abzug_aktiv')) {
+        await this.db.executeSql(
+          `ALTER TABLE medikamente ADD COLUMN auto_abzug_aktiv INTEGER NOT NULL DEFAULT 0;`
+        );
+      }
+      console.log('[DB] Migration V2->V3: Erinnerung + Auto-Abzug Felder geprueft');
+    } catch (error) {
+      console.warn('[DB] Migration V2->V3 Pruefung:', error);
     }
   }
 

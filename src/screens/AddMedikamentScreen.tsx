@@ -22,6 +22,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 import { useMedikamente } from '../context/MedikamentContext';
 import { parseDeFloat } from '../utils/FloatUtils';
+import { Switch, Platform } from 'react-native';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AddMedikament'>;
 
@@ -35,6 +36,11 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
   const [pzn, setPzn] = useState('');
   const [packungsgroesse, setPackungsgroesse] = useState('');
   const [warnungAb, setWarnungAb] = useState('7');
+  // Erinnerung & Auto-Abzug
+  const [erinnerungAktiv, setErinnerungAktiv] = useState(false);
+  const [einnahmeUhrzeiten, setEinnahmeUhrzeiten] = useState<string[]>(['08:00']);
+  const [autoAbzugAktiv, setAutoAbzugAktiv] = useState(false);
+  const [neueUhrzeit, setNeueUhrzeit] = useState('');
 
   // Gescannte PZN aus BarcodeScanner übernehmen
   React.useEffect(() => {
@@ -75,7 +81,10 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
         pzn: pzn.trim(),
         packungsgroesse: packungsFloat,
         warnung_ab_bestand: warnungFloat,
-        sync_status: 0, // lokal, noch nicht synchronisiert
+        sync_status: 0,
+        erinnerung_aktiv: erinnerungAktiv ? 1 : 0,
+        einnahme_uhrzeiten: JSON.stringify(einnahmeUhrzeiten),
+        auto_abzug_aktiv: autoAbzugAktiv ? 1 : 0,
       });
 
       Alert.alert(
@@ -212,6 +221,84 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
           />
           <Text style={styles.hint}>Warnung wenn Bestand darunter faellt</Text>
         </View>
+
+        {/* === ABSCHNITT: Erinnerung === */}
+        <Text style={styles.sectionTitle}>Erinnerung</Text>
+
+        {/* Erinnerung aktivieren */}
+        <View style={styles.switchRow}>
+          <Text style={styles.label}>Erinnerung aktivieren</Text>
+          <Switch
+            value={erinnerungAktiv}
+            onValueChange={setErinnerungAktiv}
+            trackColor={{ false: '#ccc', true: '#1a1a2e' }}
+            thumbColor={erinnerungAktiv ? '#fff' : '#f4f4f4'}
+            style={{ transform: [{ scaleX: 1.3 }, { scaleY: 1.3 }] }}
+          />
+        </View>
+
+        {erinnerungAktiv && (
+          <>
+            {/* Einnahme-Uhrzeiten */}
+            <View style={styles.fieldGroup}>
+              <Text style={styles.label}>Einnahme-Uhrzeiten</Text>
+              {einnahmeUhrzeiten.map((uhrzeit, idx) => (
+                <View key={idx} style={styles.uhrzeitRow}>
+                  <Text style={styles.uhrzeitText}>{uhrzeit} Uhr</Text>
+                  <TouchableOpacity
+                    style={styles.removeButton}
+                    onPress={() => setEinnahmeUhrzeiten(prev => prev.filter((_, i) => i !== idx))}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.removeButtonText}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+              {einnahmeUhrzeiten.length < 5 && (
+                <View style={styles.addUhrzeitRow}>
+                  <TextInput
+                    style={[styles.input, { flex: 1 }]}
+                    value={neueUhrzeit}
+                    onChangeText={setNeueUhrzeit}
+                    placeholder="z.B. 20:00"
+                    placeholderTextColor="#999"
+                    keyboardType="numbers-and-punctuation"
+                  />
+                  <TouchableOpacity
+                    style={styles.addUhrzeitButton}
+                    onPress={() => {
+                      const trimmed = neueUhrzeit.trim();
+                      if (/^\d{1,2}:\d{2}$/.test(trimmed)) {
+                        setEinnahmeUhrzeiten(prev => [...prev, trimmed]);
+                        setNeueUhrzeit('');
+                      } else {
+                        Alert.alert('Ungültig', 'Bitte im Format HH:MM eingeben, z.B. 08:00');
+                      }
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.addUhrzeitText}>+ Hinzufügen</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+
+            {/* Auto-Abzug */}
+            <View style={styles.switchRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.label}>Automatischer Abzug</Text>
+                <Text style={styles.hint}>Bestand wird bei jeder Erinnerung automatisch reduziert</Text>
+              </View>
+              <Switch
+                value={autoAbzugAktiv}
+                onValueChange={setAutoAbzugAktiv}
+                trackColor={{ false: '#ccc', true: '#1a1a2e' }}
+                thumbColor={autoAbzugAktiv ? '#fff' : '#f4f4f4'}
+                style={{ transform: [{ scaleX: 1.3 }, { scaleY: 1.3 }] }}
+              />
+            </View>
+          </>
+        )}
 
         {/* Speichern */}
         <TouchableOpacity
@@ -351,5 +438,60 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+
+  // Erinnerung-Styles
+  switchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+    paddingVertical: 8,
+  },
+  uhrzeitRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    marginBottom: 8,
+    borderWidth: 2,
+    borderColor: '#e0e0e0',
+  },
+  uhrzeitText: {
+    fontSize: 24,
+    fontWeight: '600',
+    color: '#1a1a2e',
+  },
+  removeButton: {
+    minWidth: 48,
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  removeButtonText: {
+    fontSize: 22,
+    color: '#cc3333',
+  },
+  addUhrzeitRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 8,
+  },
+  addUhrzeitButton: {
+    backgroundColor: '#1a1a2e',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    minHeight: 56,
+    justifyContent: 'center',
+  },
+  addUhrzeitText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#fff',
   },
 });
