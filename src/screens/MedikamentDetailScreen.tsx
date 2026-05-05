@@ -25,6 +25,14 @@ import { useMedikamente } from '../context/MedikamentContext';
 import { MedikamentRow, PackungRow } from '../database/Database';
 import { getEinnahmenByMedikament, EinnahmeWithDate } from '../database/EinnahmeController';
 import { getLetztePackung, getOffenePackungenCount, getPackungenByMedikament } from '../database/PackungController';
+import {
+  parseEinnahmeplan,
+  tagesdosisBerechnen,
+  SLOT_META,
+  SLOT_REIHENFOLGE,
+  getAktuelleTageszeit,
+  type EinnahmeSlot,
+} from '../utils/Einnahmeplan';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'MedikamentDetail'>;
 
@@ -122,10 +130,21 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
   }
 
   const isUnterSchwelle = medikament.aktueller_bestand <= medikament.warnung_ab_bestand;
-  const tageVerbleibend =
-    medikament.einzeldosis > 0
-      ? Math.floor(medikament.aktueller_bestand / medikament.einzeldosis)
-      : 0;
+
+  // Berechne Tage verbleibend basierend auf Einnahmeplan
+  const tageVerbleibend = (() => {
+    if (medikament.einzeldosis <= 0) return 0;
+    try {
+      const plan = parseEinnahmeplan(medikament.einnahme_uhrzeiten || '[]');
+      if (plan.length > 0) {
+        const tagesDosis = tagesdosisBerechnen(plan, medikament.einzeldosis);
+        return tagesDosis > 0
+          ? Math.floor(medikament.aktueller_bestand / tagesDosis)
+          : 0;
+      }
+    } catch { /* Fallback */ }
+    return Math.floor(medikament.aktueller_bestand / medikament.einzeldosis);
+  })();
 
   return (
     <SafeAreaView style={styles.container}>
@@ -139,7 +158,7 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
           <Text style={styles.bestandEinheit}>{medikament.einheit}</Text>
           {tageVerbleibend > 0 && (
             <Text style={styles.tageInfo}>
-              Reicht für ca. {tageVerbleibend} Einnahme(n)
+              Reicht für ca. {tageVerbleibend} Tag(e)
             </Text>
           )}
         </View>
@@ -152,19 +171,73 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
           {medikament.pzn ? <DetailRow label="PZN" value={medikament.pzn} /> : null}
         </View>
 
+        {/* Einnahmeplan (falls Erinnerung aktiv) */}
+        {medikament.erinnerung_aktiv === 1 && (() => {
+          try {
+            const plan = parseEinnahmeplan(medikament.einnahme_uhrzeiten || '[]');
+            if (plan.length === 0) return null;
+            const aktuelle = getAktuelleTageszeit();
+            return (
+              <View style={styles.einnahmeplanCard}>
+                <Text style={styles.einnahmeplanTitle}>Einnahmeplan</Text>
+                <View style={styles.einnahmeplanRow}>
+                  {SLOT_REIHENFOLGE.map(slot => {
+                    const meta = SLOT_META[slot];
+                    const eintrag = plan.find((s: EinnahmeSlot) => s.slot === slot);
+                    if (!eintrag) return null;
+                    const dosis = eintrag.dosis !== undefined ? eintrag.dosis : medikament.einzeldosis;
+                    const isAktuell = aktuelle === slot;
+                    return (
+                      <View
+                        key={slot}
+                        style={[styles.einnahmeSlot, isAktuell && styles.einnahmeSlotAktuell]}
+                      >
+                        <Text style={styles.einnahmeSlotEmoji}>{meta.emoji}</Text>
+                        <Text style={[styles.einnahmeSlotLabel, isAktuell && styles.einnahmeSlotLabelAktuell]}>
+                          {meta.label}
+                        </Text>
+                        <Text style={styles.einnahmeSlotDosis}>{dosis} {medikament.einheit}</Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              </View>
+            );
+          } catch { return null; }
+        })()}
+
         {/* Einnahme-Button */}
-        <TouchableOpacity
-          style={styles.einnahmeButton}
-          onPress={handleEinnahme}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.einnahmeButtonText}>
-            Einnahme bestätigen
-          </Text>
-          <Text style={styles.einnahmeButtonSubtext}>
-            -{medikament.einzeldosis} {medikament.einheit}
-          </Text>
-        </TouchableOpacity>
+        {(() => {
+          // Zeige welche Tageszeit gerade dran ist
+          let tageszeitInfo = '';
+          try {
+            const plan = parseEinnahmeplan(medikament.einnahme_uhrzeiten || '[]');
+            const aktuelle = getAktuelleTageszeit();
+            const eintrag = plan.find((s: EinnahmeSlot) => s.slot === aktuelle);
+            if (eintrag && medikament.erinnerung_aktiv === 1) {
+              const meta = SLOT_META[aktuelle];
+              tageszeitInfo = `${meta.emoji} ${meta.label} – jetzt`;
+            }
+          } catch { /* ignore */ }
+
+          return (
+            <TouchableOpacity
+              style={styles.einnahmeButton}
+              onPress={handleEinnahme}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.einnahmeButtonText}>
+                Einnahme bestätigen
+              </Text>
+              <Text style={styles.einnahmeButtonSubtext}>
+                -{medikament.einzeldosis} {medikament.einheit}
+              </Text>
+              {tageszeitInfo ? (
+                <Text style={styles.einnahmeTageszeitInfo}>{tageszeitInfo}</Text>
+              ) : null}
+            </TouchableOpacity>
+          );
+        })()}
 
         {/* Letzte Packung (Option B) */}
         {letztePackung && (
@@ -370,8 +443,66 @@ const styles = StyleSheet.create({
   },
   einnahmeButtonSubtext: {
     fontSize: 16,
-    color: 'rgba(255,255,255,0.8)',
+    color: '#fff',
+    opacity: 0.9,
+  },
+
+  // Tageszeit-Info unter Einnahme-Button
+  einnahmeTageszeitInfo: {
+    fontSize: 16,
+    color: '#ffd700',
+    fontWeight: '600',
     marginTop: 4,
+  },
+
+  // Einnahmeplan-Karte
+  einnahmeplanCard: {
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 2,
+    borderColor: '#e0e0e0',
+  },
+  einnahmeplanTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1a1a2e',
+    marginBottom: 12,
+  },
+  einnahmeplanRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  einnahmeSlot: {
+    backgroundColor: '#f5f5f3',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    alignItems: 'center',
+    minWidth: 80,
+  },
+  einnahmeSlotAktuell: {
+    backgroundColor: '#1a1a2e',
+    borderWidth: 0,
+  },
+  einnahmeSlotEmoji: {
+    fontSize: 24,
+  },
+  einnahmeSlotLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#555',
+    marginTop: 2,
+  },
+  einnahmeSlotLabelAktuell: {
+    color: '#fff',
+  },
+  einnahmeSlotDosis: {
+    fontSize: 12,
+    color: '#888',
+    marginTop: 2,
   },
   nachkaufButton: {
     backgroundColor: '#27ae60',

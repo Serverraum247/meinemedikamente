@@ -22,7 +22,17 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 import { useMedikamente } from '../context/MedikamentContext';
 import { parseDeFloat } from '../utils/FloatUtils';
-import { Switch, Platform } from 'react-native';
+import { Switch } from 'react-native';
+import {
+  EinnahmeSlot,
+  TageszeitSlot,
+  SLOT_META,
+  SLOT_REIHENFOLGE,
+  toggleSlot,
+  setSlotDosis,
+  serializeEinnahmeplan,
+  parseEinnahmeplan,
+} from '../utils/Einnahmeplan';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AddMedikament'>;
 
@@ -38,9 +48,8 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
   const [warnungAb, setWarnungAb] = useState('7');
   // Erinnerung & Auto-Abzug
   const [erinnerungAktiv, setErinnerungAktiv] = useState(false);
-  const [einnahmeUhrzeiten, setEinnahmeUhrzeiten] = useState<string[]>(['08:00']);
+  const [einnahmePlan, setEinnahmePlan] = useState<EinnahmeSlot[]>([]);
   const [autoAbzugAktiv, setAutoAbzugAktiv] = useState(false);
-  const [neueUhrzeit, setNeueUhrzeit] = useState('');
 
   // Gescannte PZN aus BarcodeScanner übernehmen
   React.useEffect(() => {
@@ -83,7 +92,7 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
         warnung_ab_bestand: warnungFloat,
         sync_status: 0,
         erinnerung_aktiv: erinnerungAktiv ? 1 : 0,
-        einnahme_uhrzeiten: JSON.stringify(einnahmeUhrzeiten),
+        einnahme_uhrzeiten: serializeEinnahmeplan(einnahmePlan),
         auto_abzug_aktiv: autoAbzugAktiv ? 1 : 0,
       });
 
@@ -239,49 +248,87 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
 
         {erinnerungAktiv && (
           <>
-            {/* Einnahme-Uhrzeiten */}
+            {/* Tageszeit-Auswahl */}
             <View style={styles.fieldGroup}>
-              <Text style={styles.label}>Einnahme-Uhrzeiten</Text>
-              {einnahmeUhrzeiten.map((uhrzeit, idx) => (
-                <View key={idx} style={styles.uhrzeitRow}>
-                  <Text style={styles.uhrzeitText}>{uhrzeit} Uhr</Text>
-                  <TouchableOpacity
-                    style={styles.removeButton}
-                    onPress={() => setEinnahmeUhrzeiten(prev => prev.filter((_, i) => i !== idx))}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.removeButtonText}>✕</Text>
-                  </TouchableOpacity>
-                </View>
-              ))}
-              {einnahmeUhrzeiten.length < 5 && (
-                <View style={styles.addUhrzeitRow}>
-                  <TextInput
-                    style={[styles.input, { flex: 1 }]}
-                    value={neueUhrzeit}
-                    onChangeText={setNeueUhrzeit}
-                    placeholder="z.B. 20:00"
-                    placeholderTextColor="#999"
-                    keyboardType="numbers-and-punctuation"
-                  />
-                  <TouchableOpacity
-                    style={styles.addUhrzeitButton}
-                    onPress={() => {
-                      const trimmed = neueUhrzeit.trim();
-                      if (/^\d{1,2}:\d{2}$/.test(trimmed)) {
-                        setEinnahmeUhrzeiten(prev => [...prev, trimmed]);
-                        setNeueUhrzeit('');
-                      } else {
-                        Alert.alert('Ungültig', 'Bitte im Format HH:MM eingeben, z.B. 08:00');
-                      }
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.addUhrzeitText}>+ Hinzufügen</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
+              <Text style={styles.label}>Wann wird das Medikament eingenommen?</Text>
+              <Text style={styles.hint}>Alle aktiven Tageszeiten antippen</Text>
+
+              {SLOT_REIHENFOLGE.map(slot => {
+                const meta = SLOT_META[slot];
+                const isActive = einnahmePlan.some(s => s.slot === slot);
+                const eintrag = einnahmePlan.find(s => s.slot === slot);
+
+                return (
+                  <View key={slot} style={styles.tageszeitRow}>
+                    {/* Toggle-Button */}
+                    <TouchableOpacity
+                      style={[
+                        styles.tageszeitButton,
+                        isActive && styles.tageszeitButtonActive,
+                      ]}
+                      onPress={() => setEinnahmePlan(prev => toggleSlot(prev, slot))}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.tageszeitEmoji}>{meta.emoji}</Text>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[
+                          styles.tageszeitLabel,
+                          isActive && styles.tageszeitLabelActive,
+                        ]}>
+                          {meta.label}
+                        </Text>
+                        <Text style={styles.tageszeitUhrzeit}>
+                          {meta.defaultUhrzeit} Uhr
+                        </Text>
+                      </View>
+                      <Text style={[
+                        styles.tageszeitCheck,
+                        isActive && styles.tageszeitCheckActive,
+                      ]}>
+                        {isActive ? '✓' : '○'}
+                      </Text>
+                    </TouchableOpacity>
+
+                    {/* Individuelle Dosis pro Slot (nur wenn aktiv) */}
+                    {isActive && (
+                      <View style={styles.slotDosisRow}>
+                        <Text style={styles.slotDosisLabel}>Dosis:</Text>
+                        <TextInput
+                          style={styles.slotDosisInput}
+                          value={eintrag?.dosis !== undefined ? String(eintrag.dosis) : ''}
+                          onChangeText={text => {
+                            const val = parseDeFloat(text);
+                            if (!isNaN(val) || text === '' || text === ',' || text === '.') {
+                              setEinnahmePlan(prev =>
+                                setSlotDosis(prev, slot, text === '' ? undefined : val)
+                              );
+                            }
+                          }}
+                          placeholder={`${einzeldosis} (Standard)`}
+                          placeholderTextColor="#999"
+                          keyboardType="decimal-pad"
+                        />
+                        <Text style={styles.slotDosisEinheit}>{einheit}</Text>
+                      </View>
+                    )}
+                  </View>
+                );
+              })}
             </View>
+
+            {/* Tagesdosis-Vorschau */}
+            {einnahmePlan.length > 0 && (
+              <View style={styles.tagesdosisBox}>
+                <Text style={styles.tagesdosisLabel}>
+                  Tagesdosis gesamt: {(() => {
+                    const dosis = parseDeFloat(einzeldosis) || 1;
+                    const total = einnahmePlan.reduce((sum, s) =>
+                      sum + (s.dosis !== undefined ? s.dosis : dosis), 0);
+                    return Math.round(total * 1e10) / 1e10;
+                  })()} {einheit}
+                </Text>
+              </View>
+            )}
 
             {/* Auto-Abzug */}
             <View style={styles.switchRow}>
@@ -448,50 +495,90 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     paddingVertical: 8,
   },
-  uhrzeitRow: {
+
+  // Tageszeit-Toggle
+  tageszeitRow: {
+    marginBottom: 12,
+  },
+  tageszeitButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     backgroundColor: '#fff',
-    borderRadius: 12,
+    borderRadius: 14,
     paddingHorizontal: 18,
-    paddingVertical: 14,
-    marginBottom: 8,
-    borderWidth: 2,
-    borderColor: '#e0e0e0',
+    paddingVertical: 16,
+    borderWidth: 3,
+    borderColor: '#ddd',
+    minHeight: 68,
   },
-  uhrzeitText: {
-    fontSize: 24,
+  tageszeitButtonActive: {
+    borderColor: '#1a1a2e',
+    backgroundColor: '#f0f0ee',
+  },
+  tageszeitEmoji: {
+    fontSize: 32,
+    marginRight: 14,
+  },
+  tageszeitLabel: {
+    fontSize: 22,
     fontWeight: '600',
+    color: '#888',
+  },
+  tageszeitLabelActive: {
     color: '#1a1a2e',
   },
-  removeButton: {
-    minWidth: 48,
-    minHeight: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
+  tageszeitUhrzeit: {
+    fontSize: 16,
+    color: '#999',
   },
-  removeButtonText: {
-    fontSize: 22,
-    color: '#cc3333',
+  tageszeitCheck: {
+    fontSize: 28,
+    color: '#ccc',
   },
-  addUhrzeitRow: {
+  tageszeitCheckActive: {
+    color: '#27ae60',
+  },
+
+  // Individuelle Dosis pro Slot
+  slotDosisRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    marginTop: 8,
+    paddingLeft: 56,
+    paddingTop: 6,
+    paddingBottom: 4,
+    gap: 8,
   },
-  addUhrzeitButton: {
-    backgroundColor: '#1a1a2e',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    minHeight: 56,
-    justifyContent: 'center',
-  },
-  addUhrzeitText: {
+  slotDosisLabel: {
     fontSize: 18,
-    fontWeight: '700',
-    color: '#fff',
+    color: '#666',
+  },
+  slotDosisInput: {
+    flex: 1,
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 12,
+    fontSize: 20,
+    color: '#1a1a2e',
+    borderWidth: 2,
+    borderColor: '#ccc',
+    minHeight: 48,
+  },
+  slotDosisEinheit: {
+    fontSize: 16,
+    color: '#888',
+  },
+
+  // Tagesdosis-Vorschau
+  tagesdosisBox: {
+    backgroundColor: '#eaf2f8',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 16,
+  },
+  tagesdosisLabel: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#2c3e50',
+    textAlign: 'center',
   },
 });
