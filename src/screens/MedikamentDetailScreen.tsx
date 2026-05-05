@@ -77,12 +77,12 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
     if (!medikament) return;
 
     Alert.alert(
-      'Einnahme bestaetigen',
+      'Einnahme bestätigen',
       `${medikament.einzeldosis} ${medikament.einheit} ${medikament.name} eingenommen?`,
       [
         { text: 'Abbrechen', style: 'cancel' },
         {
-          text: 'Bestaetigen',
+          text: 'Bestätigen',
           style: 'default',
           onPress: async () => {
             try {
@@ -105,12 +105,12 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
     if (!medikament) return;
 
     Alert.alert(
-      'Medikament loeschen',
-      `"${medikament.name}" wirklich loeschen? Alle Einnahmen werden ebenfalls entfernt.`,
+      'Medikament löschen',
+      `"${medikament.name}" wirklich löschen? Alle Einnahmen werden ebenfalls entfernt.`,
       [
         { text: 'Abbrechen', style: 'cancel' },
         {
-          text: 'Loeschen',
+          text: 'Löschen',
           style: 'destructive',
           onPress: async () => {
             await entferneMedikament(medikament.id);
@@ -166,7 +166,7 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
         {/* Details */}
         <View style={styles.detailCard}>
           <DetailRow label="Einzeldosis" value={`${medikament.einzeldosis} ${medikament.einheit}`} />
-          <DetailRow label="Packungsgroesse" value={`${medikament.packungsgroesse} ${medikament.einheit}`} />
+          <DetailRow label="Packungsgröße" value={`${medikament.packungsgroesse} ${medikament.einheit}`} />
           <DetailRow label="Warnung ab" value={`${medikament.warnung_ab_bestand} ${medikament.einheit}`} />
           {medikament.pzn ? <DetailRow label="PZN" value={medikament.pzn} /> : null}
         </View>
@@ -350,7 +350,7 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
           onPress={handleDelete}
           activeOpacity={0.7}
         >
-          <Text style={styles.deleteButtonText}>Medikament loeschen</Text>
+          <Text style={styles.deleteButtonText}>Medikament löschen</Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>

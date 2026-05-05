@@ -92,7 +92,7 @@ export default function EditMedikamentScreen({ route, navigation }: Props) {
       return;
     }
     if (isNaN(dosisFloat) || dosisFloat <= 0) {
-      Alert.alert('Ungültig', 'Einzeldosis muss groesser als 0 sein.');
+      Alert.alert('Ungültig', 'Einzeldosis muss größer als 0 sein.');
       return;
     }
 
@@ -193,7 +193,7 @@ export default function EditMedikamentScreen({ route, navigation }: Props) {
 
         {/* Packungsgroesse */}
         <View style={styles.fieldGroup}>
-          <Text style={styles.label}>Packungsgroesse</Text>
+          <Text style={styles.label}>Packungsgröße</Text>
           <TextInput
             style={styles.input}
             value={packungsgroesse}

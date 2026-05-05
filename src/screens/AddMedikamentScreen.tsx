@@ -75,7 +75,7 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
       return;
     }
     if (dosisFloat <= 0) {
-      Alert.alert('Ungültig', 'Einzeldosis muss groesser als 0 sein.');
+      Alert.alert('Ungültig', 'Einzeldosis muss größer als 0 sein.');
       return;
     }
 
@@ -206,7 +206,7 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
 
         {/* Packungsgroesse */}
         <View style={styles.fieldGroup}>
-          <Text style={styles.label}>Packungsgroesse</Text>
+          <Text style={styles.label}>Packungsgröße</Text>
           <TextInput
             style={styles.input}
             value={packungsgroesse}
@@ -228,7 +228,7 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
             placeholderTextColor="#999"
             keyboardType="decimal-pad"
           />
-          <Text style={styles.hint}>Warnung wenn Bestand darunter faellt</Text>
+          <Text style={styles.hint}>Warnung wenn Bestand darunter fällt</Text>
         </View>
 
         {/* === ABSCHNITT: Erinnerung === */}

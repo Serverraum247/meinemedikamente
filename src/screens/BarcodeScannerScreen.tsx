@@ -38,7 +38,7 @@ export default function BarcodeScannerScreen({ navigation }: Props) {
     // PZN-Validierung (optional – nur Hinweis)
     if (/^\d{7,8}$/.test(trimmed) && !validatePZN(trimmed)) {
       Alert.alert(
-        'Pruefziffer falsch',
+        'Prüfziffer falsch',
         'Die eingegebene PZN scheint ungültig zu sein. Trotzdem übernehmen?',
         [
           { text: 'Abbrechen', style: 'cancel' },
