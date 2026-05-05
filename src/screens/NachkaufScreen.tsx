@@ -1,0 +1,284 @@
+/**
+ * NachkaufScreen.tsx – Einfacher Nachkauf-Dialog für Senioren
+ *
+ * Fragt nur das Nötigste:
+ * 1. Packungsgröße (Pflicht)
+ * 2. Ersatzprodukt? (Checkbox, standardmäßig AUS)
+ * 3. Falls Ersatzprodukt: Name + PZN (optional)
+ *
+ * Nach dem Speichern wird der Bestand automatisch erhöht.
+ */
+
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  ScrollView,
+  Alert,
+  SafeAreaView,
+  Switch,
+} from 'react-native';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../navigation/AppNavigator';
+import { useMedikamente } from '../context/MedikamentContext';
+import { MedikamentRow } from '../database/Database';
+import { nachkaufErfassen } from '../database/PackungController';
+import { parseDeFloat } from '../utils/FloatUtils';
+
+type Props = NativeStackScreenProps<RootStackParamList, 'Nachkauf'>;
+
+export default function NachkaufScreen({ route, navigation }: Props) {
+  const { medikamentId } = route.params;
+  const { medikamente, aktualisiereBestand } = useMedikamente();
+
+  const [medikament, setMedikament] = useState<MedikamentRow | null>(null);
+  const [groesse, setGroesse] = useState('');
+  const [pzn, setPzn] = useState('');
+  const [istErsatzprodukt, setIstErsatzprodukt] = useState(false);
+  const [ersatzName, setErsatzName] = useState('');
+
+  useEffect(() => {
+    const found = medikamente.find(m => m.id === medikamentId);
+    if (found) {
+      setMedikament(found);
+      setPzn(found.pzn || '');
+      navigation.setOptions({ title: `Nachkauf: ${found.name}` });
+    }
+  }, [medikamente, medikamentId, navigation]);
+
+  const handleSave = async () => {
+    if (!medikament) return;
+
+    const groesseFloat = parseDeFloat(groesse);
+    if (isNaN(groesseFloat) || groesseFloat <= 0) {
+      Alert.alert('Ungültig', 'Bitte gib die Packungsgröße ein (z.B. 50).');
+      return;
+    }
+
+    if (istErsatzprodukt && !ersatzName.trim()) {
+      Alert.alert('Hinweis', 'Bitte gib den Namen des Ersatzprodukts ein.');
+      return;
+    }
+
+    try {
+      await nachkaufErfassen(
+        medikament.id,
+        groesseFloat,
+        pzn.trim(),
+        istErsatzprodukt,
+        ersatzName.trim(),
+      );
+      // Bestand wurde in nachkaufErfassen bereits aktualisiert
+
+      const msg = istErsatzprodukt
+        ? `${groesseFloat} Stück von "${ersatzName.trim()}" hinzugefügt.`
+        : `${groesseFloat} Stück hinzugefügt.`;
+
+      Alert.alert(
+        'Nachkauf gespeichert',
+        msg,
+        [{ text: 'OK', onPress: () => navigation.goBack() }],
+      );
+    } catch (error) {
+      Alert.alert('Fehler', 'Nachkauf konnte nicht gespeichert werden.');
+      console.error(error);
+    }
+  };
+
+  if (!medikament) {
+    return (
+      <View style={styles.center}>
+        <Text>Lade Medikament...</Text>
+      </View>
+    );
+  }
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        {/* Aktueller Bestand */}
+        <View style={styles.bestandCard}>
+          <Text style={styles.bestandLabel}>Aktueller Bestand</Text>
+          <Text style={styles.bestandWert}>
+            {medikament.aktueller_bestand} {medikament.einheit}
+          </Text>
+        </View>
+
+        {/* Packungsgröße */}
+        <View style={styles.fieldGroup}>
+          <Text style={styles.label}>Packungsgröße *</Text>
+          <TextInput
+            style={styles.input}
+            value={groesse}
+            onChangeText={setGroesse}
+            placeholder="z.B. 50"
+            placeholderTextColor="#999"
+            keyboardType="decimal-pad"
+            autoFocus
+          />
+          <Text style={styles.hint}>Anzahl der Tabletten/Kapseln in der Packung</Text>
+        </View>
+
+        {/* PZN */}
+        <View style={styles.fieldGroup}>
+          <Text style={styles.label}>PZN / Barcode</Text>
+          <TextInput
+            style={styles.input}
+            value={pzn}
+            onChangeText={setPzn}
+            placeholder="Optional – automatisch vom Stammartikel"
+            placeholderTextColor="#999"
+            keyboardType="number-pad"
+          />
+        </View>
+
+        {/* Ersatzprodukt */}
+        <View style={styles.switchRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.label}>Ersatzprodukt?</Text>
+            <Text style={styles.hint}>Wenn ein anderes Produkt gekauft wurde</Text>
+          </View>
+          <Switch
+            value={istErsatzprodukt}
+            onValueChange={setIstErsatzprodukt}
+            trackColor={{ false: '#ccc', true: '#e67e22' }}
+            thumbColor={istErsatzprodukt ? '#fff' : '#f4f4f4'}
+            style={{ transform: [{ scaleX: 1.3 }, { scaleY: 1.3 }] }}
+          />
+        </View>
+
+        {istErsatzprodukt && (
+          <View style={styles.ersatzSection}>
+            <View style={styles.fieldGroup}>
+              <Text style={styles.label}>Name des Ersatzprodukts *</Text>
+              <TextInput
+                style={styles.input}
+                value={ersatzName}
+                onChangeText={setErsatzName}
+                placeholder="z.B. Ibuprofen AbZ 400"
+                placeholderTextColor="#999"
+              />
+            </View>
+          </View>
+        )}
+
+        {/* Info-Box */}
+        <View style={styles.infoBox}>
+          <Text style={styles.infoText}>
+            ℹ️ Der Bestand wird nach dem Speichern automatisch um {groesse ? groesse : '...'} {medikament.einheit} erhöht.
+          </Text>
+        </View>
+
+        {/* Speichern */}
+        <TouchableOpacity
+          style={styles.saveButton}
+          onPress={handleSave}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.saveButtonText}>Nachkauf speichern</Text>
+        </TouchableOpacity>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+  },
+  center: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  content: {
+    padding: 16,
+    paddingBottom: 40,
+  },
+  bestandCard: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
+    alignItems: 'center',
+    marginBottom: 24,
+    borderWidth: 2,
+    borderColor: '#1a1a2e',
+  },
+  bestandLabel: {
+    fontSize: 16,
+    color: '#666',
+    marginBottom: 4,
+  },
+  bestandWert: {
+    fontSize: 36,
+    fontWeight: '700',
+    color: '#1a1a2e',
+  },
+  fieldGroup: {
+    marginBottom: 20,
+  },
+  label: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1a1a2e',
+    marginBottom: 8,
+  },
+  input: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 20,
+    color: '#1a1a2e',
+    borderWidth: 2,
+    borderColor: '#ddd',
+    minHeight: 56,
+  },
+  hint: {
+    fontSize: 14,
+    color: '#888',
+    marginTop: 4,
+  },
+  switchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+    paddingVertical: 8,
+  },
+  ersatzSection: {
+    backgroundColor: '#fef9e7',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 2,
+    borderColor: '#f0c040',
+  },
+  infoBox: {
+    backgroundColor: '#eaf2f8',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+  },
+  infoText: {
+    fontSize: 16,
+    color: '#2c3e50',
+  },
+  saveButton: {
+    backgroundColor: '#27ae60',
+    borderRadius: 16,
+    padding: 22,
+    alignItems: 'center',
+    marginTop: 8,
+    minHeight: 64,
+    justifyContent: 'center',
+  },
+  saveButtonText: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+});

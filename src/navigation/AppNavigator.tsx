@@ -11,6 +11,7 @@ import MedikamentDetailScreen from '../screens/MedikamentDetailScreen';
 import AddMedikamentScreen from '../screens/AddMedikamentScreen';
 import EditMedikamentScreen from '../screens/EditMedikamentScreen';
 import BarcodeScannerScreen from '../screens/BarcodeScannerScreen';
+import NachkaufScreen from '../screens/NachkaufScreen';
 
 export type RootStackParamList = {
   Home: undefined;
@@ -18,6 +19,7 @@ export type RootStackParamList = {
   AddMedikament: { scannedPZN?: string } | undefined;
   EditMedikament: { medikamentId: string };
   BarcodeScanner: undefined;
+  Nachkauf: { medikamentId: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -62,6 +64,11 @@ export default function AppNavigator() {
           name="BarcodeScanner"
           component={BarcodeScannerScreen}
           options={{ title: 'Barcode scannen', headerShown: false }}
+        />
+        <Stack.Screen
+          name="Nachkauf"
+          component={NachkaufScreen}
+          options={{ title: 'Nachkauf' }}
         />
       </Stack.Navigator>
     </NavigationContainer>

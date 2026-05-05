@@ -12,7 +12,7 @@ SQLite.DEBUG(true);
 SQLite.enablePromise(true);
 
 const DATABASE_NAME = 'meine_medikamente.db';
-const DATABASE_VERSION = 3; // V3: Erinnerung + Auto-Abzug
+const DATABASE_VERSION = 4; // V4: Packungs-Protokoll + Ersatzprodukte
 
 export interface MedikamentRow {
   id: string;
@@ -46,6 +46,17 @@ export interface ArztUrlaubRow {
   urlaub_start: string; // ISO Date YYYY-MM-DD
   urlaub_ende: string;  // ISO Date YYYY-MM-DD
   created_at: string;
+}
+
+export interface PackungRow {
+  id: string;
+  medikament_id: string;
+  groesse: number;           // REAL – Stück pro Packung (z.B. 50)
+  pzn: string;               // PZN dieser spezifischen Packung
+  ist_ersatzprodukt: number; // 0=Original, 1=Ersatzprodukt
+  ersatz_name: string;       // Optional, z.B. "Ibuprofen AbZ 400"
+  gekauft_am: string;        // ISO Date
+  menge_verbleibend: number; // REAL – was noch übrig ist
 }
 
 class Database {
@@ -115,6 +126,20 @@ class Database {
       );
     `);
 
+    await this.db.executeSql(`
+      CREATE TABLE IF NOT EXISTS packungen (
+        id                 TEXT PRIMARY KEY NOT NULL,
+        medikament_id      TEXT NOT NULL,
+        groesse            REAL NOT NULL,
+        pzn                TEXT NOT NULL DEFAULT '',
+        ist_ersatzprodukt  INTEGER NOT NULL DEFAULT 0,
+        ersatz_name        TEXT NOT NULL DEFAULT '',
+        gekauft_am         TEXT NOT NULL DEFAULT (datetime('now')),
+        menge_verbleibend  REAL NOT NULL DEFAULT 0,
+        FOREIGN KEY (medikament_id) REFERENCES medikamente(id) ON DELETE CASCADE
+      );
+    `);
+
     // Indices für Performance
     await this.db.executeSql(
       `CREATE INDEX IF NOT EXISTS idx_einnahmen_medikament ON einnahmen(medikament_id);`
@@ -128,11 +153,14 @@ class Database {
     await this.db.executeSql(
       `CREATE INDEX IF NOT EXISTS idx_medikamente_sync ON medikamente(sync_status);`
     );
+    await this.db.executeSql(
+      `CREATE INDEX IF NOT EXISTS idx_packungen_medikament ON packungen(medikament_id);`
+    );
 
-    // Migration V1 -> V2: sync_status Spalte
+    // Migrationen
     await this.migrateV1toV2();
-    // Migration V2 -> V3: Erinnerung + Auto-Abzug
     await this.migrateV2toV3();
+    await this.migrateV3toV4();
   }
 
   /**
@@ -194,6 +222,35 @@ class Database {
       console.log('[DB] Migration V2->V3: Erinnerung + Auto-Abzug Felder geprueft');
     } catch (error) {
       console.warn('[DB] Migration V2->V3 Pruefung:', error);
+    }
+  }
+
+  /**
+   * Migration V3 -> V4: Packungen-Tabelle anlegen
+   */
+  private async migrateV3toV4(): Promise<void> {
+    if (!this.db) return;
+    // CREATE TABLE IF NOT EXISTS ist sicher – macht nichts wenn Tabelle existiert
+    try {
+      await this.db.executeSql(`
+        CREATE TABLE IF NOT EXISTS packungen (
+          id                 TEXT PRIMARY KEY NOT NULL,
+          medikament_id      TEXT NOT NULL,
+          groesse            REAL NOT NULL,
+          pzn                TEXT NOT NULL DEFAULT '',
+          ist_ersatzprodukt  INTEGER NOT NULL DEFAULT 0,
+          ersatz_name        TEXT NOT NULL DEFAULT '',
+          gekauft_am         TEXT NOT NULL DEFAULT (datetime('now')),
+          menge_verbleibend  REAL NOT NULL DEFAULT 0,
+          FOREIGN KEY (medikament_id) REFERENCES medikamente(id) ON DELETE CASCADE
+        );
+      `);
+      await this.db.executeSql(
+        `CREATE INDEX IF NOT EXISTS idx_packungen_medikament ON packungen(medikament_id);`
+      );
+      console.log('[DB] Migration V3->V4: packungen Tabelle geprueft');
+    } catch (error) {
+      console.warn('[DB] Migration V3->V4 Pruefung:', error);
     }
   }
 

@@ -22,8 +22,9 @@ import {
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 import { useMedikamente } from '../context/MedikamentContext';
-import { MedikamentRow } from '../database/Database';
+import { MedikamentRow, PackungRow } from '../database/Database';
 import { getEinnahmenByMedikament, EinnahmeWithDate } from '../database/EinnahmeController';
+import { getLetztePackung, getOffenePackungenCount, getPackungenByMedikament } from '../database/PackungController';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'MedikamentDetail'>;
 
@@ -33,6 +34,10 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
 
   const [medikament, setMedikament] = useState<MedikamentRow | null>(null);
   const [historie, setHistorie] = useState<EinnahmeWithDate[]>([]);
+  const [letztePackung, setLetztePackung] = useState<PackungRow | null>(null);
+  const [offenePackungen, setOffenePackungen] = useState(0);
+  const [packungsHistorie, setPackungsHistorie] = useState<PackungRow[]>([]);
+  const [zeigeHistorie, setZeigeHistorie] = useState(false);
 
   // Medikament + Historie laden
   const loadData = useCallback(async () => {
@@ -44,6 +49,13 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
     try {
       const einnahmen = await getEinnahmenByMedikament(medikamentId, 30);
       setHistorie(einnahmen);
+      // Packungsdaten laden
+      const letzte = await getLetztePackung(medikamentId);
+      setLetztePackung(letzte);
+      const count = await getOffenePackungenCount(medikamentId);
+      setOffenePackungen(count);
+      const hist = await getPackungenByMedikament(medikamentId);
+      setPackungsHistorie(hist);
     } catch (e) {
       console.error('[Historie] Fehler:', e);
     }
@@ -147,25 +159,82 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
           activeOpacity={0.7}
         >
           <Text style={styles.einnahmeButtonText}>
-            Einnahme bestaetigen
+            Einnahme bestätigen
           </Text>
           <Text style={styles.einnahmeButtonSubtext}>
             -{medikament.einzeldosis} {medikament.einheit}
           </Text>
         </TouchableOpacity>
 
-        {/* Nachkauf-Button */}
+        {/* Letzte Packung (Option B) */}
+        {letztePackung && (
+          <View style={styles.packungCard}>
+            <View style={styles.packungHeader}>
+              <Text style={styles.packungTitle}>Letzte Packung</Text>
+              {offenePackungen > 1 && (
+                <Text style={styles.packungCount}>
+                  {offenePackungen} Packungen offen
+                </Text>
+              )}
+            </View>
+            <View style={styles.packungRow}>
+              <Text style={styles.packungLabel}>Größe</Text>
+              <Text style={styles.packungValue}>{letztePackung.groesse} {medikament.einheit}</Text>
+            </View>
+            {letztePackung.ist_ersatzprodukt === 1 && (
+              <View style={styles.ersatzBadge}>
+                <Text style={styles.ersatzBadgeText}>
+                  Ersatzprodukt: {letztePackung.ersatz_name || 'Ja'}
+                </Text>
+              </View>
+            )}
+            {letztePackung.pzn ? (
+              <View style={styles.packungRow}>
+                <Text style={styles.packungLabel}>PZN</Text>
+                <Text style={styles.packungValue}>{letztePackung.pzn}</Text>
+              </View>
+            ) : null}
+
+            {/* Packungshistorie einklappbar */}
+            {packungsHistorie.length > 1 && (
+              <TouchableOpacity
+                onPress={() => setZeigeHistorie(!zeigeHistorie)}
+                activeOpacity={0.7}
+                style={styles.historieToggle}
+              >
+                <Text style={styles.historieToggleText}>
+                  {zeigeHistorie ? '▲' : '▼'} {packungsHistorie.length} Käufe insgesamt
+                </Text>
+              </TouchableOpacity>
+            )}
+            {zeigeHistorie && packungsHistorie.map(p => (
+              <View key={p.id} style={styles.packungHistRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.packungHistDate}>
+                    {p.gekauft_am ? new Date(p.gekauft_am).toLocaleDateString('de-DE') : '?'}
+                  </Text>
+                  {p.ist_ersatzprodukt === 1 && (
+                    <Text style={styles.packungHistErsatz}>
+                      Ersatz: {p.ersatz_name || 'Ja'}
+                    </Text>
+                  )}
+                </View>
+                <Text style={styles.packungHistGroesse}>
+                  {p.groesse} {medikament.einheit}
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* Nachkauf-Button -> NachkaufScreen */}
         <TouchableOpacity
           style={styles.nachkaufButton}
-          onPress={async () => {
-            const neuerBestand = medikament.aktueller_bestand + medikament.packungsgroesse;
-            await aktualisiereBestand(medikament.id, neuerBestand);
-            Alert.alert('Nachkauf', `Bestand auf ${neuerBestand} aktualisiert.`);
-          }}
+          onPress={() => navigation.navigate('Nachkauf', { medikamentId: medikament.id })}
           activeOpacity={0.7}
         >
           <Text style={styles.nachkaufButtonText}>
-            + Nachkauf ({medikament.packungsgroesse} {medikament.einheit})
+            + Nachkauf
           </Text>
         </TouchableOpacity>
 
@@ -305,7 +374,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   nachkaufButton: {
-    backgroundColor: '#3498db',
+    backgroundColor: '#27ae60',
     borderRadius: 16,
     padding: 20,
     alignItems: 'center',
@@ -317,6 +386,94 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '600',
     color: '#FFFFFF',
+  },
+
+  // Packungs-Karte (Option B)
+  packungCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  packungHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  packungTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1a1a2e',
+  },
+  packungCount: {
+    fontSize: 14,
+    color: '#e67e22',
+    fontWeight: '600',
+  },
+  packungRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 6,
+  },
+  packungLabel: {
+    fontSize: 16,
+    color: '#666',
+  },
+  packungValue: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1a1a2e',
+  },
+  ersatzBadge: {
+    backgroundColor: '#fef9e7',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginTop: 4,
+    marginBottom: 4,
+    borderWidth: 1,
+    borderColor: '#f0c040',
+  },
+  ersatzBadgeText: {
+    fontSize: 15,
+    color: '#8a6d3b',
+    fontWeight: '500',
+  },
+  historieToggle: {
+    paddingVertical: 10,
+    marginTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+  },
+  historieToggleText: {
+    fontSize: 16,
+    color: '#3498db',
+    fontWeight: '500',
+  },
+  packungHistRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  packungHistDate: {
+    fontSize: 14,
+    color: '#333',
+  },
+  packungHistErsatz: {
+    fontSize: 12,
+    color: '#e67e22',
+    fontWeight: '500',
+  },
+  packungHistGroesse: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1a1a2e',
   },
   editButton: {
     backgroundColor: '#f39c12',
