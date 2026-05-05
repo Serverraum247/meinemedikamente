@@ -14,6 +14,7 @@ import BarcodeScannerScreen from '../screens/BarcodeScannerScreen';
 import NachkaufScreen from '../screens/NachkaufScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import ArztUrlaubScreen from '../screens/ArztUrlaubScreen';
+import PremiumScreen from '../screens/PremiumScreen';
 
 export type RootStackParamList = {
   Home: undefined;
@@ -24,6 +25,7 @@ export type RootStackParamList = {
   Nachkauf: { medikamentId: string };
   Settings: undefined;
   ArztUrlaub: undefined;
+  Premium: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -80,6 +82,7 @@ export default function AppNavigator() {
           options={{ title: 'Einstellungen' }}
         />
         <Stack.Screen name="ArztUrlaub" component={ArztUrlaubScreen} options={{ title: 'Arzt-Urlaub' }} />
+        <Stack.Screen name="Premium" component={PremiumScreen} options={{ title: 'Premium' }} />
       </Stack.Navigator>
     </NavigationContainer>
   );

@@ -141,6 +141,17 @@ export default function HomeScreen({ navigation }: Props) {
         <Text style={styles.arztUrlaubButtonText}>📅 Arzt-Urlaub verwalten</Text>
       </TouchableOpacity>
 
+      {/* Premium freischalten */}
+      <TouchableOpacity
+        style={styles.premiumButton}
+        onPress={() => navigation.navigate('Premium')}
+        activeOpacity={0.7}
+        accessibilityRole="button"
+        accessibilityLabel="Premium-Features freischalten"
+      >
+        <Text style={styles.premiumButtonText}>⭐ Premium freischalten</Text>
+      </TouchableOpacity>
+
       {/* Leerer Zustand */}
       {medikamente.length === 0 ? (
         <View style={styles.center}>
@@ -326,6 +337,21 @@ const styles = StyleSheet.create({
   arztUrlaubButtonText: {
     fontSize: 20,
     color: '#1a1a2e',
+    fontWeight: '600',
+  },
+  premiumButton: {
+    backgroundColor: '#fffdf5',
+    borderWidth: 2,
+    borderColor: '#f39c12',
+    borderRadius: 12,
+    padding: 16,
+    marginHorizontal: 16,
+    marginTop: 10,
+    alignItems: 'center',
+  },
+  premiumButtonText: {
+    fontSize: 20,
+    color: '#f39c12',
     fontWeight: '600',
   },
 });

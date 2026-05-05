@@ -35,6 +35,7 @@ import {
   parseEinnahmeplan,
   getAllDefaultUhrzeiten,
 } from '../utils/Einnahmeplan';
+import { getMaxReminderSlots, isPremium } from '../services/PremiumService';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AddMedikament'>;
 
@@ -55,6 +56,7 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
     morgens: '08:00', mittags: '12:00', abends: '18:00', nachts: '22:00',
   });
   const [autoAbzugAktiv, setAutoAbzugAktiv] = useState(false);
+  const [maxSlots, setMaxSlots] = useState(1);
 
   // Gescannte PZN aus BarcodeScanner übernehmen
 
@@ -64,6 +66,7 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
       const stored = await getAllDefaultUhrzeiten();
       setDefaultUhrzeiten(stored);
     })();
+    getMaxReminderSlots().then(setMaxSlots);
   }, []);
   React.useEffect(() => {
     const scannedPZN = route.params?.scannedPZN;
@@ -294,6 +297,22 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
                         isActive && styles.tageszeitButtonActive,
                       ]}
                       onPress={async () => {
+                        const isActive = einnahmePlan.some(s => s.slot === slot);
+                        // Premium-Gate: Slot aktivieren prüfen
+                        if (!isActive) {
+                          const activeSlots = einnahmePlan.length;
+                          if (activeSlots >= maxSlots) {
+                            Alert.alert(
+                              'Premium erforderlich',
+                              'Nur 1 Erinnerung-Slot pro Medikament in der kostenlosen Version. Premium = alle Slots.',
+                              [
+                                { text: 'Abbrechen', style: 'cancel' },
+                                { text: 'Premium', onPress: () => navigation.navigate('Premium') },
+                              ]
+                            );
+                            return;
+                          }
+                        }
                         const newPlan = await toggleSlot(einnahmePlan, slot);
                         setEinnahmePlan(newPlan);
                       }}

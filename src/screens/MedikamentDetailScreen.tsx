@@ -35,6 +35,7 @@ import {
 } from '../utils/Einnahmeplan';
 import { announceChange } from '../utils/AccessibilityHelpers';
 import { erstelleRezeptAbholtermin } from '../services/KalenderService';
+import { canCreateCalendarEvent, recordCalendarEvent } from '../services/PremiumService';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'MedikamentDetail'>;
 
@@ -381,6 +382,21 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
             style={styles.kalenderButton}
             onPress={async () => {
               try {
+                // Premium-Gate: Kalender-Limit prüfen
+                const { allowed } = await canCreateCalendarEvent();
+                if (!allowed) {
+                  Alert.alert(
+                    'Premium erforderlich',
+                    'Du hast bereits 2 Kalendereinträge diesen Monat erstellt. Premium = unbegrenzt.',
+                    [
+                      { text: 'Abbrechen', style: 'cancel' },
+                      { text: 'Premium', onPress: () => navigation.navigate('Premium') },
+                    ]
+                  );
+                  return;
+                }
+                await recordCalendarEvent();
+
                 await erstelleRezeptAbholtermin(
                   medikament.name,
                   medikament.aktueller_bestand,

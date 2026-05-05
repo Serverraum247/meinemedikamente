@@ -22,18 +22,34 @@ import {
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 import { validatePZN } from '../services/BarcodeScannerService';
+import { canScanBarcode, recordBarcodeScan } from '../services/PremiumService';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'BarcodeScanner'>;
 
 export default function BarcodeScannerScreen({ navigation }: Props) {
   const [pznInput, setPznInput] = useState('');
 
-  const handleUebernehmen = () => {
+  const handleUebernehmen = async () => {
     const trimmed = pznInput.trim();
     if (!trimmed) {
       Alert.alert('Leer', 'Bitte gib eine PZN oder Barcode ein.');
       return;
     }
+
+    // Premium-Gate: Barcode-Scan-Limit prüfen
+    const { allowed } = await canScanBarcode();
+    if (!allowed) {
+      Alert.alert(
+        'Premium erforderlich',
+        'Du hast bereits 3 Barcodes heute gescannt. Premium = unbegrenzt Scans.',
+        [
+          { text: 'Abbrechen', style: 'cancel' },
+          { text: 'Premium', onPress: () => navigation.navigate('Premium') },
+        ]
+      );
+      return;
+    }
+    await recordBarcodeScan();
 
     // PZN-Validierung (optional – nur Hinweis)
     if (/^\d{7,8}$/.test(trimmed) && !validatePZN(trimmed)) {
