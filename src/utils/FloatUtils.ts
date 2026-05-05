@@ -9,6 +9,14 @@
  */
 
 /**
+ * Deutschen Dezimalwert parsen (Komma oder Punkt)
+ * '0,5' -> 0.5, '0.5' -> 0.5, '' -> NaN
+ */
+export function parseDeFloat(value: string): number {
+  return parseFloat(value.replace(',', '.'));
+}
+
+/**
  * Hilfsfunktion: Auf 2 Nachkommastellen runden
  */
 function round2(n: number): number {

@@ -20,6 +20,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 import { useMedikamente } from '../context/MedikamentContext';
 import { MedikamentRow } from '../database/Database';
+import { parseDeFloat } from '../utils/FloatUtils';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'EditMedikament'>;
 
@@ -61,10 +62,10 @@ export default function EditMedikamentScreen({ route, navigation }: Props) {
       return;
     }
 
-    const bestandFloat = parseFloat(bestand);
-    const dosisFloat = parseFloat(einzeldosis);
-    const packungsFloat = parseFloat(packungsgroesse);
-    const warnungFloat = parseFloat(warnungAb);
+    const bestandFloat = parseDeFloat(bestand);
+    const dosisFloat = parseDeFloat(einzeldosis);
+    const packungsFloat = parseDeFloat(packungsgroesse);
+    const warnungFloat = parseDeFloat(warnungAb);
 
     if (isNaN(bestandFloat) || bestandFloat < 0) {
       Alert.alert('Ungültig', 'Bestand muss eine gueltige Zahl >= 0 sein.');

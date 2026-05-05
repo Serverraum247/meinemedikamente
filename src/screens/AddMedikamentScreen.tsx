@@ -21,6 +21,7 @@ import {
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 import { useMedikamente } from '../context/MedikamentContext';
+import { parseDeFloat } from '../utils/FloatUtils';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AddMedikament'>;
 
@@ -49,10 +50,10 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
       return;
     }
 
-    const bestandFloat = parseFloat(bestand) || 0;
-    const dosisFloat = parseFloat(einzeldosis) || 1;
-    const packungsFloat = parseFloat(packungsgroesse) || 0;
-    const warnungFloat = parseFloat(warnungAb) || 7;
+    const bestandFloat = parseDeFloat(bestand) || 0;
+    const dosisFloat = parseDeFloat(einzeldosis) || 1;
+    const packungsFloat = parseDeFloat(packungsgroesse) || 0;
+    const warnungFloat = parseDeFloat(warnungAb) || 7;
 
     if (bestandFloat < 0) {
       Alert.alert('Ungültig', 'Bestand darf nicht negativ sein.');
@@ -143,7 +144,7 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
             style={styles.input}
             value={einzeldosis}
             onChangeText={setEinzeldosis}
-            placeholder="z.B. 0.5 für halbe Tablette"
+            placeholder="z.B. 0,5 für halbe Tablette"
             placeholderTextColor="#999"
             keyboardType="decimal-pad"
           />
