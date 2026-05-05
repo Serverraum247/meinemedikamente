@@ -1,11 +1,11 @@
 /**
  * KalenderService.ts – Native Kalender-Integration
  *
- * Erstellt automatisch Kalendereintrage fuer:
+ * Erstellt automatisch Kalendereinträge für:
  * - Rezept-Abholtermine (Premium Feature)
  * - Arzt-Urlaub-Warnungen
  *
- * Verwendet react-native-calendar-events fuer native Integration.
+ * Verwendet react-native-calendar-events für native Integration.
  * Berechtigung wird zur Laufzeit angefragt.
  */
 
@@ -35,7 +35,7 @@ export async function requestKalenderBerechtigung(): Promise<boolean> {
 }
 
 /**
- * Pruefen ob Kalender-Berechtigung erteilt ist
+ * Prüfen ob Kalender-Berechtigung erteilt ist
  */
 export async function hasKalenderBerechtigung(): Promise<boolean> {
   try {

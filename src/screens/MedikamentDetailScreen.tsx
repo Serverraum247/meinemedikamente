@@ -127,7 +127,7 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
           <Text style={styles.bestandEinheit}>{medikament.einheit}</Text>
           {tageVerbleibend > 0 && (
             <Text style={styles.tageInfo}>
-              Reicht fuer ca. {tageVerbleibend} Einnahme(n)
+              Reicht für ca. {tageVerbleibend} Einnahme(n)
             </Text>
           )}
         </View>

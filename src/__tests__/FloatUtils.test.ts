@@ -1,7 +1,7 @@
 /**
- * FloatUtils.test.ts – Unit-Tests fuer Float-Arithmetik
+ * FloatUtils.test.ts – Unit-Tests für Float-Arithmetik
  *
- * Testet alle Edge-Cases fuer halbe Tabletten (0.5),
+ * Testet alle Edge-Cases für halbe Tabletten (0.5),
  * Floating-Point-Praezision, Rundung und Datumsberechnung.
  */
 
@@ -206,7 +206,7 @@ test('Verbleibend: 0 / 1 = 0', () => {
 });
 
 // =============================================
-// Tests ausfuehren
+// Tests ausführen
 // =============================================
 
 let passed = 0;

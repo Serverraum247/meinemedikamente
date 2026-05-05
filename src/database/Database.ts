@@ -12,7 +12,7 @@ SQLite.DEBUG(true);
 SQLite.enablePromise(true);
 
 const DATABASE_NAME = 'meine_medikamente.db';
-const DATABASE_VERSION = 2; // V2: sync_status fuer Cloud-Backup
+const DATABASE_VERSION = 2; // V2: sync_status für Cloud-Backup
 
 export interface MedikamentRow {
   id: string;
@@ -22,8 +22,8 @@ export interface MedikamentRow {
   einheit: string;           // 'Tabletten', 'Kapseln', etc.
   pzn: string;               // Pharmazentralnummer / Barcode
   packungsgroesse: number;   // Float – Anzahl Tabletten pro Packung
-  warnung_ab_bestand: number; // Float – Schwelle fuer Nachbestell-Warnung
-  sync_status: number;       // 0=lokal, 1=aenderung ausstehend, 2=synchronisiert
+  warnung_ab_bestand: number; // Float – Schwelle für Nachbestell-Warnung
+  sync_status: number;       // 0=lokal, 1=änderung ausstehend, 2=synchronisiert
   created_at: string;
   updated_at: string;
 }
@@ -127,7 +127,7 @@ class Database {
   }
 
   /**
-   * Migration V1 -> V2: sync_status Spalte fuer Cloud-Backup
+   * Migration V1 -> V2: sync_status Spalte für Cloud-Backup
    * Prueft ob die Spalte existiert und fuegt sie ggf. hinzu.
    */
   private async migrateV1toV2(): Promise<void> {

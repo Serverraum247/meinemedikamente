@@ -1,7 +1,7 @@
 /**
  * AddMedikamentScreen.tsx – Neues Medikament anlegen
  *
- * Senioren-optimiert: Ein-Spalten-Layout, sehr grosse Textfelder,
+ * Senioren-optimiert: Ein-Spalten-Layout, sehr große Textfelder,
  * klare Abschnitte, 44x44+ Touch-Ziele, WCAG AA Kontrast.
  *
  * Alle Zahlenfelder unterstuetzen Float (halbe Tabletten = 0.5).
@@ -35,7 +35,7 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
   const [packungsgroesse, setPackungsgroesse] = useState('');
   const [warnungAb, setWarnungAb] = useState('7');
 
-  // Gescannte PZN aus BarcodeScanner uebernehmen
+  // Gescannte PZN aus BarcodeScanner übernehmen
   React.useEffect(() => {
     const scannedPZN = route.params?.scannedPZN;
     if (scannedPZN && !pzn) {
@@ -55,11 +55,11 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
     const warnungFloat = parseFloat(warnungAb) || 7;
 
     if (bestandFloat < 0) {
-      Alert.alert('Ungueltig', 'Bestand darf nicht negativ sein.');
+      Alert.alert('Ungültig', 'Bestand darf nicht negativ sein.');
       return;
     }
     if (dosisFloat <= 0) {
-      Alert.alert('Ungueltig', 'Einzeldosis muss groesser als 0 sein.');
+      Alert.alert('Ungültig', 'Einzeldosis muss groesser als 0 sein.');
       return;
     }
 
@@ -143,7 +143,7 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
             style={styles.input}
             value={einzeldosis}
             onChangeText={setEinzeldosis}
-            placeholder="z.B. 0.5 fuer halbe Tablette"
+            placeholder="z.B. 0.5 für halbe Tablette"
             placeholderTextColor="#999"
             keyboardType="decimal-pad"
           />
@@ -275,7 +275,7 @@ const styles = StyleSheet.create({
     color: '#1a1a2e',
     borderWidth: 2,
     borderColor: '#ccc',
-    minHeight: 64, // Grosse Touch-Ziele fuer Senioren
+    minHeight: 64, // Große Touch-Ziele für Senioren
   },
   hint: {
     fontSize: 18,

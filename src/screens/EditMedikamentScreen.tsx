@@ -2,7 +2,7 @@
  * EditMedikamentScreen.tsx – Bestehendes Medikament bearbeiten
  *
  * Alle Zahlenfelder unterstuetzen Float (halbe Tabletten = 0.5).
- * Senioren-freundlich: Groesse Eingabefelder, klare Labels, Zurueck-Button.
+ * Senioren-freundlich: Groesse Eingabefelder, klare Labels, Zurück-Button.
  */
 
 import React, { useState, useEffect } from 'react';
@@ -67,11 +67,11 @@ export default function EditMedikamentScreen({ route, navigation }: Props) {
     const warnungFloat = parseFloat(warnungAb);
 
     if (isNaN(bestandFloat) || bestandFloat < 0) {
-      Alert.alert('Ungueltig', 'Bestand muss eine gueltige Zahl >= 0 sein.');
+      Alert.alert('Ungültig', 'Bestand muss eine gueltige Zahl >= 0 sein.');
       return;
     }
     if (isNaN(dosisFloat) || dosisFloat <= 0) {
-      Alert.alert('Ungueltig', 'Einzeldosis muss groesser als 0 sein.');
+      Alert.alert('Ungültig', 'Einzeldosis muss groesser als 0 sein.');
       return;
     }
 
@@ -84,7 +84,7 @@ export default function EditMedikamentScreen({ route, navigation }: Props) {
         pzn: pzn.trim(),
         packungsgroesse: isNaN(packungsFloat) ? 0 : packungsFloat,
         warnung_ab_bestand: isNaN(warnungFloat) ? 7 : warnungFloat,
-        sync_status: 1, // Aenderung ausstehend
+        sync_status: 1, // Änderung ausstehend
       });
 
       Alert.alert(
@@ -93,7 +93,7 @@ export default function EditMedikamentScreen({ route, navigation }: Props) {
         [{ text: 'OK', onPress: () => navigation.goBack() }]
       );
     } catch (error) {
-      Alert.alert('Fehler', 'Aenderung konnte nicht gespeichert werden.');
+      Alert.alert('Fehler', 'Änderung konnte nicht gespeichert werden.');
       console.error(error);
     }
   };
@@ -212,7 +212,7 @@ export default function EditMedikamentScreen({ route, navigation }: Props) {
           onPress={handleSave}
           activeOpacity={0.7}
         >
-          <Text style={styles.saveButtonText}>Aenderungen speichern</Text>
+          <Text style={styles.saveButtonText}>Änderungen speichern</Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>

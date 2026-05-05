@@ -5,7 +5,7 @@
 import { database, EinnahmeRow } from './Database';
 
 export interface EinnahmeWithDate extends EinnahmeRow {
-  datum_formatted: string; // Lesbares Datum fuer die Anzeige
+  datum_formatted: string; // Lesbares Datum für die Anzeige
   uhrzeit_formatted: string;
 }
 
@@ -48,7 +48,7 @@ export async function getEinnahmenByMedikament(
 }
 
 /**
- * Letzte N Einnahmen ueber alle Medikamente
+ * Letzte N Einnahmen über alle Medikamente
  */
 export async function getRecentEinnahmen(
   limit: number = 20

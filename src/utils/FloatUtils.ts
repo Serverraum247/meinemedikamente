@@ -1,5 +1,5 @@
 /**
- * FloatUtils.ts – Testbare Float-Arithmetik fuer Medikamentenbestaende
+ * FloatUtils.ts – Testbare Float-Arithmetik für Medikamentenbestände
  *
  * Alle Funktionen sind rein (keine Seiteneffekte) und damit
  * ohne Datenbank-Abhaengigkeit testbar.
@@ -36,7 +36,7 @@ export function increaseBestand(bestand: number, packungsgroesse: number): numbe
  * Verbleibende Kalendertage berechnen, bis der Bestand aufgebraucht ist.
  *
  * Berechnung: bestand / (einzeldosis * einnahmenProTag)
- * Gerundet auf 2 Nachkommastellen, dann Math.floor fuer ganze Tage.
+ * Gerundet auf 2 Nachkommastellen, dann Math.floor für ganze Tage.
  *
  * Beispiele:
  *   28 Tabletten, 1.0/Tag, 1x = 28 Tage
@@ -76,9 +76,9 @@ export function calculateLeerDatum(
 }
 
 /**
- * Pruefen, ob eine Nachfuellung vor einem bestimmten Datum noetig ist.
+ * Prüfen, ob eine Nachfuellung vor einem bestimmten Datum noetig ist.
  *
- * Verwendet fuer Arzt-Urlaub-Praevention:
+ * Verwendet für Arzt-Urlaub-Prävention:
  *   "Wird das Leer-Datum VOR oder AM Ende des Urlaubs + Puffer erreicht?"
  *
  * @param bestand Aktueller Bestand
@@ -103,14 +103,14 @@ export function isNachfuellungVorUrlaubNoetig(
 }
 
 /**
- * Pruefen, ob der Bestand unter der Warnschwelle liegt
+ * Prüfen, ob der Bestand unter der Warnschwelle liegt
  */
 export function isUnterWarnschwelle(bestand: number, warnschwelle: number): boolean {
   return bestand <= warnschwelle;
 }
 
 /**
- * Einnahmen zaehlen, die noch moeglich sind
+ * Einnahmen zählen, die noch möglich sind
  */
 export function remainingEinnahmen(bestand: number, einzeldosis: number): number {
   if (einzeldosis <= 0) return 0;

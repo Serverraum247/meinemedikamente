@@ -6,7 +6,7 @@
  */
 
 /**
- * Unterstuetzte Barcode-Formate fuer PZN/Medikamenten-Scanning
+ * Unterstützte Barcode-Formate für PZN/Medikamenten-Scanning
  */
 export const BARCODE_TYPES = {
   PZN_EAN13: 'EAN_13',
@@ -28,7 +28,7 @@ export interface ScanResult {
  * Prueft, ob ein Barcode eine gueltige PZN sein koennte.
  *
  * PZN-Format: PZN gefolgt von 7-8 Ziffern
- * EAN-13: 13 Ziffern, oft mit Praefix fuer Deutschland (400-440)
+ * EAN-13: 13 Ziffern, oft mit Präfix für Deutschland (400-440)
  */
 export function parseScanResult(barcodeValue: string, format: string): ScanResult {
   const cleaned = barcodeValue.trim();

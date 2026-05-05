@@ -3,10 +3,10 @@
  *
  * Aktuell: Manuelle PZN-Eingabe mit Hinweis auf kommenden Scanner.
  * Geplant: react-native-vision-camera + vision-camera-code-scanner
- *          fuer native Kamera-Integration (Phase 3.1).
+ *          für native Kamera-Integration (Phase 3.1).
  *
  * Der Screen wird vom AddMedikamentScreen aufgerufen und gibt
- * die gescannte/eingegebene PZN per Navigation-Param zurueck.
+ * die gescannte/eingegebene PZN per Navigation-Param zurück.
  */
 
 import React, { useState } from 'react';
@@ -39,11 +39,11 @@ export default function BarcodeScannerScreen({ navigation }: Props) {
     if (/^\d{7,8}$/.test(trimmed) && !validatePZN(trimmed)) {
       Alert.alert(
         'Pruefziffer falsch',
-        'Die eingegebene PZN scheint ungueltig zu sein. Trotzdem uebernehmen?',
+        'Die eingegebene PZN scheint ungültig zu sein. Trotzdem übernehmen?',
         [
           { text: 'Abbrechen', style: 'cancel' },
           {
-            text: 'Trotzdem uebernehmen',
+            text: 'Trotzdem übernehmen',
             onPress: () => {
               navigation.navigate('AddMedikament', { scannedPZN: trimmed });
             },
@@ -88,7 +88,7 @@ export default function BarcodeScannerScreen({ navigation }: Props) {
           onPress={handleUebernehmen}
           activeOpacity={0.7}
         >
-          <Text style={styles.uebernehmenButtonText}>Uebernehmen</Text>
+          <Text style={styles.uebernehmenButtonText}>Übernehmen</Text>
         </TouchableOpacity>
       </View>
 
