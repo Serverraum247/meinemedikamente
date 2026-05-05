@@ -110,7 +110,7 @@ export default function SettingsScreen({ navigation }: Props) {
 
         {/* Standard-Uhrzeiten */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Standard-Uhrzeiten</Text>
+          <Text style={styles.sectionTitle} accessibilityRole="header">Standard-Uhrzeiten</Text>
           <Text style={styles.sectionHint}>
             Diese Uhrzeiten werden verwendet, wenn du bei einem Medikament
             eine Tageszeit aktivierst. Du kannst sie hier anpassen.
@@ -125,6 +125,7 @@ export default function SettingsScreen({ navigation }: Props) {
                   <Text style={styles.uhrzeitLabel}>{meta.label}</Text>
                 </View>
                 <TextInput
+                  accessibilityLabel={`${meta.label} Standard-Uhrzeit`}
                   style={[
                     styles.uhrzeitInput,
                     geaendert.has(slot) && styles.uhrzeitInputChanged,
@@ -144,6 +145,8 @@ export default function SettingsScreen({ navigation }: Props) {
         {/* Speichern-Button */}
         {geaendert.size > 0 && (
           <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Änderungen speichern"
             style={styles.speichernButton}
             onPress={handleSpeichern}
             activeOpacity={0.7}
@@ -156,6 +159,8 @@ export default function SettingsScreen({ navigation }: Props) {
 
         {/* Zuruecksetzen */}
         <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel="Auf Standard zurücksetzen"
           style={styles.resetButton}
           onPress={handleReset}
           activeOpacity={0.7}

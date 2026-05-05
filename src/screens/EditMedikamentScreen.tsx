@@ -151,6 +151,7 @@ export default function EditMedikamentScreen({ route, navigation }: Props) {
           <Text style={styles.label}>Name des Medikaments *</Text>
           <TextInput
             style={styles.input}
+            accessibilityLabel="Name des Medikaments"
             value={name}
             onChangeText={setName}
             placeholder="z.B. Aspirin"
@@ -163,6 +164,7 @@ export default function EditMedikamentScreen({ route, navigation }: Props) {
           <Text style={styles.label}>Aktueller Bestand</Text>
           <TextInput
             style={styles.input}
+            accessibilityLabel="Aktueller Bestand"
             value={bestand}
             onChangeText={setBestand}
             placeholder="z.B. 28.5"
@@ -177,6 +179,7 @@ export default function EditMedikamentScreen({ route, navigation }: Props) {
           <Text style={styles.label}>Einzeldosis *</Text>
           <TextInput
             style={styles.input}
+            accessibilityLabel="Einzeldosis"
             value={einzeldosis}
             onChangeText={setEinzeldosis}
             placeholder="z.B. 0.5"
@@ -209,6 +212,7 @@ export default function EditMedikamentScreen({ route, navigation }: Props) {
           <Text style={styles.label}>Packungsgröße</Text>
           <TextInput
             style={styles.input}
+            accessibilityLabel="Packungsgröße"
             value={packungsgroesse}
             onChangeText={setPackungsgroesse}
             placeholder="z.B. 50"
@@ -222,6 +226,7 @@ export default function EditMedikamentScreen({ route, navigation }: Props) {
           <Text style={styles.label}>Warnung ab Bestand</Text>
           <TextInput
             style={styles.input}
+            accessibilityLabel="Warnung ab Bestand"
             value={warnungAb}
             onChangeText={setWarnungAb}
             placeholder="z.B. 7"
@@ -235,6 +240,7 @@ export default function EditMedikamentScreen({ route, navigation }: Props) {
           <Text style={styles.label}>PZN / Barcode</Text>
           <TextInput
             style={styles.input}
+            accessibilityLabel="PZN / Barcode"
             value={pzn}
             onChangeText={setPzn}
             placeholder="Optional"
@@ -244,12 +250,15 @@ export default function EditMedikamentScreen({ route, navigation }: Props) {
         </View>
 
         {/* === ABSCHNITT: Erinnerung === */}
-        <Text style={styles.sectionTitle}>Erinnerung</Text>
+        <Text style={styles.sectionTitle} accessibilityRole="header">Erinnerung</Text>
 
         <View style={styles.switchRow}>
           <Text style={styles.label}>Erinnerung aktivieren</Text>
           <Switch
             value={erinnerungAktiv}
+            accessibilityRole="switch"
+            accessibilityLabel="Erinnerung aktivieren"
+            accessibilityState={{ checked: erinnerungAktiv }}
             onValueChange={setErinnerungAktiv}
             trackColor={{ false: '#ccc', true: '#1a1a2e' }}
             thumbColor={erinnerungAktiv ? '#fff' : '#f4f4f4'}
@@ -273,6 +282,9 @@ export default function EditMedikamentScreen({ route, navigation }: Props) {
                   <View key={slot} style={styles.tageszeitRow}>
                     <TouchableOpacity
                       style={[styles.tageszeitButton, isActive && styles.tageszeitButtonActive]}
+                      accessibilityRole="switch"
+                      accessibilityLabel={`${meta.label} ${isActive ? 'aktiv' : 'inaktiv'}`}
+                      accessibilityState={{ checked: isActive }}
                       onPress={async () => {
                         const newPlan = await toggleSlot(einnahmePlan, slot);
                         setEinnahmePlan(newPlan);
@@ -296,6 +308,7 @@ export default function EditMedikamentScreen({ route, navigation }: Props) {
                         <Text style={styles.slotDosisLabel}>Dosis:</Text>
                         <TextInput
                           style={styles.slotDosisInput}
+                          accessibilityLabel={`Dosis für ${meta.label}`}
                           value={eintrag?.dosis !== undefined ? String(eintrag.dosis) : ''}
                           onChangeText={text => {
                             const val = parseDeFloat(text);
@@ -337,6 +350,9 @@ export default function EditMedikamentScreen({ route, navigation }: Props) {
               </View>
               <Switch
                 value={autoAbzugAktiv}
+                accessibilityRole="switch"
+                accessibilityLabel="Automatischer Bestandsabzug"
+                accessibilityState={{ checked: autoAbzugAktiv }}
                 onValueChange={setAutoAbzugAktiv}
                 trackColor={{ false: '#ccc', true: '#1a1a2e' }}
                 thumbColor={autoAbzugAktiv ? '#fff' : '#f4f4f4'}
@@ -349,6 +365,8 @@ export default function EditMedikamentScreen({ route, navigation }: Props) {
         {/* Speichern */}
         <TouchableOpacity
           style={styles.saveButton}
+          accessibilityLabel="Änderungen speichern"
+          accessibilityRole="button"
           onPress={handleSave}
           activeOpacity={0.7}
         >

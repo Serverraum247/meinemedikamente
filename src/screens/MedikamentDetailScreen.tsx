@@ -150,8 +150,12 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
         {/* Bestand-Anzeige */}
-        <View style={[styles.bestandCard, isUnterSchwelle && styles.bestandCardWarning]}>
-          <Text style={styles.bestandLabel}>Aktueller Bestand</Text>
+        <View
+          style={[styles.bestandCard, isUnterSchwelle && styles.bestandCardWarning]}
+          accessibilityLabel={`Bestand: ${medikament.aktueller_bestand} ${medikament.einheit}${tageVerbleibend > 0 ? `, reicht für ca. ${tageVerbleibend} Tag(e)` : ''}`}
+          accessibilityLiveRegion="polite"
+        >
+          <Text style={styles.bestandLabel} accessibilityRole="header">Aktueller Bestand</Text>
           <Text style={[styles.bestandWert, isUnterSchwelle && styles.bestandWertWarning]}>
             {medikament.aktueller_bestand}
           </Text>
@@ -179,7 +183,7 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
             const aktuelle = getAktuelleTageszeit();
             return (
               <View style={styles.einnahmeplanCard}>
-                <Text style={styles.einnahmeplanTitle}>Einnahmeplan</Text>
+                <Text style={styles.einnahmeplanTitle} accessibilityRole="header">Einnahmeplan</Text>
                 <View style={styles.einnahmeplanRow}>
                   {SLOT_REIHENFOLGE.map(slot => {
                     const meta = SLOT_META[slot];
@@ -192,7 +196,7 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
                         key={slot}
                         style={[styles.einnahmeSlot, isAktuell && styles.einnahmeSlotAktuell]}
                       >
-                        <Text style={styles.einnahmeSlotEmoji}>{meta.emoji}</Text>
+                        <Text style={styles.einnahmeSlotEmoji} accessibilityElementsHidden>{meta.emoji}</Text>
                         <Text style={[styles.einnahmeSlotLabel, isAktuell && styles.einnahmeSlotLabelAktuell]}>
                           {meta.label}
                         </Text>
@@ -225,6 +229,9 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
               style={styles.einnahmeButton}
               onPress={handleEinnahme}
               activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel={`${medikament.name} als eingenommen markieren`}
+              accessibilityHint="Bestand wird automatisch reduziert"
             >
               <Text style={styles.einnahmeButtonText}>
                 Einnahme bestätigen
@@ -243,7 +250,7 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
         {letztePackung && (
           <View style={styles.packungCard}>
             <View style={styles.packungHeader}>
-              <Text style={styles.packungTitle}>Letzte Packung</Text>
+              <Text style={styles.packungTitle} accessibilityRole="header">Letzte Packung</Text>
               {offenePackungen > 1 && (
                 <Text style={styles.packungCount}>
                   {offenePackungen} Packungen offen
@@ -274,6 +281,8 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
                 onPress={() => setZeigeHistorie(!zeigeHistorie)}
                 activeOpacity={0.7}
                 style={styles.historieToggle}
+                accessibilityRole="button"
+                accessibilityLabel={`${packungsHistorie.length} Käufe insgesamt, ${zeigeHistorie ? 'ausblenden' : 'einblenden'}`}
               >
                 <Text style={styles.historieToggleText}>
                   {zeigeHistorie ? '▲' : '▼'} {packungsHistorie.length} Käufe insgesamt
@@ -305,6 +314,8 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
           style={styles.nachkaufButton}
           onPress={() => navigation.navigate('Nachkauf', { medikamentId: medikament.id })}
           activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Nachkauf erfassen"
         >
           <Text style={styles.nachkaufButtonText}>
             + Nachkauf
@@ -316,13 +327,15 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
           style={styles.editButton}
           onPress={() => navigation.navigate('EditMedikament', { medikamentId: medikament.id })}
           activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Medikament bearbeiten"
         >
           <Text style={styles.editButtonText}>Medikament bearbeiten</Text>
         </TouchableOpacity>
 
         {/* Einnahme-Historie */}
         <View style={styles.historieSection}>
-          <Text style={styles.historieTitle}>Einnahme-Historie</Text>
+          <Text style={styles.historieTitle} accessibilityRole="header">Einnahme-Historie</Text>
           {historie.length === 0 ? (
             <Text style={styles.historieEmpty}>Noch keine Einnahmen erfasst.</Text>
           ) : (
@@ -349,6 +362,9 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
           style={styles.deleteButton}
           onPress={handleDelete}
           activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Medikament löschen"
+          accessibilityHint="Alle Daten werden entfernt"
         >
           <Text style={styles.deleteButtonText}>Medikament löschen</Text>
         </TouchableOpacity>

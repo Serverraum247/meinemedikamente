@@ -101,7 +101,7 @@ export default function NachkaufScreen({ route, navigation }: Props) {
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {/* Aktueller Bestand */}
         <View style={styles.bestandCard}>
-          <Text style={styles.bestandLabel}>Aktueller Bestand</Text>
+          <Text style={styles.bestandLabel} accessibilityRole="header">Aktueller Bestand</Text>
           <Text style={styles.bestandWert}>
             {medikament.aktueller_bestand} {medikament.einheit}
           </Text>
@@ -109,7 +109,7 @@ export default function NachkaufScreen({ route, navigation }: Props) {
 
         {/* Packungsgröße */}
         <View style={styles.fieldGroup}>
-          <Text style={styles.label}>Packungsgröße *</Text>
+          <Text style={styles.label} accessibilityRole="header">Packungsgröße *</Text>
           <TextInput
             style={styles.input}
             value={groesse}
@@ -118,13 +118,14 @@ export default function NachkaufScreen({ route, navigation }: Props) {
             placeholderTextColor="#999"
             keyboardType="decimal-pad"
             autoFocus
+            accessibilityLabel="Packungsgröße"
           />
           <Text style={styles.hint}>Anzahl der Tabletten/Kapseln in der Packung</Text>
         </View>
 
         {/* PZN */}
         <View style={styles.fieldGroup}>
-          <Text style={styles.label}>PZN / Barcode</Text>
+          <Text style={styles.label} accessibilityRole="header">PZN / Barcode</Text>
           <TextInput
             style={styles.input}
             value={pzn}
@@ -132,13 +133,14 @@ export default function NachkaufScreen({ route, navigation }: Props) {
             placeholder="Optional – automatisch vom Stammartikel"
             placeholderTextColor="#999"
             keyboardType="number-pad"
+            accessibilityLabel="PZN / Barcode"
           />
         </View>
 
         {/* Ersatzprodukt */}
         <View style={styles.switchRow}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.label}>Ersatzprodukt?</Text>
+            <Text style={styles.label} accessibilityRole="header">Ersatzprodukt?</Text>
             <Text style={styles.hint}>Wenn ein anderes Produkt gekauft wurde</Text>
           </View>
           <Switch
@@ -147,19 +149,23 @@ export default function NachkaufScreen({ route, navigation }: Props) {
             trackColor={{ false: '#ccc', true: '#e67e22' }}
             thumbColor={istErsatzprodukt ? '#fff' : '#f4f4f4'}
             style={{ transform: [{ scaleX: 1.3 }, { scaleY: 1.3 }] }}
+            accessibilityRole="switch"
+            accessibilityLabel="Ersatzprodukt"
+            accessibilityState={{ checked: istErsatzprodukt }}
           />
         </View>
 
         {istErsatzprodukt && (
           <View style={styles.ersatzSection}>
             <View style={styles.fieldGroup}>
-              <Text style={styles.label}>Name des Ersatzprodukts *</Text>
+              <Text style={styles.label} accessibilityRole="header">Name des Ersatzprodukts *</Text>
               <TextInput
                 style={styles.input}
                 value={ersatzName}
                 onChangeText={setErsatzName}
                 placeholder="z.B. Ibuprofen AbZ 400"
                 placeholderTextColor="#999"
+                accessibilityLabel="Ersatzprodukt-Name"
               />
             </View>
           </View>
@@ -177,6 +183,8 @@ export default function NachkaufScreen({ route, navigation }: Props) {
           style={styles.saveButton}
           onPress={handleSave}
           activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Nachkauf speichern"
         >
           <Text style={styles.saveButtonText}>Nachkauf speichern</Text>
         </TouchableOpacity>

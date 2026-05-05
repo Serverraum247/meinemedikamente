@@ -58,9 +58,12 @@ export default function BarcodeScannerScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerIcon}>📷</Text>
-        <Text style={styles.headerText}>Barcode / PZN eingeben</Text>
+        <View style={styles.header}
+          accessibilityElementsHidden={true}
+          importantForAccessibility="no-hide-descendants"
+        >
+          <Text style={styles.headerIcon}>📷</Text>
+          <Text style={styles.headerText} accessibilityRole="header">Barcode / PZN eingeben</Text>
         <Text style={styles.headerSubtext}>
           Kamera-Scanner folgt in einem kommenden Update
         </Text>
@@ -76,6 +79,7 @@ export default function BarcodeScannerScreen({ navigation }: Props) {
             placeholder="z.B. 12345678"
             placeholderTextColor="#999"
             keyboardType="number-pad"
+            accessibilityLabel="PZN oder Barcode eingeben"
             autoFocus
           />
           <Text style={styles.hint}>
@@ -87,6 +91,8 @@ export default function BarcodeScannerScreen({ navigation }: Props) {
           style={styles.uebernehmenButton}
           onPress={handleUebernehmen}
           activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="PZN übernehmen"
         >
           <Text style={styles.uebernehmenButtonText}>Übernehmen</Text>
         </TouchableOpacity>
@@ -96,6 +102,8 @@ export default function BarcodeScannerScreen({ navigation }: Props) {
         style={styles.cancelButton}
         onPress={() => navigation.goBack()}
         activeOpacity={0.7}
+        accessibilityRole="button"
+        accessibilityLabel="Abbrechen"
       >
         <Text style={styles.cancelButtonText}>Abbrechen</Text>
       </TouchableOpacity>

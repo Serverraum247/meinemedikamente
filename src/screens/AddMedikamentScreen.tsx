@@ -126,7 +126,7 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
         keyboardShouldPersistTaps="handled"
       >
         {/* === ABSCHNITT: Medikament === */}
-        <Text style={styles.sectionTitle}>Medikament</Text>
+        <Text style={styles.sectionTitle} accessibilityRole="header">Medikament</Text>
 
         {/* Name */}
         <View style={styles.fieldGroup}>
@@ -137,6 +137,7 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
             onChangeText={setName}
             placeholder="z.B. Aspirin 100"
             placeholderTextColor="#999"
+            accessibilityLabel="Name"
             autoFocus
           />
         </View>
@@ -151,6 +152,7 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
               onChangeText={setPzn}
               placeholder="Optional"
               placeholderTextColor="#999"
+              accessibilityLabel="PZN"
               keyboardType="number-pad"
             />
             {/* Scanner-Button – wird in Phase 3 aktiviert */}
@@ -158,6 +160,7 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
               style={styles.scanButton}
               onPress={() => navigation.navigate('BarcodeScanner')}
               activeOpacity={0.7}
+              accessibilityLabel="Barcode scannen"
             >
               <Text style={styles.scanButtonText}>Scan</Text>
             </TouchableOpacity>
@@ -165,7 +168,7 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
         </View>
 
         {/* === ABSCHNITT: Dosierung === */}
-        <Text style={styles.sectionTitle}>Dosierung</Text>
+        <Text style={styles.sectionTitle} accessibilityRole="header">Dosierung</Text>
 
         {/* Einzeldosis */}
         <View style={styles.fieldGroup}>
@@ -176,6 +179,7 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
             onChangeText={setEinzeldosis}
             placeholder="z.B. 0,5 für halbe Tablette"
             placeholderTextColor="#999"
+            accessibilityLabel="Einzeldosis"
             keyboardType="decimal-pad"
           />
           <Text style={styles.hint}>Halbe Tabletten als 0.5 eingeben</Text>
@@ -191,6 +195,9 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
                 style={[styles.einheitButton, einheit === e && styles.einheitActive]}
                 onPress={() => setEinheit(e)}
                 activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel={`Einheit: ${e}`}
+                accessibilityState={{ selected: einheit === e }}
               >
                 <Text style={[styles.einheitText, einheit === e && styles.einheitTextActive]}>
                   {e}
@@ -201,7 +208,7 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
         </View>
 
         {/* === ABSCHNITT: Bestand === */}
-        <Text style={styles.sectionTitle}>Bestand</Text>
+        <Text style={styles.sectionTitle} accessibilityRole="header">Bestand</Text>
 
         {/* Aktueller Bestand */}
         <View style={styles.fieldGroup}>
@@ -212,6 +219,7 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
             onChangeText={setBestand}
             placeholder="z.B. 28.5"
             placeholderTextColor="#999"
+            accessibilityLabel="Bestand"
             keyboardType="decimal-pad"
           />
         </View>
@@ -225,6 +233,7 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
             onChangeText={setPackungsgroesse}
             placeholder="z.B. 50"
             placeholderTextColor="#999"
+            accessibilityLabel="Packungsgröße"
             keyboardType="decimal-pad"
           />
         </View>
@@ -238,13 +247,14 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
             onChangeText={setWarnungAb}
             placeholder="z.B. 7"
             placeholderTextColor="#999"
+            accessibilityLabel="Warnung ab Bestand"
             keyboardType="decimal-pad"
           />
           <Text style={styles.hint}>Warnung wenn Bestand darunter fällt</Text>
         </View>
 
         {/* === ABSCHNITT: Erinnerung === */}
-        <Text style={styles.sectionTitle}>Erinnerung</Text>
+        <Text style={styles.sectionTitle} accessibilityRole="header">Erinnerung</Text>
 
         {/* Erinnerung aktivieren */}
         <View style={styles.switchRow}>
@@ -255,6 +265,9 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
             trackColor={{ false: '#ccc', true: '#1a1a2e' }}
             thumbColor={erinnerungAktiv ? '#fff' : '#f4f4f4'}
             style={{ transform: [{ scaleX: 1.3 }, { scaleY: 1.3 }] }}
+            accessibilityRole="switch"
+            accessibilityLabel="Erinnerung aktivieren"
+            accessibilityState={{ checked: erinnerungAktiv }}
           />
         </View>
 
@@ -283,6 +296,9 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
                         setEinnahmePlan(newPlan);
                       }}
                       activeOpacity={0.7}
+                      accessibilityRole="switch"
+                      accessibilityLabel={`${meta.label} ${isActive ? 'aktiviert' : 'deaktiviert'}`}
+                      accessibilityState={{ checked: isActive }}
                     >
                       <Text style={styles.tageszeitEmoji}>{meta.emoji}</Text>
                       <View style={{ flex: 1 }}>
@@ -321,6 +337,7 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
                           }}
                           placeholder={`${einzeldosis} (Standard)`}
                           placeholderTextColor="#999"
+                          accessibilityLabel={`${meta.label} Dosis`}
                           keyboardType="decimal-pad"
                         />
                         <Text style={styles.slotDosisEinheit}>{einheit}</Text>
@@ -357,6 +374,9 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
                 trackColor={{ false: '#ccc', true: '#1a1a2e' }}
                 thumbColor={autoAbzugAktiv ? '#fff' : '#f4f4f4'}
                 style={{ transform: [{ scaleX: 1.3 }, { scaleY: 1.3 }] }}
+                accessibilityRole="switch"
+                accessibilityLabel="Automatischer Bestandsabzug"
+                accessibilityState={{ checked: autoAbzugAktiv }}
               />
             </View>
           </>
@@ -367,6 +387,8 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
           style={styles.saveButton}
           onPress={handleSave}
           activeOpacity={0.7}
+          accessibilityLabel="Medikament speichern"
+          accessibilityRole="button"
         >
           <Text style={styles.saveButtonText}>Medikament speichern</Text>
         </TouchableOpacity>

@@ -32,6 +32,8 @@ export default function HomeScreen({ navigation }: Props) {
           onPress={() => navigation.navigate('Settings')}
           style={styles.settingsButton}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          accessibilityRole="button"
+          accessibilityLabel="Einstellungen öffnen"
         >
           <Text style={styles.settingsButtonText}>⚙️</Text>
         </TouchableOpacity>
@@ -43,7 +45,10 @@ export default function HomeScreen({ navigation }: Props) {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color="#1a1a2e" />
-        <Text style={styles.loadingText}>Lade Medikamente...</Text>
+        <Text
+          style={styles.loadingText}
+          accessibilityLiveRegion="polite"
+        >Lade Medikamente...</Text>
       </View>
     );
   }
@@ -59,6 +64,9 @@ export default function HomeScreen({ navigation }: Props) {
         ]}
         onPress={() => navigation.navigate('MedikamentDetail', { medikamentId: item.id })}
         activeOpacity={0.7}
+        accessibilityRole="button"
+        accessibilityLabel={`${item.name}, Bestand: ${item.aktueller_bestand} ${item.einheit}${isUnterSchwelle ? ', Nachbestellen empfohlen' : ''}`}
+        accessibilityHint="Doppelt tippen für Details"
       >
         <View style={styles.cardContent}>
           <Text style={styles.medName}>{item.name}</Text>
@@ -88,7 +96,10 @@ export default function HomeScreen({ navigation }: Props) {
     <SafeAreaView style={styles.container}>
       {/* Warnungs-Banner */}
       {medikamenteUnterSchwelle.length > 0 && (
-        <View style={styles.warnBanner}>
+        <View
+          style={styles.warnBanner}
+          accessibilityLiveRegion="polite"
+        >
           <Text style={styles.warnBannerText}>
             ⚠ {medikamenteUnterSchwelle.length} Medikament(e) unter Warnschwelle
           </Text>
@@ -117,6 +128,8 @@ export default function HomeScreen({ navigation }: Props) {
         style={styles.fab}
         onPress={() => navigation.navigate('AddMedikament')}
         activeOpacity={0.8}
+        accessibilityRole="button"
+        accessibilityLabel="Neues Medikament hinzufügen"
       >
         <Text style={styles.fabText}>+</Text>
       </TouchableOpacity>
