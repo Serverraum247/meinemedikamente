@@ -7,6 +7,7 @@
 
 import { database, ArztUrlaubRow, MedikamentRow } from './Database';
 import { getMedikamenteUnterSchwelle, getAllMedikamente } from './MedikamentController';
+import { parseEinnahmeplan, tagesdosisBerechnen } from '../utils/Einnahmeplan';
 
 export interface UrlaubsWarnung {
   medikament: MedikamentRow;
@@ -14,6 +15,9 @@ export interface UrlaubsWarnung {
   urlaub: ArztUrlaubRow;
   tageBisLeer: number;
 }
+
+// Oeffentlicher Typ fuer Screens
+export type { ArztUrlaubRow };
 
 /**
  * Arzt-Urlaub anlegen
@@ -100,7 +104,17 @@ export async function calculateUrlaubsWarnungen(): Promise<UrlaubsWarnung[]> {
     // Nur Medikamente mit Bestand prüfen
     if (med.aktueller_bestand <= 0) continue;
 
-    const leerDatum = calculateRefillDate(med.aktueller_bestand, med.einzeldosis);
+    const leerDatum = calculateRefillDate(med.aktueller_bestand, med.einzeldosis,
+      (() => {
+        // Einnahmeplan parsen und Tagesdosis berechnen
+        try {
+          const plan = parseEinnahmeplan(med.einnahme_uhrzeiten || '[]');
+          const td = tagesdosisBerechnen(plan, med.einzeldosis);
+          // Einnahmen pro Tag = Tagesdosis / Einzeldosis
+          return td > 0 ? Math.round(td / med.einzeldosis) : 1;
+        } catch { return 1; }
+      })()
+    );
     leerDatum.setHours(0, 0, 0, 0);
 
     for (const urlaub of urlaube) {

@@ -5,7 +5,7 @@
  * klare Anzeige der Bestände (inkl. Float-Werte wie 28.5)
  */
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -18,11 +18,14 @@ import {
 import { useMedikamente } from '../context/MedikamentContext';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
+import { calculateUrlaubsWarnungen } from '../database/UrlaubController';
+import type { UrlaubsWarnung } from '../database/UrlaubController';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
 
 export default function HomeScreen({ navigation }: Props) {
   const { medikamente, medikamenteUnterSchwelle, loading } = useMedikamente();
+  const [urlaubsWarnungen, setUrlaubsWarnungen] = useState<UrlaubsWarnung[]>([]);
 
   // Einstellungen-Button im Header
   useEffect(() => {
@@ -40,6 +43,11 @@ export default function HomeScreen({ navigation }: Props) {
       ),
     });
   }, [navigation]);
+
+  // Urlaub-Kollisionen laden
+  useEffect(() => {
+    calculateUrlaubsWarnungen().then(setUrlaubsWarnungen).catch(console.error);
+  }, []);
 
   if (loading) {
     return (
@@ -105,6 +113,33 @@ export default function HomeScreen({ navigation }: Props) {
           </Text>
         </View>
       )}
+
+      {/* Urlaub-Kollisions-Banner */}
+      {urlaubsWarnungen.length > 0 && (
+        <TouchableOpacity
+          style={styles.urlaubBanner}
+          onPress={() => navigation.navigate('ArztUrlaub')}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel={`${urlaubsWarnungen.length} Urlaub-Kollisionen. Medikamente werden waehrend Arzturlaub leer. Tippen fuer Details.`}
+        >
+          <Text style={styles.urlaubBannerText}>
+            📅 {urlaubsWarnungen.length} Urlaub-Kollision(en) – Medikamente werden waehrend Arzturlaub leer!
+          </Text>
+        </TouchableOpacity>
+      )}
+
+      {/* Arzt-Urlaub verwalten – immer sichtbar */}
+      <TouchableOpacity
+        style={styles.arztUrlaubButton}
+        onPress={() => navigation.navigate('ArztUrlaub')}
+        activeOpacity={0.7}
+        accessibilityRole="button"
+        accessibilityLabel="Arzt-Urlaub verwalten"
+        accessibilityHint="Urlaube von Arztpraxen eintragen und Kollisionen prüfen"
+      >
+        <Text style={styles.arztUrlaubButtonText}>📅 Arzt-Urlaub verwalten</Text>
+      </TouchableOpacity>
 
       {/* Leerer Zustand */}
       {medikamente.length === 0 ? (
@@ -265,5 +300,32 @@ const styles = StyleSheet.create({
   },
   settingsButtonText: {
     fontSize: 26,
+  },
+  urlaubBanner: {
+    backgroundColor: '#fff3cd',
+    borderLeftWidth: 4,
+    borderLeftColor: '#e74c3c',
+    padding: 12,
+  },
+  urlaubBannerText: {
+    fontSize: 16,
+    color: '#856404',
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  arztUrlaubButton: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 12,
+    padding: 16,
+    marginHorizontal: 16,
+    marginTop: 12,
+    alignItems: 'center',
+  },
+  arztUrlaubButtonText: {
+    fontSize: 20,
+    color: '#1a1a2e',
+    fontWeight: '600',
   },
 });

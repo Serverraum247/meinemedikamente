@@ -34,6 +34,7 @@ import {
   type EinnahmeSlot,
 } from '../utils/Einnahmeplan';
 import { announceChange } from '../utils/AccessibilityHelpers';
+import { erstelleRezeptAbholtermin } from '../services/KalenderService';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'MedikamentDetail'>;
 
@@ -373,6 +374,35 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
         >
           <Text style={styles.deleteButtonText}>Medikament löschen</Text>
         </TouchableOpacity>
+
+        {/* Rezept-Termin im Kalender */}
+        {medikament.aktueller_bestand > 0 && (
+          <TouchableOpacity
+            style={styles.kalenderButton}
+            onPress={async () => {
+              try {
+                await erstelleRezeptAbholtermin(
+                  medikament.name,
+                  medikament.aktueller_bestand,
+                  medikament.einzeldosis,
+                  1,
+                  7,
+                );
+                Alert.alert('Termin erstellt', 'Der Rezept-Abholtermin wurde im Kalender eingetragen.');
+              } catch (error) {
+                Alert.alert('Fehler', 'Kalendereintrag konnte nicht erstellt werden.');
+              }
+            }}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Kalendereintrag für Rezept-Abholung erstellen"
+            accessibilityHint="Erstellt einen Termin im Kalender, 7 Tage bevor das Medikament leer wird"
+          >
+            <Text style={styles.kalenderButtonText}>
+              📅 Rezept-Termin erstellen
+            </Text>
+          </TouchableOpacity>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -701,11 +731,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderColor: '#e74c3c',
+    marginBottom: 12,
   },
   deleteButtonText: {
     fontSize: 18,
     color: '#e74c3c',
     fontWeight: '600',
+  },
+  kalenderButton: {
+    backgroundColor: '#3498db',
+    borderRadius: 16,
+    padding: 20,
+    alignItems: 'center',
+    minHeight: 60,
+    justifyContent: 'center',
+  },
+  kalenderButtonText: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
 });
 

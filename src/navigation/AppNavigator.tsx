@@ -13,6 +13,7 @@ import EditMedikamentScreen from '../screens/EditMedikamentScreen';
 import BarcodeScannerScreen from '../screens/BarcodeScannerScreen';
 import NachkaufScreen from '../screens/NachkaufScreen';
 import SettingsScreen from '../screens/SettingsScreen';
+import ArztUrlaubScreen from '../screens/ArztUrlaubScreen';
 
 export type RootStackParamList = {
   Home: undefined;
@@ -22,6 +23,7 @@ export type RootStackParamList = {
   BarcodeScanner: undefined;
   Nachkauf: { medikamentId: string };
   Settings: undefined;
+  ArztUrlaub: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -77,6 +79,7 @@ export default function AppNavigator() {
           component={SettingsScreen}
           options={{ title: 'Einstellungen' }}
         />
+        <Stack.Screen name="ArztUrlaub" component={ArztUrlaubScreen} options={{ title: 'Arzt-Urlaub' }} />
       </Stack.Navigator>
     </NavigationContainer>
   );
