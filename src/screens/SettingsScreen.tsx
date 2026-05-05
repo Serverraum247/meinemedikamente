@@ -159,6 +159,17 @@ export default function SettingsScreen({ navigation }: Props) {
           </TouchableOpacity>
         )}
 
+        {/* Cloud-Backup */}
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel="Cloud-Backup"
+          style={styles.backupButton}
+          onPress={() => navigation.navigate('Backup')}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.backupButtonText}>☁️ Cloud-Backup</Text>
+        </TouchableOpacity>
+
         {/* Zuruecksetzen */}
         <TouchableOpacity
           accessibilityRole="button"
@@ -256,6 +267,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   speichernButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  backupButton: {
+    backgroundColor: '#2980b9',
+    borderRadius: 14,
+    padding: 18,
+    alignItems: 'center',
+    marginBottom: 12,
+    minHeight: 56,
+    justifyContent: 'center',
+  },
+  backupButtonText: {
     color: '#fff',
     fontSize: 18,
     fontWeight: '700',
