@@ -83,8 +83,8 @@ export default function HomeScreen({ navigation }: Props) {
           )}
         </View>
         <View style={styles.cardBestand}>
-          <Text style={[styles.bestandZahl, isUnterSchwelle && styles.bestandWarning]}>
-            {item.aktueller_bestand}
+          <Text style={[styles.bestandZahl, isUnterSchwelle && styles.bestandWarning]} maxFontSizeMultiplier={1.3}>
+            {isUnterSchwelle ? '⚠' : '✓'} {item.aktueller_bestand}
           </Text>
           <Text style={styles.bestandLabel}>übrig</Text>
         </View>

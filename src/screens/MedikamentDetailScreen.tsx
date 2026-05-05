@@ -156,10 +156,13 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
           accessibilityLiveRegion="polite"
         >
           <Text style={styles.bestandLabel} accessibilityRole="header">Aktueller Bestand</Text>
-          <Text style={[styles.bestandWert, isUnterSchwelle && styles.bestandWertWarning]}>
-            {medikament.aktueller_bestand}
+          <Text style={[styles.bestandWert, isUnterSchwelle && styles.bestandWertWarning]} maxFontSizeMultiplier={1.3}>
+            {isUnterSchwelle ? '⚠' : '✓'} {medikament.aktueller_bestand}
           </Text>
           <Text style={styles.bestandEinheit}>{medikament.einheit}</Text>
+          <Text style={[styles.bestandStatusLabel, isUnterSchwelle ? styles.bestandStatusWarning : styles.bestandStatusOk]}>
+            {isUnterSchwelle ? '⚠ Nachbestellen empfohlen' : '✓ Bestand OK'}
+          </Text>
           {tageVerbleibend > 0 && (
             <Text style={styles.tageInfo}>
               Reicht für ca. {tageVerbleibend} Tag(e)
@@ -431,6 +434,17 @@ const styles = StyleSheet.create({
     fontSize: 20,
     color: '#555',
     marginTop: 4,
+  },
+  bestandStatusLabel: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginTop: 8,
+  },
+  bestandStatusOk: {
+    color: '#27ae60',
+  },
+  bestandStatusWarning: {
+    color: '#e74c3c',
   },
   tageInfo: {
     fontSize: 16,
