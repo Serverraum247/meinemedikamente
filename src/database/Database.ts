@@ -12,7 +12,7 @@ SQLite.DEBUG(true);
 SQLite.enablePromise(true);
 
 const DATABASE_NAME = 'meine_medikamente.db';
-const DATABASE_VERSION = 4; // V4: Packungs-Protokoll + Ersatzprodukte
+const DATABASE_VERSION = 5; // V5: Einstellungen-Tabelle
 
 export interface MedikamentRow {
   id: string;
@@ -157,10 +157,19 @@ class Database {
       `CREATE INDEX IF NOT EXISTS idx_packungen_medikament ON packungen(medikament_id);`
     );
 
+    // Einstellungen (Key-Value)
+    await this.db.executeSql(`
+      CREATE TABLE IF NOT EXISTS einstellungen (
+        key   TEXT PRIMARY KEY NOT NULL,
+        value TEXT NOT NULL
+      );
+    `);
+
     // Migrationen
     await this.migrateV1toV2();
     await this.migrateV2toV3();
     await this.migrateV3toV4();
+    await this.migrateV4toV5();
   }
 
   /**
@@ -255,6 +264,24 @@ class Database {
   }
 
   /**
+   * Migration V4 -> V5: Einstellungen-Tabelle anlegen
+   */
+  private async migrateV4toV5(): Promise<void> {
+    if (!this.db) return;
+    try {
+      await this.db.executeSql(`
+        CREATE TABLE IF NOT EXISTS einstellungen (
+          key   TEXT PRIMARY KEY NOT NULL,
+          value TEXT NOT NULL
+        );
+      `);
+      console.log('[DB] Migration V4->V5: einstellungen Tabelle geprueft');
+    } catch (error) {
+      console.warn('[DB] Migration V4->V5 Pruefung:', error);
+    }
+  }
+
+  /**
    * Datenbank-Instanz abrufen (muss zuvor init() aufgerufen haben)
    */
   getDatabase(): SQLite.SQLiteDatabase {
@@ -276,3 +303,11 @@ class Database {
 
 // Singleton-Export
 export const database = new Database();
+
+/**
+ * Async-Helper: Gibt die initialisierte DB-Instanz zurueck.
+ * Verwendet in Services die keine eigene DB-Referenz halten.
+ */
+export async function getDatabase(): Promise<SQLite.SQLiteDatabase> {
+  return database.init();
+}

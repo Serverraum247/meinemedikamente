@@ -12,6 +12,7 @@ import AddMedikamentScreen from '../screens/AddMedikamentScreen';
 import EditMedikamentScreen from '../screens/EditMedikamentScreen';
 import BarcodeScannerScreen from '../screens/BarcodeScannerScreen';
 import NachkaufScreen from '../screens/NachkaufScreen';
+import SettingsScreen from '../screens/SettingsScreen';
 
 export type RootStackParamList = {
   Home: undefined;
@@ -20,6 +21,7 @@ export type RootStackParamList = {
   EditMedikament: { medikamentId: string };
   BarcodeScanner: undefined;
   Nachkauf: { medikamentId: string };
+  Settings: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -69,6 +71,11 @@ export default function AppNavigator() {
           name="Nachkauf"
           component={NachkaufScreen}
           options={{ title: 'Nachkauf' }}
+        />
+        <Stack.Screen
+          name="Settings"
+          component={SettingsScreen}
+          options={{ title: 'Einstellungen' }}
         />
       </Stack.Navigator>
     </NavigationContainer>

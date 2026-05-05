@@ -5,7 +5,7 @@
  * klare Anzeige der Bestände (inkl. Float-Werte wie 28.5)
  */
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   View,
   Text,
@@ -23,6 +23,21 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
 
 export default function HomeScreen({ navigation }: Props) {
   const { medikamente, medikamenteUnterSchwelle, loading } = useMedikamente();
+
+  // Einstellungen-Button im Header
+  useEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <TouchableOpacity
+          onPress={() => navigation.navigate('Settings')}
+          style={styles.settingsButton}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Text style={styles.settingsButtonText}>⚙️</Text>
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation]);
 
   if (loading) {
     return (
@@ -230,5 +245,12 @@ const styles = StyleSheet.create({
     fontSize: 32,
     color: '#FFFFFF',
     fontWeight: '300',
+  },
+  settingsButton: {
+    marginRight: 8,
+    padding: 6,
+  },
+  settingsButtonText: {
+    fontSize: 26,
   },
 });

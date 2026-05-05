@@ -7,7 +7,7 @@
  * Alle Zahlenfelder unterstuetzen Float (halbe Tabletten = 0.5).
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -32,6 +32,7 @@ import {
   setSlotDosis,
   serializeEinnahmeplan,
   parseEinnahmeplan,
+  getAllDefaultUhrzeiten,
 } from '../utils/Einnahmeplan';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AddMedikament'>;
@@ -49,9 +50,20 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
   // Erinnerung & Auto-Abzug
   const [erinnerungAktiv, setErinnerungAktiv] = useState(false);
   const [einnahmePlan, setEinnahmePlan] = useState<EinnahmeSlot[]>([]);
+  const [defaultUhrzeiten, setDefaultUhrzeiten] = useState<Record<TageszeitSlot, string>>({
+    morgens: '08:00', mittags: '12:00', abends: '18:00', nachts: '22:00',
+  });
   const [autoAbzugAktiv, setAutoAbzugAktiv] = useState(false);
 
   // Gescannte PZN aus BarcodeScanner übernehmen
+
+  // Default-Uhrzeiten aus Einstellungen laden
+  useEffect(() => {
+    (async () => {
+      const stored = await getAllDefaultUhrzeiten();
+      setDefaultUhrzeiten(stored);
+    })();
+  }, []);
   React.useEffect(() => {
     const scannedPZN = route.params?.scannedPZN;
     if (scannedPZN && !pzn) {
@@ -266,7 +278,10 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
                         styles.tageszeitButton,
                         isActive && styles.tageszeitButtonActive,
                       ]}
-                      onPress={() => setEinnahmePlan(prev => toggleSlot(prev, slot))}
+                      onPress={async () => {
+                        const newPlan = await toggleSlot(einnahmePlan, slot);
+                        setEinnahmePlan(newPlan);
+                      }}
                       activeOpacity={0.7}
                     >
                       <Text style={styles.tageszeitEmoji}>{meta.emoji}</Text>
@@ -278,7 +293,7 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
                           {meta.label}
                         </Text>
                         <Text style={styles.tageszeitUhrzeit}>
-                          {meta.defaultUhrzeit} Uhr
+                          {defaultUhrzeiten[slot]} Uhr
                         </Text>
                       </View>
                       <Text style={[

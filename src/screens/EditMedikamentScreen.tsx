@@ -15,21 +15,23 @@ import {
   ScrollView,
   Alert,
   SafeAreaView,
+  Switch,
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 import { useMedikamente } from '../context/MedikamentContext';
 import { MedikamentRow } from '../database/Database';
 import { parseDeFloat } from '../utils/FloatUtils';
-import { Switch } from 'react-native';
 import {
   EinnahmeSlot,
+  TageszeitSlot,
   SLOT_META,
   SLOT_REIHENFOLGE,
   toggleSlot,
   setSlotDosis,
   serializeEinnahmeplan,
   parseEinnahmeplan,
+  getAllDefaultUhrzeiten,
 } from '../utils/Einnahmeplan';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'EditMedikament'>;
@@ -50,9 +52,20 @@ export default function EditMedikamentScreen({ route, navigation }: Props) {
   // Erinnerung & Auto-Abzug
   const [erinnerungAktiv, setErinnerungAktiv] = useState(false);
   const [einnahmePlan, setEinnahmePlan] = useState<EinnahmeSlot[]>([]);
+  const [defaultUhrzeiten, setDefaultUhrzeiten] = useState<Record<TageszeitSlot, string>>({
+    morgens: '08:00', mittags: '12:00', abends: '18:00', nachts: '22:00',
+  });
   const [autoAbzugAktiv, setAutoAbzugAktiv] = useState(false);
 
   // Medikament-Daten laden
+
+  // Default-Uhrzeiten aus Einstellungen laden
+  useEffect(() => {
+    (async () => {
+      const stored = await getAllDefaultUhrzeiten();
+      setDefaultUhrzeiten(stored);
+    })();
+  }, []);
   useEffect(() => {
     const found = medikamente.find(m => m.id === medikamentId);
     if (found) {
@@ -260,7 +273,10 @@ export default function EditMedikamentScreen({ route, navigation }: Props) {
                   <View key={slot} style={styles.tageszeitRow}>
                     <TouchableOpacity
                       style={[styles.tageszeitButton, isActive && styles.tageszeitButtonActive]}
-                      onPress={() => setEinnahmePlan(prev => toggleSlot(prev, slot))}
+                      onPress={async () => {
+                        const newPlan = await toggleSlot(einnahmePlan, slot);
+                        setEinnahmePlan(newPlan);
+                      }}
                       activeOpacity={0.7}
                     >
                       <Text style={styles.tageszeitEmoji}>{meta.emoji}</Text>
@@ -268,7 +284,7 @@ export default function EditMedikamentScreen({ route, navigation }: Props) {
                         <Text style={[styles.tageszeitLabel, isActive && styles.tageszeitLabelActive]}>
                           {meta.label}
                         </Text>
-                        <Text style={styles.tageszeitUhrzeit}>{meta.defaultUhrzeit} Uhr</Text>
+                        <Text style={styles.tageszeitUhrzeit}>{defaultUhrzeiten[slot]} Uhr</Text>
                       </View>
                       <Text style={[styles.tageszeitCheck, isActive && styles.tageszeitCheckActive]}>
                         {isActive ? '✓' : '○'}
