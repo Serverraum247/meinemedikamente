@@ -1,3 +1,11 @@
+/**
+ * ArztUrlaubScreen.tsx – Arzt-Urlaub verwalten
+ *
+ * Zeigt eine Liste aller Urlaube mit Warnungen.
+ * Im Premium-Modus kann ein Urlaub eingetragen, bearbeitet und gelöscht werden.
+ * Verwendet die Arztdaten aus der Einstellungen-Sektion.
+ */
+
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -9,6 +17,8 @@ import {
   Alert,
   StyleSheet,
   Linking,
+  Modal,
+  FlatList,
 } from 'react-native';
 import {
   createArztUrlaub,
@@ -18,6 +28,12 @@ import {
   ArztUrlaubRow,
   UrlaubsWarnung,
 } from '../database/UrlaubController';
+import {
+  getAllAerzte,
+  createArzt,
+  getMaxAerzte,
+  type ArztRow,
+} from '../database/ArztController';
 import { isPremium } from '../services/PremiumService';
 
 // ---------- Helper functions ----------
@@ -58,6 +74,14 @@ const ArztUrlaubScreen: React.FC<ArztUrlaubScreenProps> = ({ navigation }) => {
   const [urlaube, setUrlaube] = useState<ArztUrlaubRow[]>([]);
   const [warnungen, setWarnungen] = useState<UrlaubsWarnung[]>([]);
   const [premium, setPremiumStatus] = useState(false);
+  const [aerzte, setAerzte] = useState<ArztRow[]>([]);
+  const [maxAerzte, setMaxAerzteState] = useState(1);
+  const [menueOffen, setMenueOffen] = useState(false);
+  const [neuenArztAnlegen, setNeuenArztAnlegen] = useState(false);
+  const [neuArztName, setNeuArztName] = useState('');
+  const [neuArztTelefon, setNeuArztTelefon] = useState('');
+  const [neuArztFachgebiet, setNeuArztFachgebiet] = useState('');
+  const [selectedArztId, setSelectedArztId] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
@@ -65,25 +89,66 @@ const ArztUrlaubScreen: React.FC<ArztUrlaubScreenProps> = ({ navigation }) => {
 
   const loadData = async () => {
     try {
-      setPremiumStatus(await isPremium());
-      const allUrlaube = await getAllArztUrlaube();
-      // Only keep vacations that haven't fully ended yet
-      const activeUrlaube = allUrlaube.filter(
+      const [urlaubeList, warnings, isPrem, aerzteList, max] = await Promise.all([
+        getAllArztUrlaube(),
+        calculateUrlaubsWarnungen(),
+        isPremium(),
+        getAllAerzte(),
+        getMaxAerzte(),
+      ]);
+      const activeUrlaube = urlaubeList.filter(
         (u: ArztUrlaubRow) => isFutureOrToday(u.urlaub_ende)
       );
       setUrlaube(activeUrlaube);
-
-      const warnings = await calculateUrlaubsWarnungen();
       setWarnungen(warnings);
+      setPremiumStatus(isPrem);
+      setAerzte(aerzteList);
+      setMaxAerzteState(max);
     } catch (error) {
       console.error('Fehler beim Laden der Urlaubsdaten:', error);
     }
   };
 
+  // Arzt aus der Liste auswählen
+  const handleArztAuswahlen = (arzt: ArztRow) => {
+    setSelectedArztId(arzt.id);
+    setPraxisName(arzt.name);
+    setTelefon(arzt.telefon);
+    setMenueOffen(false);
+  };
+
+  // Neuen Arzt anlegen (Premium)
+  const handleNeuenArztSpeichern = async () => {
+    if (!neuArztName.trim()) {
+      Alert.alert('Fehler', 'Bitte geben Sie einen Namen ein.');
+      return;
+    }
+    const result = await createArzt({
+      name: neuArztName.trim(),
+      telefon: neuArztTelefon.trim(),
+      adresse: '',
+      fachgebiet: neuArztFachgebiet.trim(),
+    });
+    if (!result.success) {
+      Alert.alert('Limit erreicht', result.error || 'Fehler beim Anlegen.');
+      return;
+    }
+    // Neuen Arzt zur Liste laden und auswählen
+    await loadData();
+    const newArzt = (await getAllAerzte()).find(a => a.name === neuArztName.trim());
+    if (newArzt) {
+      handleArztAuswahlen(newArzt);
+    }
+    setNeuenArztAnlegen(false);
+    setNeuArztName('');
+    setNeuArztTelefon('');
+    setNeuArztFachgebiet('');
+  };
+
   const handleAddUrlaub = async () => {
     const name = praxisName.trim();
     if (!name) {
-      Alert.alert('Fehler', 'Bitte geben Sie einen Praxis-Namen ein.');
+      Alert.alert('Fehler', 'Bitte wählen oder geben Sie einen Praxis-Namen ein.');
       return;
     }
     if (!urlaubVon || !urlaubBis) {
@@ -118,6 +183,7 @@ const ArztUrlaubScreen: React.FC<ArztUrlaubScreenProps> = ({ navigation }) => {
       setTelefon('');
       setUrlaubVon('');
       setUrlaubBis('');
+      setSelectedArztId(null);
       await loadData();
       Alert.alert('Erfolg', 'Urlaub wurde eingetragen.');
     } catch (error) {
@@ -186,7 +252,7 @@ const ArztUrlaubScreen: React.FC<ArztUrlaubScreenProps> = ({ navigation }) => {
               onPress={() => navigation.goBack()}
               accessibilityLabel="Zurück"
             >
-              <Text style={styles.backButtonText}>← Zurück</Text>
+              <Text style={styles.backButtonText}>Zurück</Text>
             </TouchableOpacity>
           ) : null}
           <Text style={styles.headerTitle}>Arzt-Urlaub verwalten</Text>
@@ -197,59 +263,77 @@ const ArztUrlaubScreen: React.FC<ArztUrlaubScreenProps> = ({ navigation }) => {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Neuen Urlaub eintragen</Text>
 
-          <Text style={styles.label}>Praxis-Name</Text>
-          <TextInput
-            style={styles.input}
-            value={praxisName}
-            onChangeText={setPraxisName}
-            placeholder="z.B. Praxis Dr. Müller"
-            placeholderTextColor="#999"
-            accessibilityLabel="Praxis-Name eingeben"
-          />
+            {/* Arzt-Auswahl */}
+            <Text style={styles.label}>Arzt auswählen</Text>
+            <TouchableOpacity
+              style={[styles.input, styles.selectButton]}
+              onPress={() => setMenueOffen(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Arzt aus Liste auswählen"
+            >
+              <Text style={styles.selectButtonText}>
+                {selectedArztId
+                  ? aerzte.find(a => a.id === selectedArztId)?.name || 'Arzt auswählen'
+                  : 'Arzt aus Liste auswählen'
+                }
+              </Text>
+              <Text style={styles.arrowIcon}>▼</Text>
+            </TouchableOpacity>
 
-          <Text style={styles.label}>Telefonnummer</Text>
-          <TextInput
-            style={styles.input}
-            value={telefon}
-            onChangeText={setTelefon}
-            placeholder="z.B. 0681 123456"
-            placeholderTextColor="#999"
-            keyboardType="phone-pad"
-            accessibilityLabel="Telefonnummer eingeben"
-          />
+            {/* Manuelle Eingabe (Fallback) */}
+            <Text style={styles.label}>Praxis-Name</Text>
+            <TextInput
+              style={styles.input}
+              value={praxisName}
+              onChangeText={setPraxisName}
+              placeholder="z.B. Praxis Dr. Müller"
+              placeholderTextColor="#999"
+              accessibilityLabel="Praxis-Name eingeben"
+            />
 
-          <Text style={styles.label}>Urlaub von</Text>
-          <TextInput
-            style={styles.input}
-            value={urlaubVon}
-            onChangeText={setUrlaubVon}
-            placeholder="TT.MM.JJJJ"
-            placeholderTextColor="#999"
-            keyboardType="numeric"
-            maxLength={10}
-            accessibilityLabel="Urlaub Startdatum eingeben"
-          />
+            <Text style={styles.label}>Telefonnummer</Text>
+            <TextInput
+              style={styles.input}
+              value={telefon}
+              onChangeText={setTelefon}
+              placeholder="z.B. 0681 123456"
+              placeholderTextColor="#999"
+              keyboardType="phone-pad"
+              accessibilityLabel="Telefonnummer eingeben"
+            />
 
-          <Text style={styles.label}>Urlaub bis</Text>
-          <TextInput
-            style={styles.input}
-            value={urlaubBis}
-            onChangeText={setUrlaubBis}
-            placeholder="TT.MM.JJJJ"
-            placeholderTextColor="#999"
-            keyboardType="numeric"
-            maxLength={10}
-            accessibilityLabel="Urlaub Enddatum eingeben"
-          />
+            <Text style={styles.label}>Urlaub von</Text>
+            <TextInput
+              style={styles.input}
+              value={urlaubVon}
+              onChangeText={setUrlaubVon}
+              placeholder="TT.MM.JJJJ"
+              placeholderTextColor="#999"
+              keyboardType="numeric"
+              maxLength={10}
+              accessibilityLabel="Urlaub Startdatum eingeben"
+            />
 
-          <TouchableOpacity
-            style={styles.addButton}
-            onPress={handleAddUrlaub}
-            accessibilityLabel="Urlaub eintragen"
-          >
-            <Text style={styles.addButtonText}>Urlaub eintragen</Text>
-          </TouchableOpacity>
-        </View>
+            <Text style={styles.label}>Urlaub bis</Text>
+            <TextInput
+              style={styles.input}
+              value={urlaubBis}
+              onChangeText={setUrlaubBis}
+              placeholder="TT.MM.JJJJ"
+              placeholderTextColor="#999"
+              keyboardType="numeric"
+              maxLength={10}
+              accessibilityLabel="Urlaub Enddatum eingeben"
+            />
+
+            <TouchableOpacity
+              style={styles.addButton}
+              onPress={handleAddUrlaub}
+              accessibilityLabel="Urlaub eintragen"
+            >
+              <Text style={styles.addButtonText}>Urlaub eintragen</Text>
+            </TouchableOpacity>
+          </View>
         ) : (
           <View style={styles.premiumBanner}>
             <Text style={styles.premiumBannerText}>
@@ -336,6 +420,126 @@ const ArztUrlaubScreen: React.FC<ArztUrlaubScreenProps> = ({ navigation }) => {
             ))}
           </View>
         )}
+
+        {/* Arzt-Auswahl-Menü (Modal) */}
+        <Modal
+          visible={menueOffen}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setMenueOffen(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Arzt auswählen</Text>
+                <TouchableOpacity onPress={() => setMenueOffen(false)}>
+                  <Text style={styles.closeIcon}>✕</Text>
+                </TouchableOpacity>
+              </View>
+
+              {aerzte.length === 0 ? (
+                <Text style={styles.emptyModalText}>Noch keine Ärzte hinterlegt.</Text>
+              ) : (
+                <FlatList
+                  data={aerzte}
+                  keyExtractor={(item) => item.id}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity
+                      style={styles.arztItem}
+                      onPress={() => handleArztAuswahlen(item)}
+                      accessibilityLabel={`${item.name} (${item.fachgebiet || 'Kein Fachgebiet'})`}
+                    >
+                      <View style={styles.arztItemInfo}>
+                        <Text style={styles.arztItemName}>{item.name}</Text>
+                        {item.fachgebiet ? (
+                          <Text style={styles.arztItemDetail}>{item.fachgebiet}</Text>
+                        ) : null}
+                        {item.telefon ? (
+                          <Text style={styles.arztItemDetail}>{item.telefon}</Text>
+                        ) : null}
+                      </View>
+                      <Text style={styles.checkIcon}>✓</Text>
+                    </TouchableOpacity>
+                  )}
+                />
+              )}
+
+              {/* Neuen Arzt anlegen (Premium) */}
+              {premium && aerzte.length < maxAerzte && (
+                <TouchableOpacity
+                  style={styles.neuArztButton}
+                  onPress={() => {
+                    setMenueOffen(false);
+                    setNeuenArztAnlegen(true);
+                  }}
+                  accessibilityLabel="Neuen Arzt anlegen"
+                >
+                  <Text style={styles.neuArztButtonText}>+ Neuen Arzt anlegen</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        </Modal>
+
+        {/* Neuen Arzt anlegen (Modal) */}
+        <Modal
+          visible={neuenArztAnlegen}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setNeuenArztAnlegen(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Neuen Arzt anlegen</Text>
+
+              <Text style={styles.label}>Name *</Text>
+              <TextInput
+                style={styles.input}
+                value={neuArztName}
+                onChangeText={setNeuArztName}
+                placeholder="Dr. Max Mustermann"
+                placeholderTextColor="#999"
+                accessibilityLabel="Arzt-Namen eingeben"
+              />
+
+              <Text style={styles.label}>Fachgebiet</Text>
+              <TextInput
+                style={styles.input}
+                value={neuArztFachgebiet}
+                onChangeText={setNeuArztFachgebiet}
+                placeholder="Hausarzt, Kardiologie..."
+                placeholderTextColor="#999"
+                accessibilityLabel="Fachgebiet eingeben"
+              />
+
+              <Text style={styles.label}>Telefon</Text>
+              <TextInput
+                style={styles.input}
+                value={neuArztTelefon}
+                onChangeText={setNeuArztTelefon}
+                placeholder="0681 123456"
+                placeholderTextColor="#999"
+                keyboardType="phone-pad"
+                accessibilityLabel="Telefonnummer eingeben"
+              />
+
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={[styles.modalBtn, styles.modalBtnCancel]}
+                  onPress={() => setNeuenArztAnlegen(false)}
+                >
+                  <Text style={styles.modalBtnCancelText}>Abbrechen</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalBtn, styles.modalBtnSave]}
+                  onPress={handleNeuenArztSpeichern}
+                >
+                  <Text style={styles.modalBtnSaveText}>Speichern</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
       </ScrollView>
     </SafeAreaView>
   );
@@ -409,6 +613,23 @@ const styles = StyleSheet.create({
     backgroundColor: '#fafafa',
     color: '#1a1a1a',
     minHeight: 50,
+  },
+  selectButton: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#e8f5e9',
+    borderColor: '#27ae60',
+    borderWidth: 2,
+  },
+  selectButtonText: {
+    fontSize: 18,
+    color: '#27ae60',
+    fontWeight: '600',
+  },
+  arrowIcon: {
+    fontSize: 16,
+    color: '#27ae60',
   },
   addButton: {
     backgroundColor: '#28a745',
@@ -518,26 +739,124 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 20,
     marginBottom: 20,
-    borderWidth: 2,
-    borderColor: '#f5a623',
-    alignItems: 'center',
   },
   premiumBannerText: {
     fontSize: 18,
-    color: '#333',
-    textAlign: 'center',
-    marginBottom: 16,
-    lineHeight: 26,
+    color: '#856404',
+    fontWeight: '600',
+    marginBottom: 12,
   },
   premiumBannerButton: {
-    backgroundColor: '#f5a623',
+    backgroundColor: '#ffc107',
     borderRadius: 10,
-    paddingVertical: 14,
-    paddingHorizontal: 24,
+    padding: 14,
+    alignItems: 'center',
+    minHeight: 48,
   },
   premiumBannerButtonText: {
-    color: '#fff',
+    color: '#333',
     fontSize: 18,
+    fontWeight: 'bold',
+  },
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#1a1a1a',
+  },
+  closeIcon: {
+    fontSize: 28,
+    color: '#888',
+  },
+  emptyModalText: {
+    fontSize: 16,
+    color: '#888',
+    textAlign: 'center',
+    paddingVertical: 20,
+  },
+  arztItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  arztItemInfo: {
+    flex: 1,
+  },
+  arztItemName: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1a1a1a',
+  },
+  arztItemDetail: {
+    fontSize: 14,
+    color: '#888',
+    marginTop: 2,
+  },
+  checkIcon: {
+    fontSize: 24,
+    color: '#27ae60',
+  },
+  neuArztButton: {
+    backgroundColor: '#27ae60',
+    borderRadius: 10,
+    padding: 14,
+    alignItems: 'center',
+    marginTop: 12,
+    minHeight: 48,
+  },
+  neuArztButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 16,
+  },
+  modalBtn: {
+    flex: 1,
+    height: 48,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalBtnCancel: {
+    backgroundColor: '#f0f0f0',
+  },
+  modalBtnCancelText: {
+    fontSize: 16,
+    color: '#888',
+    fontWeight: '600',
+  },
+  modalBtnSave: {
+    backgroundColor: '#27ae60',
+  },
+  modalBtnSaveText: {
+    fontSize: 16,
+    color: '#fff',
     fontWeight: 'bold',
   },
 });

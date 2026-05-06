@@ -12,7 +12,7 @@ SQLite.DEBUG(true);
 SQLite.enablePromise(true);
 
 const DATABASE_NAME = 'meine_medikamente.db';
-const DATABASE_VERSION = 6; // V6: telefon Spalte in arzt_urlaub
+const DATABASE_VERSION = 7; // V7: aerzte Tabelle fuer Arztkontaktdaten
 
 export interface MedikamentRow {
   id: string;
@@ -46,6 +46,15 @@ export interface ArztUrlaubRow {
   telefon?: string;       // Telefonnummer des Arztes (optional)
   urlaub_start: string; // ISO Date YYYY-MM-DD
   urlaub_ende: string;  // ISO Date YYYY-MM-DD
+  created_at: string;
+}
+
+export interface ArztRow {
+  id: string;
+  name: string;          // Name der Praxis / des Arztes
+  telefon: string;       // Telefonnummer
+  adresse: string;       // Adresse (optional)
+  fachgebiet: string;    // Fachgebiet (optional)
   created_at: string;
 }
 
@@ -128,6 +137,17 @@ class Database {
     `);
 
     await this.db.executeSql(`
+      CREATE TABLE IF NOT EXISTS aerzte (
+        id          TEXT PRIMARY KEY NOT NULL,
+        name        TEXT NOT NULL,
+        telefon     TEXT NOT NULL DEFAULT '',
+        adresse     TEXT NOT NULL DEFAULT '',
+        fachgebiet  TEXT NOT NULL DEFAULT '',
+        created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+    `);
+
+    await this.db.executeSql(`
       CREATE TABLE IF NOT EXISTS packungen (
         id                 TEXT PRIMARY KEY NOT NULL,
         medikament_id      TEXT NOT NULL,
@@ -172,6 +192,7 @@ class Database {
     await this.migrateV3toV4();
     await this.migrateV4toV5();
     await this.migrateV5toV6();
+    await this.migrateV6toV7();
   }
 
   /**
@@ -320,6 +341,28 @@ class Database {
       await this.db.close();
       this.db = null;
       console.log('[DB] Datenbank geschlossen');
+    }
+  }
+
+  /**
+   * Migration V6 -> V7: aerzte Tabelle fuer Arztkontaktdaten
+   */
+  private async migrateV6toV7(): Promise<void> {
+    if (!this.db) return;
+    try {
+      await this.db.executeSql(`SELECT id FROM aerzte LIMIT 1`);
+    } catch {
+      await this.db.executeSql(`
+        CREATE TABLE IF NOT EXISTS aerzte (
+          id          TEXT PRIMARY KEY NOT NULL,
+          name        TEXT NOT NULL,
+          telefon     TEXT NOT NULL DEFAULT '',
+          adresse     TEXT NOT NULL DEFAULT '',
+          fachgebiet  TEXT NOT NULL DEFAULT '',
+          created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+      `);
+      console.log('[DB] Migration V6->V7: aerzte Tabelle erstellt');
     }
   }
 }

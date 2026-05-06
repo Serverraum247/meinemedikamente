@@ -1,7 +1,8 @@
 /**
  * SettingsScreen.tsx – App-Einstellungen
  *
- * Aktuell: Standard-Uhrzeiten fuer Tageszeit-Slots anpassen
+ * - Standard-Uhrzeiten fuer Tageszeit-Slots
+ * - Arztkontaktdaten pflegen (Free: 1 Arzt, Premium: unbegrenzt)
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -26,10 +27,20 @@ import {
   type TageszeitSlot,
 } from '../utils/Einnahmeplan';
 import { announceChange } from '../utils/AccessibilityHelpers';
+import {
+  getAllAerzte,
+  createArzt,
+  updateArzt,
+  deleteArzt,
+  getMaxAerzte,
+  type ArztRow,
+} from '../database/ArztController';
+import { isPremium } from '../services/PremiumService';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
 
 export default function SettingsScreen({ navigation }: Props) {
+  // Uhrzeiten-State
   const [uhrzeiten, setUhrzeiten] = useState<Record<TageszeitSlot, string>>({
     morgens: '08:00',
     mittags: '12:00',
@@ -38,13 +49,32 @@ export default function SettingsScreen({ navigation }: Props) {
   });
   const [geaendert, setGeaendert] = useState<Set<TageszeitSlot>>(new Set());
 
-  // Uhrzeiten beim Oeffnen laden
+  // Aerzte-State
+  const [aerzte, setAerzte] = useState<ArztRow[]>([]);
+  const [premium, setPremiumStatus] = useState(false);
+  const [maxAerzte, setMaxAerzteState] = useState(1);
+  const [editArzt, setEditArzt] = useState<ArztRow | null>(null);
+  const [neuerArzt, setNeuerArzt] = useState(false);
+
+  // Uhrzeiten + Aerzte laden
   useEffect(() => {
     (async () => {
       const stored = await getAllDefaultUhrzeiten();
       setUhrzeiten(stored);
+      await loadAerzte();
     })();
   }, []);
+
+  const loadAerzte = async () => {
+    const [list, isPrem, max] = await Promise.all([
+      getAllAerzte(),
+      isPremium(),
+      getMaxAerzte(),
+    ]);
+    setAerzte(list);
+    setPremiumStatus(isPrem);
+    setMaxAerzteState(max);
+  };
 
   // Uhrzeit validieren (HH:MM)
   const isValidTime = (t: string): boolean => {
@@ -54,13 +84,11 @@ export default function SettingsScreen({ navigation }: Props) {
     })();
   };
 
-  // Uhrzeit-Aenderung speichern
   const handleUhrzeitChange = useCallback((slot: TageszeitSlot, value: string) => {
     setUhrzeiten(prev => ({ ...prev, [slot]: value }));
     setGeaendert(prev => new Set(prev).add(slot));
   }, []);
 
-  // Alle Aenderungen speichern
   const handleSpeichern = useCallback(async () => {
     try {
       for (const slot of geaendert) {
@@ -78,12 +106,11 @@ export default function SettingsScreen({ navigation }: Props) {
       setGeaendert(new Set());
       announceChange('Einstellungen gespeichert');
       Alert.alert('Gespeichert', 'Standard-Uhrzeiten wurden aktualisiert.');
-    } catch (e) {
+    } catch (_e) {
       Alert.alert('Fehler', 'Uhrzeiten konnten nicht gespeichert werden.');
     }
   }, [geaendert, uhrzeiten]);
 
-  // Zuruecksetzen
   const handleReset = useCallback(() => {
     Alert.alert(
       'Zurücksetzen',
@@ -104,13 +131,200 @@ export default function SettingsScreen({ navigation }: Props) {
     );
   }, []);
 
+  // === Arzt-Handler ===
+
+  const handleAddArzt = () => {
+    if (aerzte.length >= maxAerzte) {
+      Alert.alert(
+        'Premium erforderlich',
+        `Kostenlose Version: nur 1 Arzt. Premium = unbegrenzte Ärzte.`,
+        [
+          { text: 'Abbrechen', style: 'cancel' },
+          { text: 'Premium', onPress: () => navigation.navigate('Premium') },
+        ],
+      );
+      return;
+    }
+    setNeuerArzt(true);
+    setEditArzt({ id: '', name: '', telefon: '', adresse: '', fachgebiet: '', created_at: '' });
+  };
+
+  const handleSaveArzt = async () => {
+    if (!editArzt || !editArzt.name.trim()) {
+      Alert.alert('Pflichtfeld', 'Bitte gib einen Namen ein.');
+      return;
+    }
+
+    try {
+      if (neuerArzt) {
+        const result = await createArzt({
+          name: editArzt.name.trim(),
+          telefon: editArzt.telefon.trim(),
+          adresse: editArzt.adresse.trim(),
+          fachgebiet: editArzt.fachgebiet.trim(),
+        });
+        if (!result.success) {
+          Alert.alert('Limit erreicht', result.error || 'Fehler beim Anlegen.');
+          return;
+        }
+      } else {
+        await updateArzt(editArzt.id, {
+          name: editArzt.name.trim(),
+          telefon: editArzt.telefon.trim(),
+          adresse: editArzt.adresse.trim(),
+          fachgebiet: editArzt.fachgebiet.trim(),
+        });
+      }
+      setEditArzt(null);
+      setNeuerArzt(false);
+      await loadAerzte();
+    } catch (_e) {
+      Alert.alert('Fehler', 'Arzt konnte nicht gespeichert werden.');
+    }
+  };
+
+  const handleDeleteArzt = (arzt: ArztRow) => {
+    Alert.alert(
+      'Arzt löschen',
+      `"${arzt.name}" wirklich löschen?`,
+      [
+        { text: 'Abbrechen', style: 'cancel' },
+        {
+          text: 'Löschen',
+          style: 'destructive',
+          onPress: async () => {
+            await deleteArzt(arzt.id);
+            await loadAerzte();
+          },
+        },
+      ],
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Header */}
+
+        {/* === Meine Aerzte === */}
         <Text style={styles.title}>Einstellungen</Text>
 
-        {/* Standard-Uhrzeiten */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle} accessibilityRole="header">
+              👨‍⚕️ Meine Ärzte
+            </Text>
+            <TouchableOpacity onPress={handleAddArzt} accessibilityRole="button" accessibilityLabel="Arzt hinzufügen">
+              <Text style={styles.addButton}>+ Hinzufügen</Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.sectionHint}>
+            Hinterlege Kontaktdaten deiner Ärzte.{'\n'}
+            {premium
+              ? 'Premium: unbegrenzte Ärzte.'
+              : `Kostenlos: 1 Arzt. Premium = unbegrenzt.`
+            }
+          </Text>
+
+          {aerzte.length === 0 && !editArzt && (
+            <Text style={styles.emptyText}>Noch kein Arzt hinterlegt.</Text>
+          )}
+
+          {aerzte.map(arzt => (
+            <View key={arzt.id} style={styles.arztCard}>
+              <View style={styles.arztInfo}>
+                <Text style={styles.arztName}>{arzt.name}</Text>
+                {arzt.fachgebiet ? (
+                  <Text style={styles.arztDetail}>{arzt.fachgebiet}</Text>
+                ) : null}
+                {arzt.telefon ? (
+                  <Text style={styles.arztDetail}>📞 {arzt.telefon}</Text>
+                ) : null}
+                {arzt.adresse ? (
+                  <Text style={styles.arztDetail}>📍 {arzt.adresse}</Text>
+                ) : null}
+              </View>
+              <View style={styles.arztActions}>
+                <TouchableOpacity
+                  onPress={() => { setNeuerArzt(false); setEditArzt({ ...arzt }); }}
+                  accessibilityLabel={`${arzt.name} bearbeiten`}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Text style={styles.arztEditButton}>✏️</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => handleDeleteArzt(arzt)}
+                  accessibilityLabel={`${arzt.name} löschen`}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Text style={styles.arztDeleteButton}>🗑️</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))}
+
+          {/* Arzt bearbeiten/hinzufuegen Formular */}
+          {editArzt && (
+            <View style={styles.arztForm}>
+              <Text style={styles.arztFormTitle}>
+                {neuerArzt ? 'Neuer Arzt' : 'Arzt bearbeiten'}
+              </Text>
+
+              <Text style={styles.fieldLabel}>Name *</Text>
+              <TextInput
+                style={styles.fieldInput}
+                value={editArzt.name}
+                onChangeText={t => setEditArzt({ ...editArzt, name: t })}
+                placeholder="Dr. Müller"
+                placeholderTextColor="#999"
+              />
+
+              <Text style={styles.fieldLabel}>Fachgebiet</Text>
+              <TextInput
+                style={styles.fieldInput}
+                value={editArzt.fachgebiet}
+                onChangeText={t => setEditArzt({ ...editArzt, fachgebiet: t })}
+                placeholder="Hausarzt, Kardiologie..."
+                placeholderTextColor="#999"
+              />
+
+              <Text style={styles.fieldLabel}>Telefon</Text>
+              <TextInput
+                style={styles.fieldInput}
+                value={editArzt.telefon}
+                onChangeText={t => setEditArzt({ ...editArzt, telefon: t })}
+                placeholder="0681 123456"
+                placeholderTextColor="#999"
+                keyboardType="phone-pad"
+              />
+
+              <Text style={styles.fieldLabel}>Adresse</Text>
+              <TextInput
+                style={styles.fieldInput}
+                value={editArzt.adresse}
+                onChangeText={t => setEditArzt({ ...editArzt, adresse: t })}
+                placeholder="Musterstraße 1, 66111 Saarbrücken"
+                placeholderTextColor="#999"
+              />
+
+              <View style={styles.arztFormButtons}>
+                <TouchableOpacity
+                  style={[styles.arztFormBtn, styles.arztFormCancel]}
+                  onPress={() => { setEditArzt(null); setNeuerArzt(false); }}
+                >
+                  <Text style={styles.arztFormCancelText}>Abbrechen</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.arztFormBtn, styles.arztFormSave]}
+                  onPress={handleSaveArzt}
+                >
+                  <Text style={styles.arztFormSaveText}>Speichern</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+        </View>
+
+        {/* === Standard-Uhrzeiten === */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle} accessibilityRole="header">Standard-Uhrzeiten</Text>
           <Text style={styles.sectionHint}>
@@ -206,6 +420,12 @@ const styles = StyleSheet.create({
     padding: 20,
     marginBottom: 16,
   },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
   sectionTitle: {
     fontSize: 22,
     fontWeight: '700',
@@ -218,6 +438,114 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     lineHeight: 22,
   },
+
+  // Arzt-Liste
+  addButton: {
+    fontSize: 16,
+    color: '#27ae60',
+    fontWeight: '700',
+  },
+  emptyText: {
+    fontSize: 16,
+    color: '#999',
+    textAlign: 'center',
+    paddingVertical: 12,
+  },
+  arztCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 14,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+  },
+  arztInfo: {
+    flex: 1,
+  },
+  arztName: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1a1a2e',
+  },
+  arztDetail: {
+    fontSize: 15,
+    color: '#666',
+    marginTop: 2,
+  },
+  arztActions: {
+    flexDirection: 'row',
+    gap: 12,
+    paddingLeft: 12,
+  },
+  arztEditButton: {
+    fontSize: 22,
+  },
+  arztDeleteButton: {
+    fontSize: 22,
+  },
+
+  // Arzt-Formular
+  arztForm: {
+    backgroundColor: '#f9f9f8',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 12,
+    borderTopWidth: 2,
+    borderTopColor: '#27ae60',
+  },
+  arztFormTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1a1a2e',
+    marginBottom: 12,
+  },
+  fieldLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#888',
+    marginBottom: 4,
+    marginTop: 8,
+  },
+  fieldInput: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 18,
+    color: '#1a1a2e',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  arztFormButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 16,
+  },
+  arztFormBtn: {
+    flex: 1,
+    height: 48,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  arztFormCancel: {
+    backgroundColor: '#f0f0f0',
+  },
+  arztFormCancelText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#888',
+  },
+  arztFormSave: {
+    backgroundColor: '#27ae60',
+  },
+  arztFormSaveText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#fff',
+  },
+
+  // Uhrzeiten
   uhrzeitRow: {
     flexDirection: 'row',
     alignItems: 'center',
