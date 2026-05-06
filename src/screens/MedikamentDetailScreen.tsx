@@ -35,7 +35,7 @@ import {
 } from '../utils/Einnahmeplan';
 import { announceChange } from '../utils/AccessibilityHelpers';
 import { erstelleRezeptAbholtermin } from '../services/KalenderService';
-import { canCreateCalendarEvent, recordCalendarEvent } from '../services/PremiumService';
+import { canCreateCalendarEvent, recordCalendarEvent, isPremium } from '../services/PremiumService';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'MedikamentDetail'>;
 
@@ -49,6 +49,7 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
   const [offenePackungen, setOffenePackungen] = useState(0);
   const [packungsHistorie, setPackungsHistorie] = useState<PackungRow[]>([]);
   const [zeigeHistorie, setZeigeHistorie] = useState(false);
+  const [premium, setPremiumStatus] = useState(false);
 
   // Medikament + Historie laden
   const loadData = useCallback(async () => {
@@ -71,6 +72,11 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
       console.error('[Historie] Fehler:', e);
     }
   }, [medikamente, medikamentId, navigation]);
+
+  // Premium-Status einmal laden
+  useEffect(() => {
+    isPremium().then(setPremiumStatus);
+  }, []);
 
   useEffect(() => {
     loadData();
@@ -160,6 +166,42 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
     );
   }, [medikament, loadData]);
 
+  // Bestandskorrektur (Premium)
+  const handleBestandskorrektur = useCallback(() => {
+    if (!medikament) return;
+
+    Alert.prompt(
+      'Bestandskorrektur',
+      `Aktueller Bestand: ${medikament.aktueller_bestand} ${medikament.einheit}\nNeuer Bestand:`,
+      [
+        { text: 'Abbrechen', style: 'cancel' },
+        {
+          text: 'Korrigieren',
+          onPress: async (value?: string) => {
+            const input = (value || '').replace(',', '.');
+            const neuerBestand = parseFloat(input);
+            if (isNaN(neuerBestand) || neuerBestand < 0) {
+              Alert.alert('Ungültig', 'Bitte eine gültige Zahl eingeben (z.B. 28.5).');
+              return;
+            }
+            try {
+              await aktualisiereBestand(medikament.id, neuerBestand);
+              Alert.alert(
+                'Bestand korrigiert',
+                `${medikament.aktueller_bestand} → ${neuerBestand} ${medikament.einheit}`
+              );
+              await loadData();
+            } catch {
+              Alert.alert('Fehler', 'Bestand konnte nicht korrigiert werden.');
+            }
+          },
+        },
+      ],
+      'plain-text',
+      String(medikament.aktueller_bestand)
+    );
+  }, [medikament, aktualisiereBestand, loadData]);
+
   if (!medikament) {
     return (
       <View style={styles.center}>
@@ -206,6 +248,16 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
             <Text style={styles.tageInfo}>
               Reicht für ca. {tageVerbleibend} Tag(e)
             </Text>
+          )}
+          {premium && (
+            <TouchableOpacity
+              style={styles.korrekturButton}
+              onPress={handleBestandskorrektur}
+              accessibilityLabel="Bestand korrigieren"
+              accessibilityHint="Bestand manuell anpassen, z.B. bei Verlust"
+            >
+              <Text style={styles.korrekturButtonText}>✏️ Bestand korrigieren</Text>
+            </TouchableOpacity>
           )}
         </View>
 
@@ -544,6 +596,19 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#888',
     marginTop: 8,
+  },
+  korrekturButton: {
+    marginTop: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    backgroundColor: '#f0f0f0',
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+  },
+  korrekturButtonText: {
+    fontSize: 16,
+    color: '#555',
+    fontWeight: '500',
   },
   detailCard: {
     backgroundColor: '#FFFFFF',
