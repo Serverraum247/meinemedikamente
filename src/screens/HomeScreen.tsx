@@ -5,7 +5,7 @@
  * klare Anzeige der Bestände (inkl. Float-Werte wie 28.5)
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -15,6 +15,9 @@ import {
   ActivityIndicator,
   SafeAreaView,
   Alert,
+  Modal,
+  Animated,
+  Pressable,
 } from 'react-native';
 import { useMedikamente } from '../context/MedikamentContext';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -22,27 +25,30 @@ import type { RootStackParamList } from '../navigation/AppNavigator';
 import { calculateUrlaubsWarnungen } from '../database/UrlaubController';
 import type { UrlaubsWarnung } from '../database/UrlaubController';
 import { getMaxMedikamente, isPremium } from '../services/PremiumService';
+import { version as APP_VERSION } from '../../package.json';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
 
 export default function HomeScreen({ navigation }: Props) {
   const { medikamente, medikamenteUnterSchwelle, loading } = useMedikamente();
   const [urlaubsWarnungen, setUrlaubsWarnungen] = useState<UrlaubsWarnung[]>([]);
+  const [menueOffen, setMenueOffen] = useState(false);
 
-  // Einstellungen-Button im Header
+  // Hamburger-Menue im Header links
   useEffect(() => {
     navigation.setOptions({
-      headerRight: () => (
+      headerLeft: () => (
         <TouchableOpacity
-          onPress={() => navigation.navigate('Settings')}
-          style={styles.settingsButton}
+          onPress={() => setMenueOffen(true)}
+          style={styles.hamburgerButton}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           accessibilityRole="button"
-          accessibilityLabel="Einstellungen öffnen"
+          accessibilityLabel="Menü öffnen"
         >
-          <Text style={styles.settingsButtonText} accessibilityElementsHidden>⚙️</Text>
+          <Text style={styles.hamburgerIcon} accessibilityElementsHidden>☰</Text>
         </TouchableOpacity>
       ),
+      headerRight: () => null,
     });
   }, [navigation]);
 
@@ -131,28 +137,6 @@ export default function HomeScreen({ navigation }: Props) {
         </TouchableOpacity>
       )}
 
-      {/* Arzt-Urlaub – kleiner Link unten */}
-      <TouchableOpacity
-        onPress={() => navigation.navigate('ArztUrlaub')}
-        activeOpacity={0.7}
-        accessibilityLabel="Arzt-Urlaub verwalten"
-        accessibilityHint="Urlaube von Arztpraxen eintragen und Kollisionen prüfen"
-        style={styles.arztUrlaubLink}
-      >
-        <Text style={styles.arztUrlaubLinkText}>📅 Arzt-Urlaub</Text>
-      </TouchableOpacity>
-
-      {/* Premium freischalten */}
-      <TouchableOpacity
-        style={styles.premiumButton}
-        onPress={() => navigation.navigate('Premium')}
-        activeOpacity={0.7}
-        accessibilityRole="button"
-        accessibilityLabel="Premium-Features freischalten"
-      >
-        <Text style={styles.premiumButtonText}>⭐ Premium freischalten</Text>
-      </TouchableOpacity>
-
       {/* Leerer Zustand */}
       {medikamente.length === 0 ? (
         <View style={styles.center}>
@@ -194,6 +178,68 @@ export default function HomeScreen({ navigation }: Props) {
       >
         <Text style={styles.fabText}>+</Text>
       </TouchableOpacity>
+
+      {/* Hamburger-Seitenmenue */}
+      <Modal
+        visible={menueOffen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setMenueOffen(false)}
+      >
+        <Pressable style={styles.menueOverlay} onPress={() => setMenueOffen(false)}>
+          <Pressable style={styles.menuePanel} onPress={() => {}}>
+            {/* Menue-Header */}
+            <View style={styles.menueHeader}>
+              <Text style={styles.menueTitle}>Meine Medikamente</Text>
+              <TouchableOpacity onPress={() => setMenueOffen(false)} accessibilityLabel="Menü schließen">
+                <Text style={styles.menueClose}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Menue-Eintraege */}
+            <TouchableOpacity
+              style={styles.menueItem}
+              onPress={() => { setMenueOffen(false); navigation.navigate('Settings'); }}
+              accessibilityRole="button"
+            >
+              <Text style={styles.menueItemIcon}>⚙️</Text>
+              <Text style={styles.menueItemText}>Einstellungen</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.menueItem}
+              onPress={() => { setMenueOffen(false); navigation.navigate('ArztUrlaub'); }}
+              accessibilityRole="button"
+            >
+              <Text style={styles.menueItemIcon}>📅</Text>
+              <Text style={styles.menueItemText}>Arzt-Urlaub</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.menueItem}
+              onPress={() => { setMenueOffen(false); navigation.navigate('Premium'); }}
+              accessibilityRole="button"
+            >
+              <Text style={styles.menueItemIcon}>⭐</Text>
+              <Text style={styles.menueItemText}>Premium</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.menueItem}
+              onPress={() => { setMenueOffen(false); navigation.navigate('Backup'); }}
+              accessibilityRole="button"
+            >
+              <Text style={styles.menueItemIcon}>☁️</Text>
+              <Text style={styles.menueItemText}>Cloud-Backup</Text>
+            </TouchableOpacity>
+
+            {/* Version */}
+            <View style={styles.menueFooter}>
+              <Text style={styles.menueVersion}>Version {APP_VERSION}</Text>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -320,12 +366,72 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '300',
   },
-  settingsButton: {
-    marginRight: 8,
+  hamburgerButton: {
+    marginLeft: 8,
     padding: 6,
   },
-  settingsButtonText: {
-    fontSize: 26,
+  hamburgerIcon: {
+    fontSize: 28,
+    color: '#1a1a2e',
+  },
+  menueOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  menuePanel: {
+    width: '75%',
+    maxWidth: 320,
+    height: '100%',
+    backgroundColor: '#fff',
+    paddingTop: 50,
+    paddingHorizontal: 0,
+  },
+  menueHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+    marginBottom: 8,
+  },
+  menueTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#1a1a2e',
+  },
+  menueClose: {
+    fontSize: 24,
+    color: '#888',
+    padding: 8,
+  },
+  menueItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+  },
+  menueItemIcon: {
+    fontSize: 24,
+    width: 40,
+  },
+  menueItemText: {
+    fontSize: 20,
+    color: '#1a1a2e',
+    fontWeight: '500',
+  },
+  menueFooter: {
+    marginTop: 'auto',
+    paddingBottom: 30,
+    paddingHorizontal: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+    paddingTop: 16,
+  },
+  menueVersion: {
+    fontSize: 14,
+    color: '#999',
   },
   urlaubBanner: {
     backgroundColor: '#fff3cd',
@@ -338,30 +444,5 @@ const styles = StyleSheet.create({
     color: '#856404',
     fontWeight: '600',
     textAlign: 'center',
-  },
-  arztUrlaubLink: {
-    paddingVertical: 8,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  arztUrlaubLinkText: {
-    fontSize: 16,
-    color: '#888',
-    textDecorationLine: 'underline',
-  },
-  premiumButton: {
-    backgroundColor: '#fffdf5',
-    borderWidth: 2,
-    borderColor: '#f39c12',
-    borderRadius: 12,
-    padding: 16,
-    marginHorizontal: 16,
-    marginTop: 10,
-    alignItems: 'center',
-  },
-  premiumButtonText: {
-    fontSize: 20,
-    color: '#f39c12',
-    fontWeight: '600',
   },
 });
