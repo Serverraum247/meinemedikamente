@@ -230,6 +230,11 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
+        {/* Name + Zusatz */}
+        {medikament.zusatz ? (
+          <Text style={styles.zusatzUntertitel}>{medikament.zusatz}</Text>
+        ) : null}
+
         {/* Bestand-Anzeige */}
         <View
           style={[styles.bestandCard, isUnterSchwelle && styles.bestandCardWarning]}
@@ -546,6 +551,13 @@ const styles = StyleSheet.create({
   content: {
     padding: 16,
     paddingBottom: 40,
+  },
+  zusatzUntertitel: {
+    fontSize: 16,
+    color: '#666',
+    fontStyle: 'italic',
+    textAlign: 'center',
+    marginBottom: 8,
   },
   bestandCard: {
     backgroundColor: '#FFFFFF',

@@ -46,6 +46,7 @@ export default function EditMedikamentScreen({ route, navigation }: Props) {
   const [medikament, setMedikament] = useState<MedikamentRow | null>(null);
 
   const [name, setName] = useState('');
+  const [zusatz, setZusatz] = useState('');
   const [bestand, setBestand] = useState('');
   const [einzeldosis, setEinzeldosis] = useState('');
   const [einheit, setEinheit] = useState('Tabletten');
@@ -76,6 +77,7 @@ export default function EditMedikamentScreen({ route, navigation }: Props) {
     if (found) {
       setMedikament(found);
       setName(found.name);
+      setZusatz(found.zusatz || '');
       setBestand(String(found.aktueller_bestand));
       setEinzeldosis(String(found.einzeldosis));
       setEinheit(found.einheit);
@@ -117,6 +119,7 @@ export default function EditMedikamentScreen({ route, navigation }: Props) {
     try {
       await bearbeiteMedikament(medikament.id, {
         name: name.trim(),
+        zusatz: zusatz.trim(),
         aktueller_bestand: bestandFloat,
         einzeldosis: dosisFloat,
         einheit,
@@ -161,6 +164,19 @@ export default function EditMedikamentScreen({ route, navigation }: Props) {
             value={name}
             onChangeText={setName}
             placeholder="z.B. Aspirin"
+            placeholderTextColor="#999"
+          />
+        </View>
+
+        {/* Zusatz / Wirkstoff-Alias */}
+        <View style={styles.fieldGroup}>
+          <Text style={styles.label}>Zusatz / Wirkstoff</Text>
+          <TextInput
+            style={styles.input}
+            accessibilityLabel="Zusatz / Wirkstoff"
+            value={zusatz}
+            onChangeText={setZusatz}
+            placeholder="z.B. Blutdrucksenker"
             placeholderTextColor="#999"
           />
         </View>

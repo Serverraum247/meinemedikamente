@@ -86,6 +86,9 @@ export default function HomeScreen({ navigation }: Props) {
       >
         <View style={styles.cardContent}>
           <Text style={styles.medName}>{item.name}</Text>
+          {item.zusatz ? (
+            <Text style={styles.medZusatz}>{item.zusatz}</Text>
+          ) : null}
           <Text style={styles.medDetail}>
             Bestand: {item.aktueller_bestand} {item.einheit}
           </Text>
@@ -292,6 +295,12 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '600',
     color: '#1a1a2e',
+    marginBottom: 2,
+  },
+  medZusatz: {
+    fontSize: 14,
+    color: '#777',
+    fontStyle: 'italic',
     marginBottom: 4,
   },
   medDetail: {

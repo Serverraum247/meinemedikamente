@@ -12,11 +12,12 @@ SQLite.DEBUG(true);
 SQLite.enablePromise(true);
 
 const DATABASE_NAME = 'meine_medikamente.db';
-const DATABASE_VERSION = 7; // V7: aerzte Tabelle fuer Arztkontaktdaten
+const DATABASE_VERSION = 8; // V8: zusatz Spalte in medikamente (Wirkstoff-Alias)
 
 export interface MedikamentRow {
   id: string;
   name: string;
+  zusatz: string;            // z.B. "Blutdrucksenker", "Schilddrüse"
   aktueller_bestand: number; // Float, z.B. 28.5
   einzeldosis: number;       // Float, z.B. 0.5
   einheit: string;           // 'Tabletten', 'Kapseln', etc.
@@ -100,6 +101,7 @@ class Database {
       CREATE TABLE IF NOT EXISTS medikamente (
         id                TEXT PRIMARY KEY NOT NULL,
         name              TEXT NOT NULL,
+        zusatz            TEXT NOT NULL DEFAULT '',
         aktueller_bestand REAL NOT NULL DEFAULT 0,
         einzeldosis       REAL NOT NULL DEFAULT 1.0,
         einheit           TEXT NOT NULL DEFAULT 'Tabletten',
@@ -193,6 +195,7 @@ class Database {
     await this.migrateV4toV5();
     await this.migrateV5toV6();
     await this.migrateV6toV7();
+    await this.migrateV7toV8();
   }
 
   /**
@@ -363,6 +366,30 @@ class Database {
         );
       `);
       console.log('[DB] Migration V6->V7: aerzte Tabelle erstellt');
+    }
+  }
+
+  /**
+   * Migration V7 -> V8: zusatz Spalte in medikamente (Wirkstoff-Alias)
+   */
+  private async migrateV7toV8(): Promise<void> {
+    if (!this.db) return;
+    try {
+      const result = await this.db.executeSql(`PRAGMA table_info(medikamente);`);
+      const columns: string[] = [];
+      result.forEach((r: any) => {
+        for (let i = 0; i < r.rows.length; i++) {
+          columns.push(r.rows.item(i).name);
+        }
+      });
+      if (!columns.includes('zusatz')) {
+        await this.db.executeSql(
+          `ALTER TABLE medikamente ADD COLUMN zusatz TEXT NOT NULL DEFAULT '';`
+        );
+        console.log('[DB] Migration V7->V8: zusatz Spalte in medikamente hinzugefuegt');
+      }
+    } catch (error) {
+      console.warn('[DB] Migration V7->V8 Pruefung:', error);
     }
   }
 }

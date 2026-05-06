@@ -44,6 +44,7 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
   const { addMedikament } = useMedikamente();
 
   const [name, setName] = useState('');
+  const [zusatz, setZusatz] = useState('');
   const [bestand, setBestand] = useState('');
   const [einzeldosis, setEinzeldosis] = useState('1');
   const [einheit, setEinheit] = useState('Tabletten');
@@ -105,6 +106,7 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
       await addMedikament({
         id,
         name: name.trim(),
+        zusatz: zusatz.trim(),
         aktueller_bestand: bestandFloat,
         einzeldosis: dosisFloat,
         einheit,
@@ -149,6 +151,19 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
             placeholderTextColor="#999"
             accessibilityLabel="Name"
             autoFocus
+          />
+        </View>
+
+        {/* Zusatz / Wirkstoff-Alias */}
+        <View style={styles.fieldGroup}>
+          <Text style={styles.label}>Zusatz / Wirkstoff</Text>
+          <TextInput
+            style={styles.input}
+            value={zusatz}
+            onChangeText={setZusatz}
+            placeholder="z.B. Blutdrucksenker"
+            placeholderTextColor="#999"
+            accessibilityLabel="Zusatz"
           />
         </View>
 
