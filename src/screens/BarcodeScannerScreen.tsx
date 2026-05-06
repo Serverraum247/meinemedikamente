@@ -1,12 +1,9 @@
 /**
- * BarcodeScannerScreen.tsx – Barcode/PZN-Scanner
+ * BarcodeScannerScreen.tsx – Kamera-Barcode-Scanner + manuelle PZN-Eingabe
  *
- * Aktuell: Manuelle PZN-Eingabe mit Hinweis auf kommenden Scanner.
- * Geplant: react-native-vision-camera + vision-camera-code-scanner
- *          für native Kamera-Integration (Phase 3.1).
- *
- * Der Screen wird vom AddMedikamentScreen aufgerufen und gibt
- * die gescannte/eingegebene PZN per Navigation-Param zurück.
+ * Nutzt react-native-camera-kit fuer native Kamera-Barcode-Erkennung.
+ * Senioren-freundlich: Grosser Kamera-View, automatische Erkennung,
+ * Fallback auf manuelle Eingabe per Tab.
  */
 
 import React, { useState } from 'react';
@@ -18,7 +15,9 @@ import {
   StyleSheet,
   SafeAreaView,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
+import { Camera } from 'react-native-camera-kit';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 import { validatePZN } from '../services/BarcodeScannerService';
@@ -27,11 +26,88 @@ import { lookupPzn } from '../services/PznLookupService';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'BarcodeScanner'>;
 
+type TabMode = 'kamera' | 'manuell';
+
 export default function BarcodeScannerScreen({ navigation }: Props) {
+  const [tab, setTab] = useState<TabMode>('kamera');
   const [pznInput, setPznInput] = useState('');
   const [isLookingUp, setIsLookingUp] = useState(false);
   const [lookupResult, setLookupResult] = useState<string | null>(null);
+  const [hasScanned, setHasScanned] = useState(false);
 
+  // Barcode vom Kamera-Scanner verarbeiten
+  const onBarcodeScanned = async (event: any) => {
+    if (hasScanned) return; // Debounce: nur ein Scan pro Aktion
+
+    const barcode = event.nativeEvent?.codeStringValue ?? '';
+    if (!barcode) return;
+
+    // Nur numerische Barcodes (PZN, EAN) akzeptieren
+    const cleaned = barcode.trim();
+    if (!/^\d{6,13}$/.test(cleaned)) return;
+
+    setHasScanned(true);
+
+    // Premium-Gate
+    const { allowed } = await canScanBarcode();
+    if (!allowed) {
+      Alert.alert(
+        'Premium erforderlich',
+        'Du hast bereits 3 Barcodes heute gescannt. Premium = unbegrenzt Scans.',
+        [
+          { text: 'Abbrechen', style: 'cancel', onPress: () => setHasScanned(false) },
+          { text: 'Premium', onPress: () => navigation.navigate('Premium') },
+        ]
+      );
+      return;
+    }
+    await recordBarcodeScan();
+
+    await processPzn(cleaned);
+  };
+
+  // PZN verarbeiten (Lookup + Navigation)
+  const processPzn = async (pzn: string) => {
+    setIsLookingUp(true);
+    setLookupResult(null);
+    try {
+      const result = await lookupPzn(pzn);
+      setIsLookingUp(false);
+
+      if (result.found && result.name) {
+        setLookupResult(result.name);
+        Alert.alert(
+          'Medikament erkannt',
+          `${result.name}${result.hersteller ? '\nHersteller: ' + result.hersteller : ''}${result.darreichungsform ? '\nForm: ' + result.darreichungsform : ''}`,
+          [
+            {
+              text: 'Übernehmen',
+              onPress: () => {
+                navigation.navigate('AddMedikament', {
+                  scannedPZN: pzn,
+                  suggestedName: result.name,
+                });
+              },
+            },
+            {
+              text: 'Ändern',
+              style: 'cancel',
+              onPress: () => {
+                navigation.navigate('AddMedikament', { scannedPZN: pzn });
+              },
+            },
+          ]
+        );
+      } else {
+        navigation.navigate('AddMedikament', { scannedPZN: pzn });
+      }
+    } catch {
+      setIsLookingUp(false);
+      navigation.navigate('AddMedikament', { scannedPZN: pzn });
+    }
+  };
+
+  // Manuelle Eingabe
   const handleUebernehmen = async () => {
     const trimmed = pznInput.trim();
     if (!trimmed) {
@@ -39,7 +115,6 @@ export default function BarcodeScannerScreen({ navigation }: Props) {
       return;
     }
 
-    // Premium-Gate: Barcode-Scan-Limit pruefen
     const { allowed } = await canScanBarcode();
     if (!allowed) {
       Alert.alert(
@@ -54,124 +129,131 @@ export default function BarcodeScannerScreen({ navigation }: Props) {
     }
     await recordBarcodeScan();
 
-    // PZN-Validierung (optional – nur Hinweis)
     if (/^\d{7,8}$/.test(trimmed) && !validatePZN(trimmed)) {
       Alert.alert(
-        'Pruefziffer falsch',
-        'Die eingegebene PZN scheint ungueltig zu sein. Trotzdem uebernehmen?',
+        'Prüfziffer falsch',
+        'Die eingegebene PZN scheint ungültig zu sein. Trotzdem übernehmen?',
         [
           { text: 'Abbrechen', style: 'cancel' },
           {
-            text: 'Trotzdem uebernehmen',
-            onPress: () => {
-              navigation.navigate('AddMedikament', { scannedPZN: trimmed });
-            },
+            text: 'Trotzdem übernehmen',
+            onPress: () => processPzn(trimmed),
           },
         ]
       );
       return;
     }
 
-    // PZN-Lookup: Versuche den Medikamentennamen herauszufinden
-    setIsLookingUp(true);
-    setLookupResult(null);
-    try {
-      const result = await lookupPzn(trimmed);
-      setIsLookingUp(false);
-
-      if (result.found && result.name) {
-        setLookupResult(result.name);
-        // Automatisch zum AddMedikament-Screen weiterleiten mit Name + PZN
-        Alert.alert(
-          'Medikament erkannt',
-          `${result.name}${result.hersteller ? '\nHersteller: ' + result.hersteller : ''}${result.darreichungsform ? '\nForm: ' + result.darreichungsform : ''}`,
-          [
-            {
-              text: 'Uebernehmen',
-              onPress: () => {
-                navigation.navigate('AddMedikament', {
-                  scannedPZN: trimmed,
-                  suggestedName: result.name,
-                });
-              },
-            },
-            {
-              text: 'Aendern',
-              style: 'cancel',
-              onPress: () => {
-                navigation.navigate('AddMedikament', {
-                  scannedPZN: trimmed,
-                });
-              },
-            },
-          ]
-        );
-      } else {
-        // PZN nicht gefunden – normal weiter ohne Name
-        navigation.navigate('AddMedikament', { scannedPZN: trimmed });
-      }
-    } catch {
-      setIsLookingUp(false);
-      // Fallback: ohne Lookup weiter
-      navigation.navigate('AddMedikament', { scannedPZN: trimmed });
-    }
+    await processPzn(trimmed);
   };
 
   return (
     <SafeAreaView style={styles.container}>
-        <View style={styles.header}
-          accessibilityElementsHidden={true}
-          importantForAccessibility="no-hide-descendants"
-        >
-          <Text style={styles.headerIcon}>📷</Text>
-          <Text style={styles.headerText} accessibilityRole="header">Barcode / PZN eingeben</Text>
-        <Text style={styles.headerSubtext}>
-          Kamera-Scanner folgt in einem kommenden Update
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={styles.headerIcon}>📷</Text>
+        <Text style={styles.headerText} accessibilityRole="header">
+          {tab === 'kamera' ? 'Barcode scannen' : 'Barcode / PZN eingeben'}
         </Text>
       </View>
 
-      <View style={styles.content}>
-        <View style={styles.fieldGroup}>
-          <Text style={styles.label}>PZN oder Barcode</Text>
-          <TextInput
-            style={styles.input}
-            value={pznInput}
-            onChangeText={setPznInput}
-            placeholder="z.B. 12345678"
-            placeholderTextColor="#999"
-            keyboardType="number-pad"
-            accessibilityLabel="PZN oder Barcode eingeben"
-            autoFocus
-          />
-          <Text style={styles.hint}>
-            Die Nummer steht auf der Medikamentenpackung
-          </Text>
-        </View>
-
+      {/* Tab-Umschalter */}
+      <View style={styles.tabBar}>
         <TouchableOpacity
-          style={[
-            styles.uebernehmenButton,
-            isLookingUp && styles.uebernehmenButtonDisabled,
-          ]}
-          onPress={handleUebernehmen}
-          activeOpacity={0.7}
+          style={[styles.tab, tab === 'kamera' && styles.tabActive]}
+          onPress={() => setTab('kamera')}
           accessibilityRole="button"
-          accessibilityLabel={isLookingUp ? 'Suche Medikament...' : 'PZN uebernehmen'}
-          disabled={isLookingUp}
+          accessibilityLabel="Kamera-Scanner"
         >
-          <Text style={styles.uebernehmenButtonText}>
-            {isLookingUp ? 'Suche Medikament...' : 'Uebernehmen'}
+          <Text style={[styles.tabText, tab === 'kamera' && styles.tabTextActive]}>
+            📷 Kamera
           </Text>
         </TouchableOpacity>
-
-        {lookupResult && !isLookingUp && (
-          <View style={styles.lookupResult}>
-            <Text style={styles.lookupResultLabel}>Gefunden:</Text>
-            <Text style={styles.lookupResultName}>{lookupResult}</Text>
-          </View>
-        )}
+        <TouchableOpacity
+          style={[styles.tab, tab === 'manuell' && styles.tabActive]}
+          onPress={() => setTab('manuell')}
+          accessibilityRole="button"
+          accessibilityLabel="Manuelle Eingabe"
+        >
+          <Text style={[styles.tabText, tab === 'manuell' && styles.tabTextActive]}>
+            ✏️ Manuell
+          </Text>
+        </TouchableOpacity>
       </View>
 
+      {/* Kamera-Modus */}
+      {tab === 'kamera' && (
+        <View style={styles.cameraContainer}>
+          <Camera
+            scanBarcode={true}
+            onReadCode={onBarcodeScanned}
+            showFrame={true}
+            laserColor="#27ae60"
+            frameColor="#FFFFFF"
+            style={styles.camera}
+          />
+          <View style={styles.scanHint}>
+            <Text style={styles.scanHintText}>
+              Halte den Barcode vor die Kamera
+            </Text>
+          </View>
+          {isLookingUp && (
+            <View style={styles.loadingOverlay}>
+              <ActivityIndicator size="large" color="#27ae60" />
+              <Text style={styles.loadingText}>Suche Medikament...</Text>
+            </View>
+          )}
+        </View>
+      )}
+
+      {/* Manueller Modus */}
+      {tab === 'manuell' && (
+        <View style={styles.content}>
+          <View style={styles.fieldGroup}>
+            <Text style={styles.label}>PZN oder Barcode</Text>
+            <TextInput
+              style={styles.input}
+              value={pznInput}
+              onChangeText={setPznInput}
+              placeholder="z.B. 12345678"
+              placeholderTextColor="#999"
+              keyboardType="number-pad"
+              accessibilityLabel="PZN oder Barcode eingeben"
+              autoFocus
+            />
+            <Text style={styles.hint}>
+              Die Nummer steht auf der Medikamentenpackung
+            </Text>
+          </View>
+
+          <TouchableOpacity
+            style={[
+              styles.uebernehmenButton,
+              isLookingUp && styles.uebernehmenButtonDisabled,
+            ]}
+            onPress={handleUebernehmen}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel={isLookingUp ? 'Suche Medikament...' : 'PZN übernehmen'}
+            disabled={isLookingUp}
+          >
+            {isLookingUp ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.uebernehmenButtonText}>Übernehmen</Text>
+            )}
+          </TouchableOpacity>
+
+          {lookupResult && !isLookingUp && (
+            <View style={styles.lookupResult}>
+              <Text style={styles.lookupResultLabel}>Gefunden:</Text>
+              <Text style={styles.lookupResultName}>{lookupResult}</Text>
+            </View>
+          )}
+        </View>
+      )}
+
+      {/* Abbrechen-Button */}
       <TouchableOpacity
         style={styles.cancelButton}
         onPress={() => navigation.goBack()}
@@ -191,25 +273,82 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8f8f6',
   },
   header: {
-    padding: 28,
+    padding: 16,
     alignItems: 'center',
     backgroundColor: '#1a1a2e',
   },
   headerIcon: {
-    fontSize: 48,
-    marginBottom: 8,
+    fontSize: 36,
+    marginBottom: 4,
   },
   headerText: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '700',
     color: '#FFFFFF',
     textAlign: 'center',
   },
-  headerSubtext: {
-    fontSize: 18,
-    color: 'rgba(255,255,255,0.6)',
-    marginTop: 8,
-    textAlign: 'center',
+  tabBar: {
+    flexDirection: 'row',
+    backgroundColor: '#e8e8e6',
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 14,
+    alignItems: 'center',
+    backgroundColor: '#e8e8e6',
+  },
+  tabActive: {
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 3,
+    borderBottomColor: '#27ae60',
+  },
+  tabText: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#888',
+  },
+  tabTextActive: {
+    color: '#1a1a2e',
+  },
+  cameraContainer: {
+    flex: 1,
+    position: 'relative',
+  },
+  camera: {
+    flex: 1,
+  },
+  scanHint: {
+    position: 'absolute',
+    bottom: 20,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  scanHintText: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255,255,255,0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#27ae60',
+    marginTop: 12,
   },
   content: {
     flex: 1,
