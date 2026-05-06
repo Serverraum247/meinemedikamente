@@ -14,12 +14,14 @@ import {
   StyleSheet,
   ActivityIndicator,
   SafeAreaView,
+  Alert,
 } from 'react-native';
 import { useMedikamente } from '../context/MedikamentContext';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 import { calculateUrlaubsWarnungen } from '../database/UrlaubController';
 import type { UrlaubsWarnung } from '../database/UrlaubController';
+import { getMaxMedikamente, isPremium } from '../services/PremiumService';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
 
@@ -129,16 +131,15 @@ export default function HomeScreen({ navigation }: Props) {
         </TouchableOpacity>
       )}
 
-      {/* Arzt-Urlaub verwalten – immer sichtbar */}
+      {/* Arzt-Urlaub – kleiner Link unten */}
       <TouchableOpacity
-        style={styles.arztUrlaubButton}
         onPress={() => navigation.navigate('ArztUrlaub')}
         activeOpacity={0.7}
-        accessibilityRole="button"
         accessibilityLabel="Arzt-Urlaub verwalten"
         accessibilityHint="Urlaube von Arztpraxen eintragen und Kollisionen prüfen"
+        style={styles.arztUrlaubLink}
       >
-        <Text style={styles.arztUrlaubButtonText}>📅 Arzt-Urlaub verwalten</Text>
+        <Text style={styles.arztUrlaubLinkText}>📅 Arzt-Urlaub</Text>
       </TouchableOpacity>
 
       {/* Premium freischalten */}
@@ -169,10 +170,24 @@ export default function HomeScreen({ navigation }: Props) {
         />
       )}
 
-      {/* Hinzufügen-Button */}
+      {/* Hinzufuegen-Button */}
       <TouchableOpacity
         style={styles.fab}
-        onPress={() => navigation.navigate('AddMedikament')}
+        onPress={async () => {
+          const max = await getMaxMedikamente();
+          if (medikamente.length >= max) {
+            Alert.alert(
+              'Premium erforderlich',
+              `Kostenlose Version: maximal ${max} Medikamente. Premium = unbegrenzt.`,
+              [
+                { text: 'Abbrechen', style: 'cancel' },
+                { text: 'Premium', onPress: () => navigation.navigate('Premium') },
+              ]
+            );
+            return;
+          }
+          navigation.navigate('AddMedikament');
+        }}
         activeOpacity={0.8}
         accessibilityRole="button"
         accessibilityLabel="Neues Medikament hinzufügen"
@@ -324,20 +339,15 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textAlign: 'center',
   },
-  arztUrlaubButton: {
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 12,
-    padding: 16,
-    marginHorizontal: 16,
-    marginTop: 12,
+  arztUrlaubLink: {
+    paddingVertical: 8,
     alignItems: 'center',
+    marginTop: 8,
   },
-  arztUrlaubButtonText: {
-    fontSize: 20,
-    color: '#1a1a2e',
-    fontWeight: '600',
+  arztUrlaubLinkText: {
+    fontSize: 16,
+    color: '#888',
+    textDecorationLine: 'underline',
   },
   premiumButton: {
     backgroundColor: '#fffdf5',

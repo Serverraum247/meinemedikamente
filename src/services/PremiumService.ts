@@ -36,6 +36,8 @@ const FREE_SCAN_LIMIT = 3;
 const FREE_CALENDAR_LIMIT = 2;
 const FREE_REMINDER_SLOTS = 1;
 const PREMIUM_REMINDER_SLOTS = 999;
+const FREE_MAX_MEDIKAMENTE = 3;
+const PREMIUM_MAX_MEDIKAMENTE = 999;
 
 // ─── Helpers ──────────────────────────────────────────────────────
 
@@ -201,4 +203,8 @@ export async function recordCalendarEvent(): Promise<void> {
 
 export async function getMaxReminderSlots(): Promise<number> {
   return (await isPremium()) ? PREMIUM_REMINDER_SLOTS : FREE_REMINDER_SLOTS;
+}
+
+export async function getMaxMedikamente(): Promise<number> {
+  return (await isPremium()) ? PREMIUM_MAX_MEDIKAMENTE : FREE_MAX_MEDIKAMENTE;
 }
