@@ -8,6 +8,7 @@ import {
   SafeAreaView,
   Alert,
   StyleSheet,
+  Linking,
 } from 'react-native';
 import {
   createArztUrlaub,
@@ -50,6 +51,7 @@ interface ArztUrlaubScreenProps {
 
 const ArztUrlaubScreen: React.FC<ArztUrlaubScreenProps> = ({ navigation }) => {
   const [praxisName, setPraxisName] = useState('');
+  const [telefon, setTelefon] = useState('');
   const [urlaubVon, setUrlaubVon] = useState('');
   const [urlaubBis, setUrlaubBis] = useState('');
   const [urlaube, setUrlaube] = useState<ArztUrlaubRow[]>([]);
@@ -105,10 +107,12 @@ const ArztUrlaubScreen: React.FC<ArztUrlaubScreenProps> = ({ navigation }) => {
     try {
       await createArztUrlaub({
         praxis_name: name,
+        telefon: telefon.trim(),
         urlaub_start: startDate,
         urlaub_ende: endDate,
       } as any);
       setPraxisName('');
+      setTelefon('');
       setUrlaubVon('');
       setUrlaubBis('');
       await loadData();
@@ -136,6 +140,32 @@ const ArztUrlaubScreen: React.FC<ArztUrlaubScreenProps> = ({ navigation }) => {
               console.error('Fehler beim Löschen:', error);
               Alert.alert('Fehler', 'Urlaub konnte nicht gelöscht werden.');
             }
+          },
+        },
+      ]
+    );
+  };
+
+  // Anruf mit Bestaetigungsdialog
+  const handleAnrufen = (praxisNameCall: string, telefonNummer: string) => {
+    const nummer = telefonNummer.trim();
+    if (!nummer) {
+      Alert.alert('Keine Nummer', 'Für diese Praxis ist keine Telefonnummer hinterlegt.');
+      return;
+    }
+
+    Alert.alert(
+      'Arzt anrufen',
+      `Möchten Sie "${praxisNameCall}" jetzt anrufen?\n\n${nummer}`,
+      [
+        { text: 'Abbrechen', style: 'cancel' },
+        {
+          text: 'Anrufen',
+          style: 'default',
+          onPress: () => {
+            Linking.openURL(`tel:${nummer}`).catch(() => {
+              Alert.alert('Fehler', 'Anruf konnte nicht gestartet werden.');
+            });
           },
         },
       ]
@@ -171,6 +201,17 @@ const ArztUrlaubScreen: React.FC<ArztUrlaubScreenProps> = ({ navigation }) => {
             placeholder="z.B. Praxis Dr. Müller"
             placeholderTextColor="#999"
             accessibilityLabel="Praxis-Name eingeben"
+          />
+
+          <Text style={styles.label}>Telefonnummer</Text>
+          <TextInput
+            style={styles.input}
+            value={telefon}
+            onChangeText={setTelefon}
+            placeholder="z.B. 0681 123456"
+            placeholderTextColor="#999"
+            keyboardType="phone-pad"
+            accessibilityLabel="Telefonnummer eingeben"
           />
 
           <Text style={styles.label}>Urlaub von</Text>
@@ -219,14 +260,36 @@ const ArztUrlaubScreen: React.FC<ArztUrlaubScreenProps> = ({ navigation }) => {
                   <Text style={styles.urlaubDateRange}>
                     {formatGermanDate(urlaub.urlaub_start)} – {formatGermanDate(urlaub.urlaub_ende)}
                   </Text>
+                  {urlaub.telefon ? (
+                    <TouchableOpacity
+                      style={styles.telefonRow}
+                      onPress={() => handleAnrufen(urlaub.praxis_name, urlaub.telefon || '')}
+                      accessibilityLabel={`${urlaub.praxis_name} anrufen: ${urlaub.telefon}`}
+                      accessibilityHint="Tippen um Arzt anzurufen"
+                    >
+                      <Text style={styles.telefonIcon}>📞</Text>
+                      <Text style={styles.telefonText}>{urlaub.telefon}</Text>
+                    </TouchableOpacity>
+                  ) : null}
                 </View>
-                <TouchableOpacity
-                  style={styles.deleteButton}
-                  onPress={() => handleDeleteUrlaub(urlaub.id, urlaub.praxis_name)}
-                  accessibilityLabel={`Urlaub löschen: ${urlaub.praxis_name}`}
-                >
-                  <Text style={styles.deleteButtonText}>Löschen</Text>
-                </TouchableOpacity>
+                <View style={styles.urlaubActions}>
+                  {urlaub.telefon ? (
+                    <TouchableOpacity
+                      style={styles.callButton}
+                      onPress={() => handleAnrufen(urlaub.praxis_name, urlaub.telefon || '')}
+                      accessibilityLabel={`${urlaub.praxis_name} anrufen`}
+                    >
+                      <Text style={styles.callButtonText}>📞</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                  <TouchableOpacity
+                    style={styles.deleteButton}
+                    onPress={() => handleDeleteUrlaub(urlaub.id, urlaub.praxis_name)}
+                    accessibilityLabel={`Urlaub löschen: ${urlaub.praxis_name}`}
+                  >
+                    <Text style={styles.deleteButtonText}>Löschen</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             ))
           )}
@@ -370,6 +433,37 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#555555',
     marginTop: 2,
+  },
+  telefonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 6,
+    paddingVertical: 4,
+  },
+  telefonIcon: {
+    fontSize: 16,
+    marginRight: 6,
+  },
+  telefonText: {
+    fontSize: 16,
+    color: '#007AFF',
+    textDecorationLine: 'underline',
+  },
+  urlaubActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  callButton: {
+    backgroundColor: '#28a745',
+    borderRadius: 8,
+    width: 44,
+    height: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  callButtonText: {
+    fontSize: 20,
   },
   deleteButton: {
     backgroundColor: '#dc3545',

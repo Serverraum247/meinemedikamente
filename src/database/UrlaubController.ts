@@ -29,9 +29,9 @@ export async function createArztUrlaub(
   const id = urlaub.id || generateUUID();
 
   await db.executeSql(
-    `INSERT INTO arzt_urlaub (id, praxis_name, urlaub_start, urlaub_ende)
-     VALUES (?, ?, ?, ?)`,
-    [id, urlaub.praxis_name, urlaub.urlaub_start, urlaub.urlaub_ende]
+    `INSERT INTO arzt_urlaub (id, praxis_name, telefon, urlaub_start, urlaub_ende)
+     VALUES (?, ?, ?, ?, ?)`,
+    [id, urlaub.praxis_name, urlaub.telefon || '', urlaub.urlaub_start, urlaub.urlaub_ende]
   );
 
   return id;

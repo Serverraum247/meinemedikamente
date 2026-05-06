@@ -364,17 +364,6 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
           </Text>
         </TouchableOpacity>
 
-        {/* Bearbeiten-Button */}
-        <TouchableOpacity
-          style={styles.editButton}
-          onPress={() => navigation.navigate('EditMedikament', { medikamentId: medikament.id })}
-          activeOpacity={0.7}
-          accessibilityRole="button"
-          accessibilityLabel="Medikament bearbeiten"
-        >
-          <Text style={styles.editButtonText}>Medikament bearbeiten</Text>
-        </TouchableOpacity>
-
         {/* Einnahme-Historie */}
         <View style={styles.historieSection}>
           <Text style={styles.historieTitle} accessibilityRole="header">Einnahme-Historie</Text>
@@ -410,6 +399,18 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
         </View>
 
         {/* Loeschen */}
+
+        {/* Bearbeiten – kleiner Link, weiter unten */}
+        <TouchableOpacity
+          onPress={() => navigation.navigate('EditMedikament', { medikamentId: medikament.id })}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Medikament bearbeiten"
+          style={styles.editLinkContainer}
+        >
+          <Text style={styles.editLinkText}>✏️ Medikament bearbeiten</Text>
+        </TouchableOpacity>
+
         <TouchableOpacity
           style={styles.deleteButton}
           onPress={handleDelete}
@@ -742,6 +743,16 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '600',
     color: '#FFFFFF',
+  },
+  editLinkContainer: {
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  editLinkText: {
+    fontSize: 16,
+    color: '#666',
+    textDecorationLine: 'underline',
   },
   historieSection: {
     backgroundColor: '#FFFFFF',

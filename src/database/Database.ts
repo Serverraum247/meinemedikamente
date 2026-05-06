@@ -12,7 +12,7 @@ SQLite.DEBUG(true);
 SQLite.enablePromise(true);
 
 const DATABASE_NAME = 'meine_medikamente.db';
-const DATABASE_VERSION = 5; // V5: Einstellungen-Tabelle
+const DATABASE_VERSION = 6; // V6: telefon Spalte in arzt_urlaub
 
 export interface MedikamentRow {
   id: string;
@@ -43,6 +43,7 @@ export interface EinnahmeRow {
 export interface ArztUrlaubRow {
   id: string;
   praxis_name: string;
+  telefon?: string;       // Telefonnummer des Arztes (optional)
   urlaub_start: string; // ISO Date YYYY-MM-DD
   urlaub_ende: string;  // ISO Date YYYY-MM-DD
   created_at: string;
@@ -170,6 +171,7 @@ class Database {
     await this.migrateV2toV3();
     await this.migrateV3toV4();
     await this.migrateV4toV5();
+    await this.migrateV5toV6();
   }
 
   /**
@@ -278,6 +280,27 @@ class Database {
       console.log('[DB] Migration V4->V5: einstellungen Tabelle geprueft');
     } catch (error) {
       console.warn('[DB] Migration V4->V5 Pruefung:', error);
+    }
+  }
+
+  /**
+   * Migration V5 -> V6: telefon Spalte in arzt_urlaub
+   */
+  private async migrateV5toV6(): Promise<void> {
+    if (!this.db) return;
+    try {
+      const result = await this.db.executeSql(`PRAGMA table_info(arzt_urlaub);`);
+      const columns = result[0];
+      const cols = columns.rows.raw().map((col: any) => col.name);
+
+      if (!cols.includes('telefon')) {
+        await this.db.executeSql(
+          `ALTER TABLE arzt_urlaub ADD COLUMN telefon TEXT NOT NULL DEFAULT '';`
+        );
+        console.log('[DB] Migration V5->V6: telefon Spalte in arzt_urlaub hinzugefuegt');
+      }
+    } catch (error) {
+      console.warn('[DB] Migration V5->V6 Pruefung:', error);
     }
   }
 
