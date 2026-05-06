@@ -1,8 +1,9 @@
 /**
- * EinnahmeController.ts – Einnahme-Historie abfragen
+ * EinnahmeController.ts – Einnahme-Historie abfragen und stornieren
  */
 
 import { database, getDatabase, EinnahmeRow } from './Database';
+import { updateBestand, getMedikamentById } from './MedikamentController';
 
 export interface EinnahmeWithDate extends EinnahmeRow {
   datum_formatted: string; // Lesbares Datum für die Anzeige
@@ -48,7 +49,7 @@ export async function getEinnahmenByMedikament(
 }
 
 /**
- * Letzte N Einnahmen über alle Medikamente
+ * Letzte N Einnahmen ueber alle Medikamente
  */
 export async function getRecentEinnahmen(
   limit: number = 20
@@ -81,4 +82,40 @@ export async function getRecentEinnahmen(
     }
   });
   return rows;
+}
+
+/**
+ * Einnahme stornieren – loescht den Eintrag UND setzt den Bestand zurueck
+ * Bestand wird um die stornierte Menge erhoeht (Bestand + menge)
+ */
+export async function storniereEinnahme(
+  einnahmeId: string,
+  medikamentId: string
+): Promise<{ success: boolean; neuerBestand?: number }> {
+  const db = await getDatabase();
+
+  // 1. Menge der Einnahme holen
+  const result = await db.executeSql(
+    'SELECT menge FROM einnahmen WHERE id = ?',
+    [einnahmeId]
+  );
+
+  if (!result[0] || result[0].rows.length === 0) {
+    return { success: false };
+  }
+
+  const menge = result[0].rows.item(0).menge as number;
+
+  // 2. Einnahme loeschen
+  await db.executeSql('DELETE FROM einnahmen WHERE id = ?', [einnahmeId]);
+
+  // 3. Bestand wieder hochsetzen (Bestand + menge)
+  const med = await getMedikamentById(medikamentId);
+  if (med) {
+    const neuerBestand = med.aktueller_bestand + menge;
+    await updateBestand(medikamentId, neuerBestand);
+    return { success: true, neuerBestand };
+  }
+
+  return { success: true };
 }

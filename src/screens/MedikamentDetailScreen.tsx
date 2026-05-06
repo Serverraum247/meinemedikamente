@@ -23,7 +23,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 import { useMedikamente } from '../context/MedikamentContext';
 import { MedikamentRow, PackungRow } from '../database/Database';
-import { getEinnahmenByMedikament, EinnahmeWithDate } from '../database/EinnahmeController';
+import { getEinnahmenByMedikament, EinnahmeWithDate, storniereEinnahme } from '../database/EinnahmeController';
 import { getLetztePackung, getOffenePackungenCount, getPackungenByMedikament } from '../database/PackungController';
 import {
   parseEinnahmeplan,
@@ -124,6 +124,41 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
       ]
     );
   }, [medikament, entferneMedikament, navigation]);
+
+  // Einnahme stornieren (versehentliche Einnahme zuruecknehmen)
+  const handleStornoEinnahme = useCallback((item: EinnahmeWithDate) => {
+    if (!medikament) return;
+
+    Alert.alert(
+      'Einnahme stornieren',
+      `Möchten Sie die Einnahme vom ${item.datum_formatted}, ${item.uhrzeit_formatted} Uhr stornieren?\n\nDer Bestand wird um ${item.menge} ${medikament.einheit} erhöht.`,
+      [
+        { text: 'Abbrechen', style: 'cancel' },
+        {
+          text: 'Stornieren',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const result = await storniereEinnahme(item.id, medikament.id);
+              if (result.success) {
+                Alert.alert(
+                  'Storniert',
+                  result.neuerBestand !== undefined
+                    ? `Einnahme wurde storniert.\nNeuer Bestand: ${result.neuerBestand} ${medikament.einheit}`
+                    : 'Einnahme wurde storniert.'
+                );
+                await loadData();
+              } else {
+                Alert.alert('Fehler', 'Einnahme konnte nicht storniert werden.');
+              }
+            } catch (error) {
+              Alert.alert('Fehler', 'Beim Stornieren ist ein Fehler aufgetreten.');
+            }
+          },
+        },
+      ]
+    );
+  }, [medikament, loadData]);
 
   if (!medikament) {
     return (
@@ -356,9 +391,19 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
                     {item.uhrzeit_formatted} Uhr
                   </Text>
                 </View>
-                <Text style={styles.historieMenge}>
-                  -{item.menge} {medikament.einheit}
-                </Text>
+                <View style={styles.historieRight}>
+                  <Text style={styles.historieMenge}>
+                    -{item.menge} {medikament.einheit}
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => handleStornoEinnahme(item)}
+                    accessibilityLabel="Einnahme stornieren"
+                    accessibilityHint="Versehentliche Einnahme zurücknehmen"
+                    style={styles.stornoButton}
+                  >
+                    <Text style={styles.stornoButtonText}>↩</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             ))
           )}
@@ -738,6 +783,25 @@ const styles = StyleSheet.create({
   historieMenge: {
     fontSize: 18,
     fontWeight: '600',
+    color: '#e74c3c',
+  },
+  historieRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  stornoButton: {
+    backgroundColor: '#fff3f3',
+    borderRadius: 8,
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e74c3c',
+  },
+  stornoButtonText: {
+    fontSize: 18,
     color: '#e74c3c',
   },
   deleteButton: {
