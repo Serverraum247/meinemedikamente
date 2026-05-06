@@ -30,10 +30,12 @@ import {
   SLOT_REIHENFOLGE,
   toggleSlot,
   setSlotDosis,
+  setSlotUhrzeit,
   serializeEinnahmeplan,
   parseEinnahmeplan,
   getAllDefaultUhrzeiten,
 } from '../utils/Einnahmeplan';
+import { isPremium } from '../services/PremiumService';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'EditMedikament'>;
 
@@ -57,6 +59,7 @@ export default function EditMedikamentScreen({ route, navigation }: Props) {
     morgens: '08:00', mittags: '12:00', abends: '18:00', nachts: '22:00',
   });
   const [autoAbzugAktiv, setAutoAbzugAktiv] = useState(false);
+  const [premium, setPremiumStatus] = useState(false);
 
   // Medikament-Daten laden
 
@@ -65,6 +68,7 @@ export default function EditMedikamentScreen({ route, navigation }: Props) {
     (async () => {
       const stored = await getAllDefaultUhrzeiten();
       setDefaultUhrzeiten(stored);
+      setPremiumStatus(await isPremium());
     })();
   }, []);
   useEffect(() => {
@@ -298,7 +302,26 @@ export default function EditMedikamentScreen({ route, navigation }: Props) {
                         <Text style={[styles.tageszeitLabel, isActive && styles.tageszeitLabelActive]}>
                           {meta.label}
                         </Text>
-                        <Text style={styles.tageszeitUhrzeit}>{defaultUhrzeiten[slot]} Uhr</Text>
+                        {premium ? (
+                          <TextInput
+                            style={styles.tageszeitUhrzeitInput}
+                            value={eintrag?.uhrzeit || defaultUhrzeiten[slot]}
+                            onChangeText={text => {
+                              setEinnahmePlan(prev =>
+                                setSlotUhrzeit(prev, slot, text)
+                              );
+                            }}
+                            placeholder={defaultUhrzeiten[slot]}
+                            placeholderTextColor="#999"
+                            keyboardType="numbers-and-punctuation"
+                            maxLength={5}
+                            accessibilityLabel={`Uhrzeit für ${meta.label}`}
+                          />
+                        ) : (
+                          <Text style={styles.tageszeitUhrzeit}>
+                            {eintrag?.uhrzeit || defaultUhrzeiten[slot]} Uhr
+                          </Text>
+                        )}
                       </View>
                       <Text style={[styles.tageszeitCheck, isActive && styles.tageszeitCheckActive]}>
                         {isActive ? '✓' : '○'}
@@ -503,6 +526,17 @@ const styles = StyleSheet.create({
   tageszeitLabel: { fontSize: 22, fontWeight: '600', color: '#888' },
   tageszeitLabelActive: { color: '#1a1a2e' },
   tageszeitUhrzeit: { fontSize: 16, color: '#999' },
+  tageszeitUhrzeitInput: {
+    fontSize: 16,
+    color: '#007AFF',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    minWidth: 70,
+    marginTop: 2,
+  },
   tageszeitCheck: { fontSize: 28, color: '#ccc' },
   tageszeitCheckActive: { color: '#27ae60' },
 

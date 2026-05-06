@@ -18,6 +18,7 @@ import {
   ArztUrlaubRow,
   UrlaubsWarnung,
 } from '../database/UrlaubController';
+import { isPremium } from '../services/PremiumService';
 
 // ---------- Helper functions ----------
 
@@ -56,6 +57,7 @@ const ArztUrlaubScreen: React.FC<ArztUrlaubScreenProps> = ({ navigation }) => {
   const [urlaubBis, setUrlaubBis] = useState('');
   const [urlaube, setUrlaube] = useState<ArztUrlaubRow[]>([]);
   const [warnungen, setWarnungen] = useState<UrlaubsWarnung[]>([]);
+  const [premium, setPremiumStatus] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -63,6 +65,7 @@ const ArztUrlaubScreen: React.FC<ArztUrlaubScreenProps> = ({ navigation }) => {
 
   const loadData = async () => {
     try {
+      setPremiumStatus(await isPremium());
       const allUrlaube = await getAllArztUrlaube();
       // Only keep vacations that haven't fully ended yet
       const activeUrlaube = allUrlaube.filter(
@@ -189,9 +192,10 @@ const ArztUrlaubScreen: React.FC<ArztUrlaubScreenProps> = ({ navigation }) => {
           <Text style={styles.headerTitle}>Arzt-Urlaub verwalten</Text>
         </View>
 
-        {/* ---------- Form Section ---------- */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Neuen Urlaub eintragen</Text>
+        {/* ---------- Form Section (Premium) ---------- */}
+        {premium ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Neuen Urlaub eintragen</Text>
 
           <Text style={styles.label}>Praxis-Name</Text>
           <TextInput
@@ -246,6 +250,20 @@ const ArztUrlaubScreen: React.FC<ArztUrlaubScreenProps> = ({ navigation }) => {
             <Text style={styles.addButtonText}>Urlaub eintragen</Text>
           </TouchableOpacity>
         </View>
+        ) : (
+          <View style={styles.premiumBanner}>
+            <Text style={styles.premiumBannerText}>
+              ⭐ Arzt-Urlaub verwalten und Arzt anrufen ist eine Premium-Funktion.
+            </Text>
+            <TouchableOpacity
+              style={styles.premiumBannerButton}
+              onPress={() => navigation?.navigate('Premium')}
+              accessibilityLabel="Premium freischalten"
+            >
+              <Text style={styles.premiumBannerButtonText}>Premium freischalten</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* ---------- Active Vacations List ---------- */}
         <View style={styles.section}>
@@ -273,7 +291,7 @@ const ArztUrlaubScreen: React.FC<ArztUrlaubScreenProps> = ({ navigation }) => {
                   ) : null}
                 </View>
                 <View style={styles.urlaubActions}>
-                  {urlaub.telefon ? (
+                  {urlaub.telefon && premium ? (
                     <TouchableOpacity
                       style={styles.callButton}
                       onPress={() => handleAnrufen(urlaub.praxis_name, urlaub.telefon || '')}
@@ -282,13 +300,15 @@ const ArztUrlaubScreen: React.FC<ArztUrlaubScreenProps> = ({ navigation }) => {
                       <Text style={styles.callButtonText}>📞</Text>
                     </TouchableOpacity>
                   ) : null}
-                  <TouchableOpacity
-                    style={styles.deleteButton}
-                    onPress={() => handleDeleteUrlaub(urlaub.id, urlaub.praxis_name)}
-                    accessibilityLabel={`Urlaub löschen: ${urlaub.praxis_name}`}
-                  >
-                    <Text style={styles.deleteButtonText}>Löschen</Text>
-                  </TouchableOpacity>
+                  {premium ? (
+                    <TouchableOpacity
+                      style={styles.deleteButton}
+                      onPress={() => handleDeleteUrlaub(urlaub.id, urlaub.praxis_name)}
+                      accessibilityLabel={`Urlaub löschen: ${urlaub.praxis_name}`}
+                    >
+                      <Text style={styles.deleteButtonText}>Löschen</Text>
+                    </TouchableOpacity>
+                  ) : null}
                 </View>
               </View>
             ))
@@ -492,6 +512,33 @@ const styles = StyleSheet.create({
     color: '#842029',
     fontWeight: '500',
     lineHeight: 26,
+  },
+  premiumBanner: {
+    backgroundColor: '#fff8e1',
+    borderRadius: 12,
+    padding: 20,
+    marginBottom: 20,
+    borderWidth: 2,
+    borderColor: '#f5a623',
+    alignItems: 'center',
+  },
+  premiumBannerText: {
+    fontSize: 18,
+    color: '#333',
+    textAlign: 'center',
+    marginBottom: 16,
+    lineHeight: 26,
+  },
+  premiumBannerButton: {
+    backgroundColor: '#f5a623',
+    borderRadius: 10,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+  },
+  premiumBannerButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
   },
 });
 

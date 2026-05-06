@@ -31,6 +31,7 @@ import {
   SLOT_REIHENFOLGE,
   toggleSlot,
   setSlotDosis,
+  setSlotUhrzeit,
   serializeEinnahmeplan,
   parseEinnahmeplan,
   getAllDefaultUhrzeiten,
@@ -57,8 +58,7 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
   });
   const [autoAbzugAktiv, setAutoAbzugAktiv] = useState(false);
   const [maxSlots, setMaxSlots] = useState(1);
-
-  // Gescannte PZN aus BarcodeScanner übernehmen
+  const [premium, setPremiumStatus] = useState(false);
 
   // Default-Uhrzeiten aus Einstellungen laden
   useEffect(() => {
@@ -67,6 +67,7 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
       setDefaultUhrzeiten(stored);
     })();
     getMaxReminderSlots().then(setMaxSlots);
+    isPremium().then(setPremiumStatus);
   }, []);
   React.useEffect(() => {
     const scannedPZN = route.params?.scannedPZN;
@@ -327,15 +328,29 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
                     >
                       <Text style={styles.tageszeitEmoji} accessibilityElementsHidden>{meta.emoji}</Text>
                       <View style={{ flex: 1 }}>
-                        <Text style={[
-                          styles.tageszeitLabel,
-                          isActive && styles.tageszeitLabelActive,
-                        ]}>
+                        <Text style={styles.tageszeitLabel}>
                           {meta.label}
                         </Text>
-                        <Text style={styles.tageszeitUhrzeit}>
-                          {defaultUhrzeiten[slot]} Uhr
-                        </Text>
+                        {premium ? (
+                          <TextInput
+                            style={styles.tageszeitUhrzeitInput}
+                            value={eintrag?.uhrzeit || defaultUhrzeiten[slot]}
+                            onChangeText={text => {
+                              setEinnahmePlan(prev =>
+                                setSlotUhrzeit(prev, slot, text)
+                              );
+                            }}
+                            placeholder={defaultUhrzeiten[slot]}
+                            placeholderTextColor="#999"
+                            keyboardType="numbers-and-punctuation"
+                            maxLength={5}
+                            accessibilityLabel={`Uhrzeit für ${meta.label}`}
+                          />
+                        ) : (
+                          <Text style={styles.tageszeitUhrzeit}>
+                            {eintrag?.uhrzeit || defaultUhrzeiten[slot]} Uhr
+                          </Text>
+                        )}
                       </View>
                       <Text style={[
                         styles.tageszeitCheck,
@@ -592,6 +607,17 @@ const styles = StyleSheet.create({
   tageszeitUhrzeit: {
     fontSize: 16,
     color: '#999',
+  },
+  tageszeitUhrzeitInput: {
+    fontSize: 16,
+    color: '#007AFF',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    minWidth: 70,
+    marginTop: 2,
   },
   tageszeitCheck: {
     fontSize: 28,
