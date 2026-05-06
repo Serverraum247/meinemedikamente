@@ -1,5 +1,18 @@
-import auth from '@react-native-firebase/auth';
-import firestore from '@react-native-firebase/firestore';
+// Firebase ist auf iOS nicht verfuegbar (inkompatibel mit RN 0.85 Prebuilt Pods)
+// Dynamischer Import verhindert Crash auf iOS
+import { Platform } from 'react-native';
+
+let auth: any = null;
+let firestore: any = null;
+
+if (Platform.OS === 'android') {
+  try {
+    auth = require('@react-native-firebase/auth').default;
+    firestore = require('@react-native-firebase/firestore').default;
+  } catch {
+    // Firebase native module nicht installiert
+  }
+}
 import { getDatabase } from '../database/Database';
 import { isPremium } from './PremiumService';
 
@@ -205,7 +218,7 @@ export async function deleteBackup(): Promise<{ success: boolean }> {
       .get();
     
     const batch = firestore().batch();
-    snapshot.docs.forEach(doc => batch.delete(doc.ref));
+    snapshot.docs.forEach((doc: any) => batch.delete(doc.ref));
     await batch.commit();
     
     await firestore().collection('users').doc(uid).delete();

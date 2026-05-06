@@ -28,5 +28,13 @@ target 'MeineMedikamente' do
       :mac_catalyst_enabled => false,
       # :ccache_enabled => true
     )
+
+    # Fix: @react-native-firebase + RN 0.85 Prebuilt Pods
+    # "include of non-modular header" wird als Error gewertet
+    installer.pods_project.targets.each do |target|
+      target.build_configurations.each do |config|
+        config.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
+      end
+    end
   end
 end
