@@ -198,7 +198,7 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
         <View style={styles.fieldGroup}>
           <Text style={styles.label}>Einheit</Text>
           <View style={styles.einheitRow}>
-            {['Tabletten', 'Kapseln', 'Tropfen', 'Stueck'].map(e => (
+            {['Tabletten', 'Kapseln', 'Tropfen', 'Stück'].map(e => (
               <TouchableOpacity
                 key={e}
                 style={[styles.einheitButton, einheit === e && styles.einheitActive]}

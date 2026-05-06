@@ -8,12 +8,17 @@ import {
   SafeAreaView,
   ActivityIndicator,
   ScrollView,
+  Platform,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import { uploadBackup, getBackupInfo, restoreBackup, BackupInfo as ServiceBackupInfo } from '../services/BackupService';
 import { isPremium as checkIsPremium } from '../services/PremiumService';
 import { RootStackParamList } from '../navigation/AppNavigator';
+
+// Plattform-spezifische Labels
+const isIOS = Platform.OS === 'ios';
+const cloudName = isIOS ? 'iCloud' : 'Cloud';
 
 type BackupScreenProps = NativeStackScreenProps<RootStackParamList, 'Backup'>;
 
@@ -73,8 +78,8 @@ const BackupScreen: React.FC<BackupScreenProps> = ({ navigation }) => {
 
   const handleCreateBackup = async () => {
     Alert.alert(
-      'Cloud-Backup erstellen',
-      'Möchten Sie ein neues Cloud-Backup erstellen? Die aktuellen Medikamentendaten werden hochgeladen.',
+      `${cloudName}-Backup erstellen`,
+      `Möchten Sie ein neues ${cloudName}-Backup erstellen? Die aktuellen Medikamentendaten werden ${isIOS ? 'in iCloud gespeichert' : 'hochgeladen'}.`,
       [
         { text: 'Abbrechen', style: 'cancel' },
         {
@@ -86,7 +91,7 @@ const BackupScreen: React.FC<BackupScreenProps> = ({ navigation }) => {
               await uploadBackup();
               Alert.alert(
                 'Backup erfolgreich',
-                'Ihre Medikamentendaten wurden erfolgreich in der Cloud gespeichert.'
+                `Ihre Medikamentendaten wurden erfolgreich ${isIOS ? 'in iCloud' : 'in der Cloud'} gespeichert.`
               );
               await loadBackupInfo();
             } catch (error) {
@@ -207,7 +212,7 @@ const BackupScreen: React.FC<BackupScreenProps> = ({ navigation }) => {
             <Text style={styles.buttonText}>Backup wird erstellt...</Text>
           </View>
         ) : (
-          <Text style={styles.buttonText}>☁️ Cloud-Backup erstellen</Text>
+          <Text style={styles.buttonText}>☁️ {cloudName}-Backup erstellen</Text>
         )}
       </TouchableOpacity>
 
@@ -233,7 +238,7 @@ const BackupScreen: React.FC<BackupScreenProps> = ({ navigation }) => {
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>☁️ Cloud-Backup</Text>
+        <Text style={styles.headerTitle}>☁️ {cloudName}-Backup</Text>
       </View>
 
       <ScrollView

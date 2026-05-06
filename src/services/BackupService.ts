@@ -1,18 +1,30 @@
-// Firebase ist auf iOS nicht verfuegbar (inkompatibel mit RN 0.85 Prebuilt Pods)
-// Dynamischer Import verhindert Crash auf iOS
-import { Platform } from 'react-native';
+/**
+ * BackupService.ts – Cloud-Backup (CloudKit auf iOS, Firebase auf Android)
+ *
+ * iOS:  Native CloudKit-Module (kein Login noetig, Apple-ID reicht)
+ * Android: Firebase Firestore (anonyme Auth)
+ *
+ * Beide Plattformen: Premium-Feature, exportiert/importiert alle 7 SQLite-Tabellen.
+ */
 
+import { Platform, NativeModules } from 'react-native';
+
+// CloudKit Native Module (nur iOS)
+const { CloudKitBackup } = NativeModules;
+
+// Firebase (nur Android)
 let auth: any = null;
-let firestore: any = null;
+let firestoreModule: any = null;
 
 if (Platform.OS === 'android') {
   try {
     auth = require('@react-native-firebase/auth').default;
-    firestore = require('@react-native-firebase/firestore').default;
+    firestoreModule = require('@react-native-firebase/firestore').default;
   } catch {
     // Firebase native module nicht installiert
   }
 }
+
 import { getDatabase } from '../database/Database';
 import { isPremium } from './PremiumService';
 
@@ -35,21 +47,11 @@ export interface BackupData {
   pzn_cache: any[];
 }
 
-// Sicherstellen dass User eingeloggt ist
-export async function ensureAuth(): Promise<string | null> {
-  try {
-    const currentUser = auth().currentUser;
-    if (currentUser) return currentUser.uid;
-    
-    const credential = await auth().signInAnonymously();
-    return credential.user.uid;
-  } catch (e) {
-    console.warn('[BackupService] Auth-Fehler:', e);
-    return null;
-  }
-}
+// ============================================================
+// Gemeinsame Hilfsfunktionen
+// ============================================================
 
-// Alle lokalen Daten exportieren
+// Alle lokalen Daten aus SQLite exportieren
 async function exportLocalData(): Promise<BackupData> {
   const db = await getDatabase();
   
@@ -66,7 +68,6 @@ async function exportLocalData(): Promise<BackupData> {
       }
       data[table] = arr;
     } catch {
-      // Tabelle existiert evtl. nicht
       data[table] = [];
     }
   }
@@ -78,58 +79,93 @@ async function exportLocalData(): Promise<BackupData> {
   } as BackupData;
 }
 
-// Backup in Firestore hochladen
-export async function uploadBackup(): Promise<{ success: boolean; error?: string }> {
-  // Premium-Check
-  const premium = await isPremium();
-  if (!premium) {
-    return { success: false, error: 'Premium erforderlich fuer Cloud-Backup' };
+// Backup-Daten in SQLite zurueckschreiben
+async function importLocalData(backupData: BackupData): Promise<number> {
+  const db = await getDatabase();
+  let medCount = 0;
+  
+  // Reihenfolge wichtig: Abhaengigkeiten zuerst leeren
+  for (const table of ['einstellungen', 'pzn_cache', 'einnahmen', 'einnahmeplan', 'arzt_urlaub', 'packungen', 'medikamente']) {
+    const rows = (backupData as any)[table] || [];
+    if (rows.length === 0) continue;
+    
+    try {
+      await db.executeSql(`DELETE FROM ${table}`);
+      
+      for (const row of rows) {
+        const columns = Object.keys(row);
+        const values = columns.map(c => row[c]);
+        const placeholders = columns.map(() => '?').join(',');
+        await db.executeSql(
+          `INSERT OR REPLACE INTO ${table} (${columns.join(',')}) VALUES (${placeholders})`,
+          values
+        );
+      }
+      
+      if (table === 'medikamente') {
+        medCount = rows.length;
+      }
+    } catch (e) {
+      console.warn(`[BackupService] Restore ${table} Fehler:`, e);
+    }
   }
   
-  const uid = await ensureAuth();
-  if (!uid) {
-    return { success: false, error: 'Anmeldung fehlgeschlagen' };
+  return medCount;
+}
+
+// ============================================================
+// Android: Firebase Firestore
+// ============================================================
+
+async function ensureAuth(): Promise<string | null> {
+  try {
+    const currentUser = auth().currentUser;
+    if (currentUser) return currentUser.uid;
+    
+    const credential = await auth().signInAnonymously();
+    return credential.user.uid;
+  } catch (e) {
+    console.warn('[BackupService] Auth-Fehler:', e);
+    return null;
   }
+}
+
+async function uploadBackupAndroid(): Promise<{ success: boolean; error?: string }> {
+  const uid = await ensureAuth();
+  if (!uid) return { success: false, error: 'Anmeldung fehlgeschlagen' };
   
   try {
     const data = await exportLocalData();
     
-    await firestore()
+    await firestoreModule()
       .collection('users')
       .doc(uid)
       .collection('backups')
       .add({
         ...data,
-        createdAt: firestore.FieldValue.serverTimestamp(),
+        createdAt: firestoreModule.FieldValue.serverTimestamp(),
       });
     
-    // Letztes Backup-Datum speichern
-    await firestore()
+    await firestoreModule()
       .collection('users')
       .doc(uid)
       .set({
-        lastBackup: firestore.FieldValue.serverTimestamp(),
+        lastBackup: firestoreModule.FieldValue.serverTimestamp(),
         lastBackupMedikamente: data.medikamente.length,
       }, { merge: true });
     
-    console.log('[BackupService] Backup erfolgreich:', data.medikamente.length, 'Medikamente');
     return { success: true };
   } catch (e: any) {
-    console.warn('[BackupService] Upload-Fehler:', e);
     return { success: false, error: e.message || 'Unbekannter Fehler' };
   }
 }
 
-// Letzte Backup-Infos abrufen
-export async function getBackupInfo(): Promise<BackupInfo | null> {
-  const premium = await isPremium();
-  if (!premium) return null;
-  
+async function getBackupInfoAndroid(): Promise<BackupInfo | null> {
   const uid = await ensureAuth();
   if (!uid) return null;
   
   try {
-    const doc = await firestore().collection('users').doc(uid).get();
+    const doc = await firestoreModule().collection('users').doc(uid).get();
     if (!doc.exists) return null;
     
     const data = doc.data();
@@ -144,21 +180,12 @@ export async function getBackupInfo(): Promise<BackupInfo | null> {
   }
 }
 
-// Backup herunterladen und wiederherstellen
-export async function restoreBackup(): Promise<{ success: boolean; error?: string; medikamentCount?: number }> {
-  const premium = await isPremium();
-  if (!premium) {
-    return { success: false, error: 'Premium erforderlich' };
-  }
-  
+async function restoreBackupAndroid(): Promise<{ success: boolean; error?: string; medikamentCount?: number }> {
   const uid = await ensureAuth();
-  if (!uid) {
-    return { success: false, error: 'Anmeldung fehlgeschlagen' };
-  }
+  if (!uid) return { success: false, error: 'Anmeldung fehlgeschlagen' };
   
   try {
-    // Neustes Backup holen
-    const snapshot = await firestore()
+    const snapshot = await firestoreModule()
       .collection('users')
       .doc(uid)
       .collection('backups')
@@ -171,60 +198,135 @@ export async function restoreBackup(): Promise<{ success: boolean; error?: strin
     }
     
     const backupData = snapshot.docs[0].data() as BackupData;
-    const db = await getDatabase();
+    const medCount = await importLocalData(backupData);
     
-    // Daten in SQLite zurueckschreiben
-    for (const table of ['einstellungen', 'pzn_cache', 'einnahmen', 'einnahmeplan', 'arzt_urlaub', 'packungen', 'medikamente']) {
-      const rows = (backupData as any)[table] || [];
-      if (rows.length === 0) continue;
-      
-      try {
-        // Tabelle leeren
-        await db.executeSql(`DELETE FROM ${table}`);
-        
-        // Zeile fuer-Zeile einfuegen
-        for (const row of rows) {
-          const columns = Object.keys(row);
-          const values = columns.map(c => row[c]);
-          const placeholders = columns.map(() => '?').join(',');
-          await db.executeSql(
-            `INSERT OR REPLACE INTO ${table} (${columns.join(',')}) VALUES (${placeholders})`,
-            values
-          );
-        }
-      } catch (e) {
-        console.warn(`[BackupService] Restore ${table} Fehler:`, e);
-      }
-    }
-    
-    console.log('[BackupService] Restore erfolgreich:', backupData.medikamente?.length, 'Medikamente');
-    return { success: true, medikamentCount: backupData.medikamente?.length ?? 0 };
+    return { success: true, medikamentCount: medCount };
   } catch (e: any) {
-    console.warn('[BackupService] Restore-Fehler:', e);
     return { success: false, error: e.message || 'Unbekannter Fehler' };
   }
 }
 
-// Backup loeschen
-export async function deleteBackup(): Promise<{ success: boolean }> {
+async function deleteBackupAndroid(): Promise<{ success: boolean }> {
   const uid = await ensureAuth();
   if (!uid) return { success: false };
   
   try {
-    const snapshot = await firestore()
+    const snapshot = await firestoreModule()
       .collection('users')
       .doc(uid)
       .collection('backups')
       .get();
     
-    const batch = firestore().batch();
+    const batch = firestoreModule().batch();
     snapshot.docs.forEach((doc: any) => batch.delete(doc.ref));
     await batch.commit();
     
-    await firestore().collection('users').doc(uid).delete();
+    await firestoreModule().collection('users').doc(uid).delete();
     
     return { success: true };
   } catch {
     return { success: false };
   }
+}
+
+// ============================================================
+// iOS: CloudKit
+// ============================================================
+
+async function uploadBackupIOS(): Promise<{ success: boolean; error?: string }> {
+  try {
+    const data = await exportLocalData();
+    const jsonString = JSON.stringify(data);
+    
+    const result = await CloudKitBackup.createBackup(jsonString);
+    return { success: !!result };
+  } catch (e: any) {
+    return { success: false, error: e.message || 'iCloud-Backup fehlgeschlagen' };
+  }
+}
+
+async function getBackupInfoIOS(): Promise<BackupInfo | null> {
+  try {
+    const info = await CloudKitBackup.getBackupInfo();
+    if (!info) return null;
+    
+    return {
+      id: 'cloudkit',
+      timestamp: info.timestamp ?? '',
+      medikamentCount: info.medikamentCount ?? 0,
+      version: 5,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function restoreBackupIOS(): Promise<{ success: boolean; error?: string; medikamentCount?: number }> {
+  try {
+    const jsonString = await CloudKitBackup.restoreBackup();
+    if (!jsonString) {
+      return { success: false, error: 'Kein Backup in iCloud gefunden' };
+    }
+    
+    const backupData = JSON.parse(jsonString) as BackupData;
+    const medCount = await importLocalData(backupData);
+    
+    return { success: true, medikamentCount: medCount };
+  } catch (e: any) {
+    return { success: false, error: e.message || 'iCloud-Wiederherstellung fehlgeschlagen' };
+  }
+}
+
+async function deleteBackupIOS(): Promise<{ success: boolean }> {
+  try {
+    await CloudKitBackup.deleteBackup();
+    return { success: true };
+  } catch {
+    return { success: false };
+  }
+}
+
+// ============================================================
+// Plattform-uebergreifende API
+// ============================================================
+
+export async function uploadBackup(): Promise<{ success: boolean; error?: string }> {
+  const premium = await isPremium();
+  if (!premium) {
+    return { success: false, error: 'Premium erforderlich fuer Cloud-Backup' };
+  }
+  
+  if (Platform.OS === 'ios') {
+    return uploadBackupIOS();
+  }
+  return uploadBackupAndroid();
+}
+
+export async function getBackupInfo(): Promise<BackupInfo | null> {
+  const premium = await isPremium();
+  if (!premium) return null;
+  
+  if (Platform.OS === 'ios') {
+    return getBackupInfoIOS();
+  }
+  return getBackupInfoAndroid();
+}
+
+export async function restoreBackup(): Promise<{ success: boolean; error?: string; medikamentCount?: number }> {
+  const premium = await isPremium();
+  if (!premium) {
+    return { success: false, error: 'Premium erforderlich' };
+  }
+  
+  if (Platform.OS === 'ios') {
+    return restoreBackupIOS();
+  }
+  return restoreBackupAndroid();
+}
+
+export async function deleteBackup(): Promise<{ success: boolean }> {
+  if (Platform.OS === 'ios') {
+    return deleteBackupIOS();
+  }
+  return deleteBackupAndroid();
 }

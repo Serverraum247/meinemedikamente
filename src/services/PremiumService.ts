@@ -1,29 +1,43 @@
-import {
-  initConnection,
-  endConnection,
-  fetchProducts,
-  requestPurchase,
-  finishTransaction,
-  purchaseUpdatedListener,
-  purchaseErrorListener,
-  Product,
-  Purchase,
-  PurchaseError,
-} from 'react-native-iap';
+/**
+ * PremiumService.ts – IAP + Freemium-Logik
+ *
+ * WICHTIG: react-native-iap nutzt NitroModules (TurboModules).
+ * Falls das native Modul nicht verfuegbar ist (z.B. falsche Build-Config),
+ * faellt der Service elegant zurueck – die App startet trotzdem.
+ */
+
 import { getSetting, setSetting } from './SettingsService';
 
-// ─── Constants ───────────────────────────────────────────────────────
+// ─── Lazy IAP Loading ──────────────────────────────────────────────
+// Statischer Import crasht die App wenn NitroModules fehlt.
+// Daher: dynamisch laden und Fehler abfangen.
+
+let iapModule: any = null;
+let iapInitialized = false;
+
+async function getIAP() {
+  if (iapModule !== null) return iapModule;
+  try {
+    iapModule = await import('react-native-iap');
+    return iapModule;
+  } catch (e) {
+    console.warn('[PremiumService] react-native-iap nicht verfuegbar:', (e as Error).message);
+    return null;
+  }
+}
+
+// ─── Constants ────────────────────────────────────────────────────
 const PREMIUM_SKU = 'meine_medikamente_premium';
 const KEY_PREMIUM = 'premium_aktiv';
-const KEY_SCANS_TODAY = 'premium_scans_date'; // value: 'YYYY-MM-DD:count'
-const KEY_CALENDAR_MONTH = 'premium_calendar_month'; // value: 'YYYY-MM:count'
+const KEY_SCANS_TODAY = 'premium_scans_date';
+const KEY_CALENDAR_MONTH = 'premium_calendar_month';
 
 const FREE_SCAN_LIMIT = 3;
 const FREE_CALENDAR_LIMIT = 2;
 const FREE_REMINDER_SLOTS = 1;
 const PREMIUM_REMINDER_SLOTS = 999;
 
-// ─── Helpers ─────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────
 
 function getDateKey(): string {
   const now = new Date();
@@ -40,7 +54,7 @@ function getMonthKey(): string {
   return `${y}-${m}`;
 }
 
-// ─── Premium Status ──────────────────────────────────────────────────
+// ─── Premium Status ───────────────────────────────────────────────
 
 export async function isPremium(): Promise<boolean> {
   const val = await getSetting(KEY_PREMIUM);
@@ -51,25 +65,45 @@ export async function setPremium(aktiv: boolean): Promise<void> {
   await setSetting(KEY_PREMIUM, aktiv ? 'true' : 'false');
 }
 
-// ─── IAP ─────────────────────────────────────────────────────────────
+// ─── IAP ──────────────────────────────────────────────────────────
 
 export async function initIAP(): Promise<void> {
-  await initConnection();
+  if (iapInitialized) return;
+  
+  const iap = await getIAP();
+  if (!iap) {
+    console.warn('[PremiumService] IAP nicht verfuegbar – Premium-Funktionen deaktiviert');
+    iapInitialized = true;
+    return;
+  }
 
-  purchaseUpdatedListener(async (purchase: Purchase) => {
-    console.log('[PremiumService] Purchase successful:', purchase.productId);
-    await setPremium(true);
-    await finishTransaction({ purchase, isConsumable: false });
-  });
+  try {
+    await iap.initConnection();
+    console.log('[PremiumService] IAP-Verbindung hergestellt');
 
-  purchaseErrorListener((error: PurchaseError) => {
-    console.warn('[PremiumService] Purchase error:', error.message, error.code);
-  });
+    iap.purchaseUpdatedListener(async (purchase: any) => {
+      console.log('[PremiumService] Purchase successful:', purchase.productId);
+      await setPremium(true);
+      await iap.finishTransaction({ purchase, isConsumable: false });
+    });
+
+    iap.purchaseErrorListener((error: any) => {
+      console.warn('[PremiumService] Purchase error:', error.message, error.code);
+    });
+
+    iapInitialized = true;
+  } catch (e) {
+    console.warn('[PremiumService] IAP-Init fehlgeschlagen:', (e as Error).message);
+    iapInitialized = true;
+  }
 }
 
 export async function getProductInfo(): Promise<any> {
+  const iap = await getIAP();
+  if (!iap) return null;
+  
   try {
-    const products = await fetchProducts({ skus: [PREMIUM_SKU] });
+    const products = await iap.fetchProducts({ skus: [PREMIUM_SKU] });
     return (products && products.length > 0) ? products[0] : null;
   } catch (e) {
     console.warn('[PremiumService] getProductInfo error:', e);
@@ -78,9 +112,14 @@ export async function getProductInfo(): Promise<any> {
 }
 
 export async function purchasePremium(): Promise<boolean> {
+  const iap = await getIAP();
+  if (!iap) {
+    console.warn('[PremiumService] IAP nicht verfuegbar');
+    return false;
+  }
+  
   try {
-    await requestPurchase({ skus: [PREMIUM_SKU] } as any);
-    // The purchaseUpdatedListener handles setting premium and finishing.
+    await iap.requestPurchase({ skus: [PREMIUM_SKU] } as any);
     return true;
   } catch (e) {
     console.warn('[PremiumService] purchasePremium error:', e);
@@ -88,7 +127,7 @@ export async function purchasePremium(): Promise<boolean> {
   }
 }
 
-// ─── Feature Gates ───────────────────────────────────────────────────
+// ─── Feature Gates ────────────────────────────────────────────────
 
 export async function canScanBarcode(): Promise<{ allowed: boolean; remaining: number }> {
   if (await isPremium()) {
