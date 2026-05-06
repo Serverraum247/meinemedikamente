@@ -12,7 +12,7 @@ SQLite.DEBUG(true);
 SQLite.enablePromise(true);
 
 const DATABASE_NAME = 'meine_medikamente.db';
-const DATABASE_VERSION = 9; // V9: personen Tabelle + person_id in medikamente/einnahme/arzt_urlaub
+const DATABASE_VERSION = 10; // V10: arzt_id in medikamente (Premium: Arzt-Zuordnung)
 
 export interface MedikamentRow {
   id: string;
@@ -30,6 +30,7 @@ export interface MedikamentRow {
   erinnerung_aktiv: number;     // 0=aus, 1=an
   einnahme_uhrzeiten: string;   // JSON-Array, z.B. '["08:00","20:00"]'
   auto_abzug_aktiv: number;     // 0=aus, 1=an – Bestand automatisch pro Einnahme abziehen
+  arzt_id: string;              // verschreibender Arzt (Premium, '' = nicht zugeordnet)
   created_at: string;
   updated_at: string;
 }
@@ -209,6 +210,7 @@ class Database {
     await this.migrateV6toV7();
     await this.migrateV7toV8();
     await this.migrateV8toV9();
+    await this.migrateV9toV10();
   }
 
   /**
@@ -483,6 +485,19 @@ class Database {
       }
     });
     return columns;
+  }
+
+  /**
+   * Migration V9 -> V10: arzt_id in medikamente (Arzt-Zuordnung, Premium)
+   */
+  private async migrateV9toV10(): Promise<void> {
+    const medCols = await this.getColumnNames('medikamente');
+    if (!medCols.includes('arzt_id')) {
+      await this.db!.executeSql(
+        `ALTER TABLE medikamente ADD COLUMN arzt_id TEXT NOT NULL DEFAULT '';`
+      );
+      console.log('[DB] Migration V9->V10: arzt_id Spalte in medikamente hinzugefuegt');
+    }
   }
 }
 

@@ -18,8 +18,8 @@ export async function createMedikament(
   const id = medikament.id || generateUUID();
 
   await db.executeSql(
-    `INSERT INTO medikamente (id, name, zusatz, person_id, aktueller_bestand, einzeldosis, einheit, pzn, packungsgroesse, warnung_ab_bestand, sync_status, erinnerung_aktiv, einnahme_uhrzeiten, auto_abzug_aktiv)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO medikamente (id, name, zusatz, person_id, aktueller_bestand, einzeldosis, einheit, pzn, packungsgroesse, warnung_ab_bestand, sync_status, erinnerung_aktiv, einnahme_uhrzeiten, auto_abzug_aktiv, arzt_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       medikament.name,
@@ -35,6 +35,7 @@ export async function createMedikament(
       medikament.erinnerung_aktiv ?? 0,
       medikament.einnahme_uhrzeiten ?? '[]',
       medikament.auto_abzug_aktiv ?? 0,
+      medikament.arzt_id || '',
     ]
   );
 
@@ -145,6 +146,7 @@ export async function updateMedikament(
   if (updates.name !== undefined) { fields.push('name = ?'); values.push(updates.name); }
   if (updates.zusatz !== undefined) { fields.push('zusatz = ?'); values.push(updates.zusatz); }
   if (updates.person_id !== undefined) { fields.push('person_id = ?'); values.push(updates.person_id); }
+  if (updates.arzt_id !== undefined) { fields.push('arzt_id = ?'); values.push(updates.arzt_id); }
   if (updates.aktueller_bestand !== undefined) { fields.push('aktueller_bestand = ?'); values.push(updates.aktueller_bestand); }
   if (updates.einzeldosis !== undefined) { fields.push('einzeldosis = ?'); values.push(updates.einzeldosis); }
   if (updates.einheit !== undefined) { fields.push('einheit = ?'); values.push(updates.einheit); }

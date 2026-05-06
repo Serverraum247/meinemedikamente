@@ -38,6 +38,8 @@ import {
   getAllDefaultUhrzeiten,
 } from '../utils/Einnahmeplan';
 import { getMaxReminderSlots, isPremium } from '../services/PremiumService';
+import { getAllAerzte } from '../database/ArztController';
+import type { ArztRow } from '../database/Database';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AddMedikament'>;
 
@@ -62,6 +64,8 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
   const [autoAbzugAktiv, setAutoAbzugAktiv] = useState(false);
   const [maxSlots, setMaxSlots] = useState(1);
   const [premium, setPremiumStatus] = useState(false);
+  const [aerzte, setAerzte] = useState<ArztRow[]>([]);
+  const [gewaehlterArzt, setGewaehlterArzt] = useState('');
 
   // Default-Uhrzeiten aus Einstellungen laden
   useEffect(() => {
@@ -70,7 +74,13 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
       setDefaultUhrzeiten(stored);
     })();
     getMaxReminderSlots().then(setMaxSlots);
-    isPremium().then(setPremiumStatus);
+    isPremium().then(async (isPrem) => {
+      setPremiumStatus(isPrem);
+      if (isPrem) {
+        const arztListe = await getAllAerzte();
+        setAerzte(arztListe);
+      }
+    });
   }, []);
   React.useEffect(() => {
     const scannedPZN = route.params?.scannedPZN;
@@ -120,6 +130,7 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
         erinnerung_aktiv: erinnerungAktiv ? 1 : 0,
         einnahme_uhrzeiten: serializeEinnahmeplan(einnahmePlan),
         auto_abzug_aktiv: autoAbzugAktiv ? 1 : 0,
+        arzt_id: gewaehlterArzt,
       });
 
       announceChange('Medikament wurde gespeichert');
@@ -194,6 +205,43 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
             </TouchableOpacity>
           </View>
         </View>
+
+        {/* Arzt-Zuordnung (nur Premium) */}
+        {premium && aerzte.length > 0 && (
+          <View style={styles.fieldGroup}>
+            <Text style={styles.label}>👨‍⚕️ Verschreibender Arzt</Text>
+            <Text style={styles.hint}>Premium: Welcher Arzt hat dieses Medikament verschrieben?</Text>
+            {aerzte.map(arzt => (
+              <TouchableOpacity
+                key={arzt.id}
+                style={[
+                  styles.arztOption,
+                  gewaehlterArzt === arzt.id && styles.arztOptionSelected,
+                ]}
+                onPress={() => setGewaehlterArzt(gewaehlterArzt === arzt.id ? '' : arzt.id)}
+                accessibilityRole="radio"
+                accessibilityState={{ checked: gewaehlterArzt === arzt.id }}
+                accessibilityLabel={`Arzt: ${arzt.name}${arzt.fachgebiet ? `, ${arzt.fachgebiet}` : ''}`}
+              >
+                <Text style={[
+                  styles.arztOptionText,
+                  gewaehlterArzt === arzt.id && styles.arztOptionTextSelected,
+                ]}>
+                  {arzt.name}{arzt.fachgebiet ? ` – ${arzt.fachgebiet}` : ''}
+                </Text>
+              </TouchableOpacity>
+            ))}
+            {gewaehlterArzt !== '' && (
+              <TouchableOpacity
+                onPress={() => setGewaehlterArzt('')}
+                accessibilityRole="button"
+                accessibilityLabel="Arzt-Zuordnung entfernen"
+              >
+                <Text style={styles.arztEntfernen}>Zuordnung entfernen</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
 
         {/* === ABSCHNITT: Dosierung === */}
         <Text style={styles.sectionTitle} accessibilityRole="header">Dosierung</Text>
@@ -686,5 +734,34 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#2c3e50',
     textAlign: 'center',
+  },
+  // Arzt-Zuordnung
+  arztOption: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginBottom: 8,
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  arztOptionSelected: {
+    borderColor: '#28a745',
+    backgroundColor: '#e8f5e9',
+  },
+  arztOptionText: {
+    fontSize: 16,
+    color: '#333',
+  },
+  arztOptionTextSelected: {
+    color: '#155724',
+    fontWeight: '600',
+  },
+  arztEntfernen: {
+    fontSize: 14,
+    color: '#dc3545',
+    marginTop: 4,
+    textDecorationLine: 'underline',
   },
 });

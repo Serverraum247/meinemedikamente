@@ -36,6 +36,7 @@ import {
 import { announceChange } from '../utils/AccessibilityHelpers';
 import { erstelleRezeptAbholtermin } from '../services/KalenderService';
 import { canCreateCalendarEvent, recordCalendarEvent, isPremium } from '../services/PremiumService';
+import { getArztById } from '../database/ArztController';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'MedikamentDetail'>;
 
@@ -50,6 +51,7 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
   const [packungsHistorie, setPackungsHistorie] = useState<PackungRow[]>([]);
   const [zeigeHistorie, setZeigeHistorie] = useState(false);
   const [premium, setPremiumStatus] = useState(false);
+  const [arztName, setArztName] = useState('');
 
   // Medikament + Historie laden
   const loadData = useCallback(async () => {
@@ -57,6 +59,13 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
     if (found) {
       setMedikament(found);
       navigation.setOptions({ title: found.name });
+      // Arzt laden falls zugeordnet
+      if (found.arzt_id) {
+        const arzt = await getArztById(found.arzt_id);
+        setArztName(arzt?.name || '');
+      } else {
+        setArztName('');
+      }
     }
     try {
       const einnahmen = await getEinnahmenByMedikament(medikamentId, 30);
@@ -272,6 +281,7 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
           <DetailRow label="Packungsgröße" value={`${medikament.packungsgroesse} ${medikament.einheit}`} />
           <DetailRow label="Warnung ab" value={`${medikament.warnung_ab_bestand} ${medikament.einheit}`} />
           {medikament.pzn ? <DetailRow label="PZN" value={medikament.pzn} /> : null}
+          {arztName ? <DetailRow label="Verschrieben von" value={arztName} /> : null}
         </View>
 
         {/* Einnahmeplan (falls Erinnerung aktiv) */}
