@@ -12,12 +12,13 @@ SQLite.DEBUG(true);
 SQLite.enablePromise(true);
 
 const DATABASE_NAME = 'meine_medikamente.db';
-const DATABASE_VERSION = 8; // V8: zusatz Spalte in medikamente (Wirkstoff-Alias)
+const DATABASE_VERSION = 9; // V9: personen Tabelle + person_id in medikamente/einnahme/arzt_urlaub
 
 export interface MedikamentRow {
   id: string;
   name: string;
   zusatz: string;            // z.B. "Blutdrucksenker", "Schilddrüse"
+  person_id: string;         // zugehoerige Person
   aktueller_bestand: number; // Float, z.B. 28.5
   einzeldosis: number;       // Float, z.B. 0.5
   einheit: string;           // 'Tabletten', 'Kapseln', etc.
@@ -36,6 +37,7 @@ export interface MedikamentRow {
 export interface EinnahmeRow {
   id: string;
   medikament_id: string;
+  person_id: string;     // zugehoerige Person
   menge: number;      // Float – eingenommene Menge
   timestamp: string;  // ISO 8601
   notiz: string;
@@ -43,6 +45,7 @@ export interface EinnahmeRow {
 
 export interface ArztUrlaubRow {
   id: string;
+  person_id: string;    // zugehoerige Person
   praxis_name: string;
   telefon?: string;       // Telefonnummer des Arztes (optional)
   urlaub_start: string; // ISO Date YYYY-MM-DD
@@ -56,6 +59,15 @@ export interface ArztRow {
   telefon: string;       // Telefonnummer
   adresse: string;       // Adresse (optional)
   fachgebiet: string;    // Fachgebiet (optional)
+  created_at: string;
+}
+
+export interface PersonRow {
+  id: string;
+  name: string;            // z.B. "Daniel", "Mama"
+  avatar_emoji: string;    // z.B. "👴" – vorgefertigte Auswahl
+  avatar_uri: string;      // Pfad zum Foto in App-Sandbox (optional)
+  ist_standard: number;    // 1 = Hauptperson, kann nicht geloescht werden
   created_at: string;
 }
 
@@ -196,6 +208,7 @@ class Database {
     await this.migrateV5toV6();
     await this.migrateV6toV7();
     await this.migrateV7toV8();
+    await this.migrateV8toV9();
   }
 
   /**
@@ -391,6 +404,85 @@ class Database {
     } catch (error) {
       console.warn('[DB] Migration V7->V8 Pruefung:', error);
     }
+  }
+
+  /**
+   * Migration V8 -> V9: personen Tabelle + person_id in bestehenden Tabellen
+   */
+  private async migrateV8toV9(): Promise<void> {
+    if (!this.db) return;
+    try {
+      // 1. personen Tabelle erstellen
+      try {
+        await this.db.executeSql(`SELECT id FROM personen LIMIT 1`);
+      } catch {
+        await this.db.executeSql(`
+          CREATE TABLE IF NOT EXISTS personen (
+            id            TEXT PRIMARY KEY NOT NULL,
+            name          TEXT NOT NULL,
+            avatar_emoji  TEXT NOT NULL DEFAULT '👤',
+            avatar_uri    TEXT NOT NULL DEFAULT '',
+            ist_standard  INTEGER NOT NULL DEFAULT 0,
+            created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+          );
+        `);
+        // Default-Person anlegen
+        await this.db.executeSql(
+          `INSERT INTO personen (id, name, avatar_emoji, ist_standard) VALUES (?, 'Ich', '👤', 1);`,
+          ['person-default-001']
+        );
+        console.log('[DB] Migration V8->V9: personen Tabelle + Default-Person erstellt');
+      }
+
+      // 2. person_id in medikamente
+      const medCols = await this.getColumnNames('medikamente');
+      if (!medCols.includes('person_id')) {
+        await this.db.executeSql(
+          `ALTER TABLE medikamente ADD COLUMN person_id TEXT NOT NULL DEFAULT 'person-default-001';`
+        );
+      }
+
+      // 3. person_id in einnahmen
+      const einCols = await this.getColumnNames('einnahmen');
+      if (!einCols.includes('person_id')) {
+        await this.db.executeSql(
+          `ALTER TABLE einnahmen ADD COLUMN person_id TEXT NOT NULL DEFAULT 'person-default-001';`
+        );
+      }
+
+      // 4. person_id in arzt_urlaub
+      const urlCols = await this.getColumnNames('arzt_urlaub');
+      if (!urlCols.includes('person_id')) {
+        await this.db.executeSql(
+          `ALTER TABLE arzt_urlaub ADD COLUMN person_id TEXT NOT NULL DEFAULT 'person-default-001';`
+        );
+      }
+
+      // 5. Indices
+      await this.db.executeSql(
+        `CREATE INDEX IF NOT EXISTS idx_medikamente_person ON medikamente(person_id);`
+      );
+      await this.db.executeSql(
+        `CREATE INDEX IF NOT EXISTS idx_einnahmen_person ON einnahmen(person_id);`
+      );
+
+      console.log('[DB] Migration V8->V9: person_id Spalten + Indices hinzugefuegt');
+    } catch (error) {
+      console.warn('[DB] Migration V8->V9 Pruefung:', error);
+    }
+  }
+
+  /** Helper: Spaltennamen einer Tabelle lesen */
+  private async getColumnNames(table: string): Promise<string[]> {
+    if (!this.db) return [];
+    const result = await this.db.executeSql(`PRAGMA table_info(${table});`);
+    const columns: string[] = [];
+    result.forEach((r: any) => {
+      for (let i = 0; i < r.rows.length; i++) {
+        columns.push(r.rows.item(i).name);
+      }
+    });
+    return columns;
   }
 }
 

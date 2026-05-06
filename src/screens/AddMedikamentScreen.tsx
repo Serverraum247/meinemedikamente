@@ -21,6 +21,7 @@ import {
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 import { useMedikamente } from '../context/MedikamentContext';
+import { usePersonen } from '../context/PersonenContext';
 import { parseDeFloat } from '../utils/FloatUtils';
 import { announceChange } from '../utils/AccessibilityHelpers';
 import { Switch } from 'react-native';
@@ -42,6 +43,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'AddMedikament'>;
 
 export default function AddMedikamentScreen({ navigation, route }: Props) {
   const { addMedikament } = useMedikamente();
+  const { aktivePerson } = usePersonen();
 
   const [name, setName] = useState('');
   const [zusatz, setZusatz] = useState('');
@@ -107,6 +109,7 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
         id,
         name: name.trim(),
         zusatz: zusatz.trim(),
+        person_id: aktivePerson?.id || 'person-default-001',
         aktueller_bestand: bestandFloat,
         einzeldosis: dosisFloat,
         einheit,

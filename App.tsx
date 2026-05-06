@@ -7,6 +7,7 @@
 import React from 'react';
 import { StatusBar, Text, TextInput } from 'react-native';
 import { MedikamentProvider } from './src/context/MedikamentContext';
+import { PersonenProvider } from './src/context/PersonenContext';
 import AppNavigator from './src/navigation/AppNavigator';
 
 // ─── Globale Barrierefreiheit: Font-Scaling Limits ─────────────
@@ -28,10 +29,12 @@ if (typeof (TextInput as any).defaultProps === 'undefined') {
 
 function App(): React.JSX.Element {
   return (
-    <MedikamentProvider>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-      <AppNavigator />
-    </MedikamentProvider>
+    <PersonenProvider>
+      <MedikamentProvider>
+        <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+        <AppNavigator />
+      </MedikamentProvider>
+    </PersonenProvider>
   );
 }
 

@@ -15,6 +15,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
+  Modal,
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
@@ -36,10 +37,24 @@ import {
   type ArztRow,
 } from '../database/ArztController';
 import { isPremium } from '../services/PremiumService';
+import { usePersonen } from '../context/PersonenContext';
+import { AVATAR_EMOJIS } from '../database/PersonenController';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
 
 export default function SettingsScreen({ navigation }: Props) {
+  // Personen
+  const {
+    personen, aktivePerson, setAktivePerson,
+    addPerson, editPerson, removePerson,
+    maxPersonen, premium: personenPremium, loading: personenLoading,
+  } = usePersonen();
+  const [neuePersonName, setNeuePersonName] = useState('');
+  const [editPersonId, setEditPersonId] = useState<string | null>(null);
+  const [editPersonName, setEditPersonName] = useState('');
+  const [editPersonEmoji, setEditPersonEmoji] = useState('');
+  const [showEmojiPicker, setShowEmojiPicker] = useState<string | null>(null); // person id oder 'new'
+
   // Uhrzeiten-State
   const [uhrzeiten, setUhrzeiten] = useState<Record<TageszeitSlot, string>>({
     morgens: '08:00',
@@ -205,9 +220,215 @@ export default function SettingsScreen({ navigation }: Props) {
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
 
-        {/* === Meine Aerzte === */}
         <Text style={styles.title}>Einstellungen</Text>
 
+        {/* === Personen / Patienten === */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle} accessibilityRole="header">
+              👥 Personen
+            </Text>
+            <TouchableOpacity
+              onPress={async () => {
+                if (!neuePersonName.trim()) return;
+                const result = await addPerson({ name: neuePersonName.trim() });
+                if (result.success) {
+                  setNeuePersonName('');
+                  announceChange('Person hinzugefügt');
+                } else {
+                  Alert.alert('Premium erforderlich', result.error);
+                }
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Person hinzufügen"
+            >
+              <Text style={styles.addButton}>+ Hinzufügen</Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.sectionHint}>
+            Verwalte Medikamente für mehrere Personen.{'\n'}
+            {personenPremium
+              ? 'Premium: unbegrenzte Personen.'
+              : 'Kostenlos: 1 Person. Premium = unbegrenzt.'
+            }
+          </Text>
+
+          {/* Neue Person anlegen (nur wenn Premium oder < max) */}
+          {personen.length < maxPersonen && (
+            <View style={styles.inlineForm}>
+              <TextInput
+                style={[styles.input, { flex: 1 }]}
+                value={neuePersonName}
+                onChangeText={setNeuePersonName}
+                placeholder="Name der neuen Person"
+                placeholderTextColor="#999"
+                accessibilityLabel="Name der neuen Person"
+              />
+            </View>
+          )}
+
+          {/* Personen-Liste */}
+          {personen.map(person => {
+            const isEditing = editPersonId === person.id;
+            const isActive = aktivePerson?.id === person.id;
+            return (
+              <View key={person.id} style={styles.personRow}>
+                {isEditing ? (
+                  <View style={styles.inlineForm}>
+                    <TouchableOpacity
+                      onPress={() => setShowEmojiPicker(person.id)}
+                      accessibilityRole="button"
+                      accessibilityLabel="Avatar ändern"
+                    >
+                      <Text style={styles.personEmoji}>{person.avatar_emoji}</Text>
+                    </TouchableOpacity>
+                    <TextInput
+                      style={[styles.input, { flex: 1 }]}
+                      value={editPersonName}
+                      onChangeText={setEditPersonName}
+                      placeholder="Name"
+                      placeholderTextColor="#999"
+                      accessibilityLabel="Name bearbeiten"
+                    />
+                    <TouchableOpacity
+                      onPress={async () => {
+                        if (!editPersonName.trim()) return;
+                        await editPerson(person.id, {
+                          name: editPersonName.trim(),
+                          avatar_emoji: editPersonEmoji || person.avatar_emoji,
+                        });
+                        setEditPersonId(null);
+                        announceChange('Person aktualisiert');
+                      }}
+                      accessibilityRole="button"
+                      accessibilityLabel="Speichern"
+                    >
+                      <Text style={styles.saveButton}>✓</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => setEditPersonId(null)}
+                      accessibilityRole="button"
+                      accessibilityLabel="Abbrechen"
+                    >
+                      <Text style={styles.cancelButton}>✕</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <View style={styles.inlineForm}>
+                    <TouchableOpacity
+                      onPress={() => setShowEmojiPicker(person.id)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Avatar von ${person.name} ändern`}
+                    >
+                      <Text style={styles.personEmoji}>
+                        {person.avatar_uri ? '📷' : person.avatar_emoji}
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={{ flex: 1 }}
+                      onPress={() => {
+                        setAktivePerson(person);
+                        announceChange(`${person.name} ausgewählt`);
+                      }}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${person.name}${isActive ? ' (aktiv)' : ''}. Tippen zum Auswählen.`}
+                    >
+                      <Text style={[
+                        styles.personNameText,
+                        isActive && styles.personNameActive,
+                      ]}>
+                        {person.name} {isActive && '(aktiv)'}
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => {
+                        setEditPersonId(person.id);
+                        setEditPersonName(person.name);
+                        setEditPersonEmoji(person.avatar_emoji);
+                      }}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${person.name} bearbeiten`}
+                    >
+                      <Text style={styles.editIcon}>✏️</Text>
+                    </TouchableOpacity>
+                    {person.ist_standard !== 1 && (
+                      <TouchableOpacity
+                        onPress={() => {
+                          Alert.alert(
+                            `${person.name} löschen?`,
+                            'Medikamente dieser Person werden der Hauptperson zugeordnet.',
+                            [
+                              { text: 'Abbrechen', style: 'cancel' },
+                              {
+                                text: 'Löschen',
+                                style: 'destructive',
+                                onPress: async () => {
+                                  const result = await removePerson(person.id);
+                                  if (!result.success) {
+                                    Alert.alert('Fehler', result.error);
+                                  } else {
+                                    announceChange('Person gelöscht');
+                                  }
+                                },
+                              },
+                            ]
+                          );
+                        }}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${person.name} löschen`}
+                      >
+                        <Text style={styles.deleteIcon}>🗑️</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                )}
+              </View>
+            );
+          })}
+
+          {/* Emoji-Picker Modal */}
+          <Modal visible={!!showEmojiPicker} transparent animationType="fade">
+            <View style={styles.emojiPickerOverlay}>
+              <View style={styles.emojiPickerCard}>
+                <Text style={styles.emojiPickerTitle}>Avatar auswählen</Text>
+                <View style={styles.emojiGrid}>
+                  {AVATAR_EMOJIS.map(emoji => (
+                    <TouchableOpacity
+                      key={emoji}
+                      style={styles.emojiOption}
+                      onPress={async () => {
+                        if (showEmojiPicker === 'new') {
+                          // wird beim Erstellen gesetzt
+                        } else if (showEmojiPicker) {
+                          await editPerson(showEmojiPicker, { avatar_emoji: emoji });
+                          if (editPersonId === showEmojiPicker) {
+                            setEditPersonEmoji(emoji);
+                          }
+                        }
+                        setShowEmojiPicker(null);
+                        announceChange('Avatar geändert');
+                      }}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Avatar ${emoji}`}
+                    >
+                      <Text style={styles.emojiOptionText}>{emoji}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <TouchableOpacity
+                  onPress={() => setShowEmojiPicker(null)}
+                  style={styles.emojiPickerClose}
+                  accessibilityRole="button"
+                  accessibilityLabel="Avatar-Auswahl schließen"
+                >
+                  <Text style={styles.emojiPickerCloseText}>Schließen</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </Modal>
+        </View>
+
+        {/* === Meine Aerzte === */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle} accessibilityRole="header">
@@ -413,6 +634,110 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#1a1a2e',
     marginBottom: 24,
+  },
+  // Personen
+  personRow: {
+    marginBottom: 8,
+  },
+  personEmoji: {
+    fontSize: 32,
+    marginRight: 8,
+  },
+  personNameText: {
+    fontSize: 18,
+    color: '#333',
+    paddingVertical: 4,
+  },
+  personNameActive: {
+    color: '#155724',
+    fontWeight: '600',
+  },
+  editIcon: {
+    fontSize: 20,
+    padding: 8,
+  },
+  deleteIcon: {
+    fontSize: 20,
+    padding: 8,
+  },
+  saveButton: {
+    fontSize: 24,
+    color: '#28a745',
+    padding: 8,
+    fontWeight: '700',
+  },
+  cancelButton: {
+    fontSize: 22,
+    color: '#999',
+    padding: 8,
+  },
+  // Emoji-Picker
+  emojiPickerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emojiPickerCard: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 24,
+    width: '85%',
+    maxWidth: 400,
+  },
+  emojiPickerTitle: {
+    fontSize: 22,
+    fontWeight: '600',
+    color: '#1a1a2e',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  emojiGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  emojiOption: {
+    width: 56,
+    height: 56,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 28,
+    backgroundColor: '#f0f0f0',
+  },
+  emojiOptionText: {
+    fontSize: 32,
+  },
+  emojiPickerClose: {
+    marginTop: 20,
+    alignSelf: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 24,
+    backgroundColor: '#1a1a2e',
+    borderRadius: 8,
+  },
+  emojiPickerCloseText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  inlineForm: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginVertical: 4,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 16,
+    color: '#333',
+    backgroundColor: '#fafafa',
+    minHeight: 44,
   },
   section: {
     backgroundColor: '#fff',

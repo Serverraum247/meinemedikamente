@@ -10,6 +10,7 @@ import {
   View,
   Text,
   FlatList,
+  ScrollView,
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
@@ -20,6 +21,7 @@ import {
   Pressable,
 } from 'react-native';
 import { useMedikamente } from '../context/MedikamentContext';
+import { usePersonen } from '../context/PersonenContext';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 import { calculateUrlaubsWarnungen } from '../database/UrlaubController';
@@ -31,6 +33,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
 
 export default function HomeScreen({ navigation }: Props) {
   const { medikamente, medikamenteUnterSchwelle, loading } = useMedikamente();
+  const { personen, aktivePerson, setAktivePerson, maxPersonen, premium } = usePersonen();
   const [urlaubsWarnungen, setUrlaubsWarnungen] = useState<UrlaubsWarnung[]>([]);
   const [menueOffen, setMenueOffen] = useState(false);
 
@@ -113,6 +116,45 @@ export default function HomeScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Personen-Umschalter */}
+      {personen.length > 1 && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.personenLeiste}
+          contentContainerStyle={styles.personenLeisteContent}
+          accessibilityRole="tablist"
+          accessibilityLabel="Personen-Auswahl"
+        >
+          {personen.map(person => {
+            const isActive = aktivePerson?.id === person.id;
+            return (
+              <TouchableOpacity
+                key={person.id}
+                style={[
+                  styles.personChip,
+                  isActive && styles.personChipActive,
+                ]}
+                onPress={() => setAktivePerson(person)}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: isActive }}
+                accessibilityLabel={`${person.name}${isActive ? ' (ausgewählt)' : ''}`}
+              >
+                <Text style={styles.personEmoji} accessibilityElementsHidden>
+                  {person.avatar_uri ? '📷' : person.avatar_emoji}
+                </Text>
+                <Text
+                  style={[styles.personName, isActive && styles.personNameActive]}
+                  numberOfLines={1}
+                >
+                  {person.name}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      )}
+
       {/* Warnungs-Banner */}
       {medikamenteUnterSchwelle.length > 0 && (
         <View
@@ -253,6 +295,47 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',
+  },
+  personenLeiste: {
+    maxHeight: 80,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  personenLeisteContent: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    alignItems: 'center',
+    gap: 10,
+  },
+  personChip: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: '#f0f0f0',
+    minWidth: 56,
+    minHeight: 56,
+  },
+  personChipActive: {
+    backgroundColor: '#d4edda',
+    borderWidth: 2,
+    borderColor: '#28a745',
+  },
+  personEmoji: {
+    fontSize: 24,
+    marginBottom: 2,
+  },
+  personName: {
+    fontSize: 12,
+    color: '#555',
+    maxWidth: 60,
+    textAlign: 'center',
+  },
+  personNameActive: {
+    color: '#155724',
+    fontWeight: '600',
   },
   center: {
     flex: 1,

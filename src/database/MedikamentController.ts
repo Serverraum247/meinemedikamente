@@ -18,12 +18,13 @@ export async function createMedikament(
   const id = medikament.id || generateUUID();
 
   await db.executeSql(
-    `INSERT INTO medikamente (id, name, zusatz, aktueller_bestand, einzeldosis, einheit, pzn, packungsgroesse, warnung_ab_bestand, sync_status, erinnerung_aktiv, einnahme_uhrzeiten, auto_abzug_aktiv)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO medikamente (id, name, zusatz, person_id, aktueller_bestand, einzeldosis, einheit, pzn, packungsgroesse, warnung_ab_bestand, sync_status, erinnerung_aktiv, einnahme_uhrzeiten, auto_abzug_aktiv)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       medikament.name,
       medikament.zusatz || '',
+      medikament.person_id || 'person-default-001',
       medikament.aktueller_bestand,  // Float: z.B. 28.5
       medikament.einzeldosis,        // Float: z.B. 0.5
       medikament.einheit,
@@ -119,13 +120,14 @@ export async function einnahmeVerbuchen(medikamentId: string): Promise<number> {
  */
 export async function logEinnahme(
   medikamentId: string,
-  menge: number // Float
+  menge: number, // Float
+  personId?: string
 ): Promise<void> {
   const db = await getDatabase();
   await db.executeSql(
-    `INSERT INTO einnahmen (id, medikament_id, menge, timestamp)
-     VALUES (?, ?, ?, datetime('now'))`,
-    [generateUUID(), medikamentId, menge]
+    `INSERT INTO einnahmen (id, medikament_id, person_id, menge, timestamp)
+     VALUES (?, ?, ?, ?, datetime('now'))`,
+    [generateUUID(), medikamentId, personId || 'person-default-001', menge]
   );
 }
 
@@ -142,6 +144,7 @@ export async function updateMedikament(
 
   if (updates.name !== undefined) { fields.push('name = ?'); values.push(updates.name); }
   if (updates.zusatz !== undefined) { fields.push('zusatz = ?'); values.push(updates.zusatz); }
+  if (updates.person_id !== undefined) { fields.push('person_id = ?'); values.push(updates.person_id); }
   if (updates.aktueller_bestand !== undefined) { fields.push('aktueller_bestand = ?'); values.push(updates.aktueller_bestand); }
   if (updates.einzeldosis !== undefined) { fields.push('einzeldosis = ?'); values.push(updates.einzeldosis); }
   if (updates.einheit !== undefined) { fields.push('einheit = ?'); values.push(updates.einheit); }
