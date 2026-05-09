@@ -8,12 +8,11 @@ require Pod::Executable.execute_command('node', ['-p',
 platform :ios, min_ios_version_supported
 prepare_react_native_project!
 
-# FIX: Build from Source statt Prebuilt Pods
-# RN 0.85 Prebuilt Pods liefern JSI-Symbole (HostObject::set etc.) nicht
-# als exportierte Symbole. Ohne Prebuilt-Artifacts kompiliert rncore.rb
-# React-jsi aus Quelle -> libReact-jsi.a mit allen Symbolen.
+# FIX: Prebuilt Pods (schneller als Build-from-Source)
+# Build-from-Source brauchte 15+ Min und hatte Folly-Header-Probleme.
+# Prebuilt funktioniert da NitroModules auf iOS nicht gelinkt ist.
 # Siehe Skill: meine-medikamente-dev "iOS Build: ReactCodegen JSI-Linker-Fehler"
-ENV['RCT_USE_PREBUILT_RNCORE'] = '0'
+ENV['RCT_USE_PREBUILT_RNCORE'] = '1'
 
 target 'MeineMedikamente' do
   config = use_native_modules!
