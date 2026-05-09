@@ -15,6 +15,7 @@ import {
   deleteMedikament,
   getMedikamenteUnterSchwelle,
 } from '../database/MedikamentController';
+import { logger } from '../utils/Logger';
 
 interface MedikamentContextType {
   medikamente: MedikamentRow[];
@@ -22,7 +23,7 @@ interface MedikamentContextType {
   loading: boolean;
   refresh: () => Promise<void>;
   addMedikament: (med: Omit<MedikamentRow, 'created_at' | 'updated_at'>) => Promise<string>;
-  bestätigeEinnahme: (id: string) => Promise<number>;
+  bestätigeEinnahme: (id: string, dosisOverride?: number) => Promise<number>;
   aktualisiereBestand: (id: string, bestand: number) => Promise<void>;
   bearbeiteMedikament: (id: string, updates: Partial<MedikamentRow>) => Promise<void>;
   entferneMedikament: (id: string) => Promise<void>;
@@ -42,7 +43,7 @@ export function MedikamentProvider({ children }: { children: React.ReactNode }) 
       const unterSchwelle = await getMedikamenteUnterSchwelle();
       setMedikamenteUnterSchwelle(unterSchwelle);
     } catch (error) {
-      console.error('[Context] Fehler beim Laden:', error);
+      logger.error('[Context] Fehler beim Laden:', error);
     }
   }, []);
 
@@ -53,7 +54,7 @@ export function MedikamentProvider({ children }: { children: React.ReactNode }) 
         await database.init();
         await refresh();
       } catch (error) {
-        console.error('[Context] Init-Fehler:', error);
+        logger.error('[Context] Init-Fehler:', error);
       } finally {
         setLoading(false);
       }
@@ -66,8 +67,8 @@ export function MedikamentProvider({ children }: { children: React.ReactNode }) 
     return id;
   };
 
-  const bestätigeEinnahme = async (id: string) => {
-    const neuerBestand = await einnahmeVerbuchen(id);
+  const bestätigeEinnahme = async (id: string, dosisOverride?: number) => {
+    const neuerBestand = await einnahmeVerbuchen(id, dosisOverride);
     await refresh();
     return neuerBestand;
   };

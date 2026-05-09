@@ -12,15 +12,16 @@ interface FeatureItem {
 
 const FEATURES: FeatureItem[] = [
   { icon: '💊', label: 'Medikamente verwalten', freeText: 'Max. 3', premiumText: 'Unbegrenzt', isPremiumOnly: true },
+  { icon: '🧴', label: 'Darreichungsformen', freeText: 'Basis', premiumText: 'Erweitert', isPremiumOnly: true },
   { icon: '✅', label: 'Einnahme tracken', freeText: 'Ja', premiumText: 'Ja', isPremiumOnly: false },
-  { icon: '📊', label: 'Bestands-Warnung', freeText: 'Ja', premiumText: 'Ja', isPremiumOnly: false },
+  { icon: '📊', label: 'Bestands-Warnung', freeText: 'Nein', premiumText: 'Ja', isPremiumOnly: true },
   { icon: '📅', label: 'Arzt-Urlaub-Prävention', freeText: 'Ansehen', premiumText: 'Verwalten + Anrufen', isPremiumOnly: true },
   { icon: '✏️', label: 'Bestand korrigieren', freeText: 'Nein', premiumText: 'Ja', isPremiumOnly: true },
   { icon: '📷', label: 'Barcode-Scanner', freeText: '3 pro Tag', premiumText: 'Unbegrenzt', isPremiumOnly: true },
-  { icon: '🗓️', label: 'Kalender-Termine', freeText: '2 pro Monat', premiumText: 'Unbegrenzt', isPremiumOnly: true },
-  { icon: '⏰', label: 'Erinnerung-Slots', freeText: '1 pro Medikament', premiumText: 'Alle 4 Slots', isPremiumOnly: true },
-  { icon: '🕐', label: 'Individuelle Uhrzeiten', freeText: 'Standard-Zeiten', premiumText: 'Frei wählbar', isPremiumOnly: true },
-  { icon: '☁️', label: 'Cloud-Backup', freeText: 'Nein', premiumText: 'Ja (coming soon)', isPremiumOnly: true },
+  { icon: '🗓️', label: 'Kalender-Termine', freeText: 'Nein', premiumText: 'Ja', isPremiumOnly: true },
+  { icon: '⏰', label: 'Erinnerungen', freeText: 'Standard', premiumText: 'Unbegrenzt', isPremiumOnly: true },
+  { icon: '🕐', label: 'Uhrzeiten', freeText: 'Standard', premiumText: 'Individuell', isPremiumOnly: true },
+  { icon: '☁️', label: 'Cloud-Backup', freeText: 'Nein', premiumText: 'Ja', isPremiumOnly: true },
 ];
 
 export default function PremiumScreen({ navigation }: { navigation: any }) {
@@ -83,7 +84,7 @@ export default function PremiumScreen({ navigation }: { navigation: any }) {
         {/* Hero-Bereich */}
         <View style={styles.heroSection}>
           <Text style={styles.heroIcon}>⭐</Text>
-          <Text style={styles.heroTitle}>Meine Medikamente</Text>
+          <Text style={styles.heroTitle}>Mein MediPlan</Text>
           <Text style={styles.heroSubtitle}>Premium</Text>
 
           {premiumActive ? (

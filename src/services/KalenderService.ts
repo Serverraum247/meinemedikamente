@@ -11,6 +11,7 @@
 
 import CalendarEvents from 'react-native-calendar-events';
 import { calculateLeerDatum } from '../utils/FloatUtils';
+import { logger } from '../utils/Logger';
 
 export interface KalenderEvent {
   title: string;
@@ -29,7 +30,7 @@ export async function requestKalenderBerechtigung(): Promise<boolean> {
     const status = await CalendarEvents.requestPermissions();
     return status === 'authorized';
   } catch (error) {
-    console.error('[KalenderService] Berechtigung fehlgeschlagen:', error);
+    logger.error('[KalenderService] Berechtigung fehlgeschlagen:', error);
     return false;
   }
 }
@@ -65,7 +66,7 @@ export async function erstelleRezeptAbholtermin(
 ): Promise<string | null> {
   const berechtigt = await requestKalenderBerechtigung();
   if (!berechtigt) {
-    console.warn('[KalenderService] Keine Kalender-Berechtigung');
+    logger.warn('[KalenderService] Keine Kalender-Berechtigung');
     return null;
   }
 
@@ -90,7 +91,7 @@ export async function erstelleRezeptAbholtermin(
       `Aktueller Bestand: ${bestand}\n` +
       `Einzeldosis: ${einzeldosis}\n` +
       `Vorraeussichtlich leer am: ${leerDatum}\n\n` +
-      `Erstellt durch "Meine Medikamente" App`,
+      `Erstellt durch "Mein MediPlan" App`,
     alarm: 60, // 1 Stunde vorher erinnern
   };
 
@@ -101,10 +102,10 @@ export async function erstelleRezeptAbholtermin(
       notes: event.notes,
       alarms: [{ date: -event.alarm! }], // Negativ = Minuten vor Event
     });
-    console.log('[KalenderService] Event erstellt:', eventId);
+    logger.log('[KalenderService] Event erstellt:', eventId);
     return eventId;
   } catch (error) {
-    console.error('[KalenderService] Event erstellen fehlgeschlagen:', error);
+    logger.error('[KalenderService] Event erstellen fehlgeschlagen:', error);
     return null;
   }
 }
@@ -139,13 +140,13 @@ export async function erstelleUrlaubsWarnung(
           `Urlaub: ${urlaubStart} bis ${urlaubEnde}\n` +
           `Betroffenes Medikament: ${medikamentName}\n\n` +
           `Rezept rechtzeitig besorgen!\n` +
-          `Erstellt durch "Meine Medikamente" App`,
+          `Erstellt durch "Mein MediPlan" App`,
         alarms: [{ date: -1440 }], // 1 Tag vorher
       }
     );
     return eventId;
   } catch (error) {
-    console.error('[KalenderService] Urlaub-Warnung fehlgeschlagen:', error);
+    logger.error('[KalenderService] Urlaub-Warnung fehlgeschlagen:', error);
     return null;
   }
 }

@@ -100,20 +100,21 @@ export async function updateBestand(
 
 /**
  * Bestand nach Einnahme reduzieren
- * Bestand_Neu = Bestand_Alt - Einzeldosis (Float-Subtraktion)
+ * Bestand_Neu = Bestand_Alt - Dosis (Float-Subtraktion)
  */
-export async function einnahmeVerbuchen(medikamentId: string): Promise<number> {
+export async function einnahmeVerbuchen(medikamentId: string, dosisOverride?: number): Promise<number> {
   const med = await getMedikamentById(medikamentId);
   if (!med) throw new Error(`Medikament ${medikamentId} nicht gefunden`);
 
-  const neuerBestand = med.aktueller_bestand - med.einzeldosis;
+  const dosis = dosisOverride !== undefined ? dosisOverride : med.einzeldosis;
+  const neuerBestand = med.aktueller_bestand - dosis;
   // Verhindere negative Bestände
   const finalBestand = Math.max(0, neuerBestand);
 
   await updateBestand(medikamentId, finalBestand);
 
   // Einnahme-Log speichern
-  await logEinnahme(medikamentId, med.einzeldosis);
+  await logEinnahme(medikamentId, dosis);
 
   return finalBestand;
 }

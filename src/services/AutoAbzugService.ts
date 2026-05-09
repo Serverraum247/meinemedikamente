@@ -11,6 +11,7 @@
 
 import { database, getDatabase } from '../database/Database';
 import { reduceBestand } from '../utils/FloatUtils';
+import { logger } from '../utils/Logger';
 
 export interface AutoAbzugResult {
   success: boolean;
@@ -25,7 +26,8 @@ export interface AutoAbzugResult {
  * @returns Neuer Bestand oder Fehler
  */
 export async function fuehreAutoAbzugDurch(
-  medikamentId: string
+  medikamentId: string,
+  dosisOverride?: number
 ): Promise<AutoAbzugResult> {
   const db = await getDatabase();
 
@@ -46,12 +48,14 @@ export async function fuehreAutoAbzugDurch(
       return { success: false, neuerBestand: med.aktueller_bestand, error: 'Auto-Abzug nicht aktiviert' };
     }
 
+    const dosis = dosisOverride !== undefined ? dosisOverride : med.einzeldosis;
+
     // Bestand reduzieren (mit IEEE 754 Rounding)
-    const neuerBestand = reduceBestand(med.aktueller_bestand, med.einzeldosis);
+    const neuerBestand = reduceBestand(med.aktueller_bestand, dosis);
 
     if (neuerBestand < 0) {
       // Negativen Bestand nicht zulassen – aber trotzdem Einnahme loggen
-      console.warn(`[AutoAbzug] Bestand würde negativ: ${med.name}`);
+      logger.warn(`[AutoAbzug] Bestand würde negativ: ${med.name}`);
     }
 
     const finalBestand = Math.max(0, neuerBestand);
@@ -66,16 +70,16 @@ export async function fuehreAutoAbzugDurch(
     const einnahmeId = `auto-${Date.now()}-${medikamentId.substring(0, 8)}`;
     await db.executeSql(
       `INSERT INTO einnahmen (id, medikament_id, menge, timestamp, notiz) VALUES (?, ?, ?, datetime('now'), 'Automatische Einnahme');`,
-      [einnahmeId, medikamentId, med.einzeldosis]
+      [einnahmeId, medikamentId, dosis]
     );
 
-    console.log(
-      `[AutoAbzug] ${med.name}: ${med.aktueller_bestand} - ${med.einzeldosis} = ${finalBestand}`
+    logger.log(
+      `[AutoAbzug] ${med.name}: ${med.aktueller_bestand} - ${dosis} = ${finalBestand}`
     );
 
     return { success: true, neuerBestand: finalBestand };
   } catch (error) {
-    console.error('[AutoAbzug] Fehler:', error);
+    logger.error('[AutoAbzug] Fehler:', error);
     return { success: false, neuerBestand: 0, error: String(error) };
   }
 }

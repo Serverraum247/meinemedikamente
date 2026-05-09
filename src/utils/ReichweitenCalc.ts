@@ -7,6 +7,12 @@
  */
 
 import type { MedikamentRow } from '../database/Database';
+import {
+  parseEinnahmeplan,
+  planHatWochentage,
+  tagesdosisBerechnen,
+  tagesdosisBerechnenFuerDatum,
+} from './Einnahmeplan';
 
 export interface ReichweiteInfo {
   tage: number;           // Reichweite in Tagen (0 = leer, -1 = unendlich)
@@ -24,16 +30,7 @@ export function calculateReichweite(med: MedikamentRow): ReichweiteInfo {
   const bestand = med.aktueller_bestand || 0;
   const dosis = med.einzeldosis || 0;
 
-  // Einnahmen pro Tag aus einnahme_uhrzeiten ermitteln
-  let einnahmenProTag = 1; // Standard: 1x täglich
-  try {
-    const slots = JSON.parse(med.einnahme_uhrzeiten || '[]');
-    if (Array.isArray(slots) && slots.length > 0) {
-      einnahmenProTag = slots.length;
-    }
-  } catch {
-    einnahmenProTag = 1;
-  }
+  const plan = parseEinnahmeplan(med.einnahme_uhrzeiten || '[]');
 
   // Bestand leer
   if (bestand <= 0) {
@@ -59,12 +56,21 @@ export function calculateReichweite(med: MedikamentRow): ReichweiteInfo {
     };
   }
 
-  const tagesverbrauch = dosis * einnahmenProTag;
-  const tage = Math.floor(bestand / tagesverbrauch);
+  const reichweite = planHatWochentage(plan)
+    ? berechneWochentagsReichweite(bestand, plan, dosis)
+    : berechneTaeglicheReichweite(bestand, plan, dosis);
+  const { tage, leerDatum } = reichweite;
 
-  // Leer-Datum berechnen
-  const leerDatum = new Date();
-  leerDatum.setDate(leerDatum.getDate() + tage);
+  if (tage < 0 || !leerDatum) {
+    return {
+      tage: -1,
+      leerDatum: null,
+      istKritisch: false,
+      istLeer: false,
+      textKurz: 'unbegrenzt',
+      textLang: 'Kein geplanter Verbrauch',
+    };
+  }
 
   const istLeer = tage <= 0;
   const istKritisch = tage > 0 && tage <= 7;
@@ -102,6 +108,45 @@ function formatDate(d: Date): string {
   const monat = String(d.getMonth() + 1).padStart(2, '0');
   const jahr = d.getFullYear();
   return `${tag}.${monat}.${jahr}`;
+}
+
+function berechneTaeglicheReichweite(
+  bestand: number,
+  plan: ReturnType<typeof parseEinnahmeplan>,
+  dosis: number
+): Pick<ReichweiteInfo, 'tage' | 'leerDatum'> {
+  const tagesverbrauch = plan.length > 0
+    ? tagesdosisBerechnen(plan, dosis)
+    : dosis;
+  const tage = Math.floor(bestand / tagesverbrauch);
+  const leerDatum = new Date();
+  leerDatum.setDate(leerDatum.getDate() + tage);
+  return { tage, leerDatum };
+}
+
+function berechneWochentagsReichweite(
+  bestand: number,
+  plan: ReturnType<typeof parseEinnahmeplan>,
+  dosis: number
+): Pick<ReichweiteInfo, 'tage' | 'leerDatum'> {
+  let rest = bestand;
+  const start = new Date();
+  start.setHours(12, 0, 0, 0);
+
+  for (let tage = 1; tage <= 36500; tage++) {
+    const datum = new Date(start);
+    datum.setDate(start.getDate() + tage);
+
+    const verbrauch = tagesdosisBerechnenFuerDatum(plan, dosis, datum);
+    if (verbrauch <= 0) continue;
+
+    rest -= verbrauch;
+    if (rest <= 0) {
+      return { tage, leerDatum: datum };
+    }
+  }
+
+  return { tage: -1, leerDatum: null };
 }
 
 /**

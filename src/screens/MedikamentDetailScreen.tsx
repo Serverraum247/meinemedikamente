@@ -34,6 +34,7 @@ import {
   SLOT_META,
   SLOT_REIHENFOLGE,
   getAktuelleTageszeit,
+  getDosisFuerSlot,
   type EinnahmeSlot,
 } from '../utils/Einnahmeplan';
 import { announceChange } from '../utils/AccessibilityHelpers';
@@ -41,6 +42,8 @@ import { erstelleRezeptAbholtermin } from '../services/KalenderService';
 import { canCreateCalendarEvent, recordCalendarEvent, isPremium } from '../services/PremiumService';
 import { getArztById } from '../database/ArztController';
 import { calculateReichweite, formatStaerke } from '../utils/ReichweitenCalc';
+import { logger } from '../utils/Logger';
+import { showPremiumRequiredAlert } from '../utils/PremiumAlerts';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'MedikamentDetail'>;
 
@@ -84,7 +87,7 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
       const hist = await getPackungenByMedikament(medikamentId);
       setPackungsHistorie(hist);
     } catch (e) {
-      console.error('[Historie] Fehler:', e);
+      logger.error('[Historie] Fehler:', e);
     }
   }, [medikamente, medikamentId, navigation]);
 
@@ -99,10 +102,13 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
 
   const handleEinnahme = useCallback(async () => {
     if (!medikament) return;
+    const aktuelle = getAktuelleTageszeit();
+    const plan = parseEinnahmeplan(medikament.einnahme_uhrzeiten || '[]');
+    const dosis = getDosisFuerSlot(plan, aktuelle, medikament.einzeldosis);
 
     Alert.alert(
       'Einnahme bestätigen',
-      `${medikament.einzeldosis} ${medikament.einheit} ${medikament.name} eingenommen?`,
+      `${dosis} ${medikament.einheit} ${medikament.name} eingenommen?`,
       [
         { text: 'Abbrechen', style: 'cancel' },
         {
@@ -110,7 +116,7 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
           style: 'default',
           onPress: async () => {
             try {
-              const neuerBestand = await bestätigeEinnahme(medikament.id);
+              const neuerBestand = await bestätigeEinnahme(medikament.id, dosis);
               await loadData(); // Historie refreshen
               announceChange(`${medikament.name} wurde als eingenommen markiert`);
               Alert.alert(
@@ -348,7 +354,10 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
                 Einnahme bestätigen
               </Text>
               <Text style={styles.einnahmeButtonSubtext}>
-                -{medikament.einzeldosis} {medikament.einheit}
+                -{(() => {
+                  const plan = parseEinnahmeplan(medikament.einnahme_uhrzeiten || '[]');
+                  return getDosisFuerSlot(plan, getAktuelleTageszeit(), medikament.einzeldosis);
+                })()} {medikament.einheit}
               </Text>
               {tageszeitInfo ? (
                 <Text style={styles.einnahmeTageszeitInfo}>{tageszeitInfo}</Text>
@@ -500,13 +509,9 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
                 // Premium-Gate: Kalender-Limit prüfen
                 const { allowed } = await canCreateCalendarEvent();
                 if (!allowed) {
-                  Alert.alert(
-                    'Premium erforderlich',
-                    'Du hast bereits 2 Kalendereinträge diesen Monat erstellt. Premium = unbegrenzt.',
-                    [
-                      { text: 'Abbrechen', style: 'cancel' },
-                      { text: 'Premium', onPress: () => navigation.navigate('Premium') },
-                    ]
+                  showPremiumRequiredAlert(
+                    'Kalendertermine, zum Beispiel für Rezeptabholung, sind nur mit Premium möglich.',
+                    navigation,
                   );
                   return;
                 }

@@ -1,8 +1,8 @@
 /**
  * BarcodeScannerScreen.tsx – Kamera-Barcode-Scanner + manuelle PZN-Eingabe
  *
- * Nutzt react-native-camera-kit fuer native Kamera-Barcode-Erkennung.
- * Senioren-freundlich: Grosser Kamera-View, automatische Erkennung,
+ * Nutzt react-native-camera-kit für native Kamera-Barcode-Erkennung.
+ * Senioren-freundlich: Großer Kamera-View, automatische Erkennung,
  * Fallback auf manuelle Eingabe per Tab.
  */
 
@@ -20,9 +20,10 @@ import {
 import { Camera } from 'react-native-camera-kit';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
-import { validatePZN } from '../services/BarcodeScannerService';
+import { normalizePzn, validatePZN } from '../services/BarcodeScannerService';
 import { canScanBarcode, recordBarcodeScan } from '../services/PremiumService';
 import { lookupPzn } from '../services/PznLookupService';
+import { showPremiumRequiredAlert } from '../utils/PremiumAlerts';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'BarcodeScanner'>;
 
@@ -42,28 +43,21 @@ export default function BarcodeScannerScreen({ navigation }: Props) {
     const barcode = event.nativeEvent?.codeStringValue ?? '';
     if (!barcode) return;
 
-    // Nur numerische Barcodes (PZN, EAN) akzeptieren
-    const cleaned = barcode.trim();
-    if (!/^\d{6,13}$/.test(cleaned)) return;
+    const scannedPzn = normalizePzn(barcode);
+    if (!scannedPzn) return;
 
     setHasScanned(true);
 
     // Premium-Gate
     const { allowed } = await canScanBarcode();
     if (!allowed) {
-      Alert.alert(
-        'Premium erforderlich',
-        'Du hast bereits 3 Barcodes heute gescannt. Premium = unbegrenzt Scans.',
-        [
-          { text: 'Abbrechen', style: 'cancel', onPress: () => setHasScanned(false) },
-          { text: 'Premium', onPress: () => navigation.navigate('Premium') },
-        ]
-      );
+      showPremiumRequiredAlert('Mehr als 3 Barcode-Scans pro Tag sind nur mit Premium möglich.', navigation);
+      setHasScanned(false);
       return;
     }
     await recordBarcodeScan();
 
-    await processPzn(cleaned);
+    await processPzn(scannedPzn);
   };
 
   // PZN verarbeiten (Lookup + Navigation)
@@ -110,6 +104,7 @@ export default function BarcodeScannerScreen({ navigation }: Props) {
   // Manuelle Eingabe
   const handleUebernehmen = async () => {
     const trimmed = pznInput.trim();
+    const normalized = normalizePzn(trimmed) || trimmed;
     if (!trimmed) {
       Alert.alert('Leer', 'Bitte gib eine PZN oder Barcode ein.');
       return;
@@ -117,19 +112,12 @@ export default function BarcodeScannerScreen({ navigation }: Props) {
 
     const { allowed } = await canScanBarcode();
     if (!allowed) {
-      Alert.alert(
-        'Premium erforderlich',
-        'Du hast bereits 3 Barcodes heute gescannt. Premium = unbegrenzt Scans.',
-        [
-          { text: 'Abbrechen', style: 'cancel' },
-          { text: 'Premium', onPress: () => navigation.navigate('Premium') },
-        ]
-      );
+      showPremiumRequiredAlert('Mehr als 3 Barcode-Scans pro Tag sind nur mit Premium möglich.', navigation);
       return;
     }
     await recordBarcodeScan();
 
-    if (/^\d{7,8}$/.test(trimmed) && !validatePZN(trimmed)) {
+    if (/^\d{7,8}$/.test(normalized) && !validatePZN(normalized)) {
       Alert.alert(
         'Prüfziffer falsch',
         'Die eingegebene PZN scheint ungültig zu sein. Trotzdem übernehmen?',
@@ -137,14 +125,14 @@ export default function BarcodeScannerScreen({ navigation }: Props) {
           { text: 'Abbrechen', style: 'cancel' },
           {
             text: 'Trotzdem übernehmen',
-            onPress: () => processPzn(trimmed),
+            onPress: () => processPzn(normalized),
           },
         ]
       );
       return;
     }
 
-    await processPzn(trimmed);
+    await processPzn(normalized);
   };
 
   return (

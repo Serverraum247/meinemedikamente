@@ -8,6 +8,7 @@
  */
 
 import { Platform, NativeModules } from 'react-native';
+import { logger } from '../utils/Logger';
 
 // CloudKit Native Module (nur iOS)
 const { CloudKitBackup } = NativeModules;
@@ -106,7 +107,7 @@ async function importLocalData(backupData: BackupData): Promise<number> {
         medCount = rows.length;
       }
     } catch (e) {
-      console.warn(`[BackupService] Restore ${table} Fehler:`, e);
+      logger.warn(`[BackupService] Restore ${table} Fehler:`, e);
     }
   }
   
@@ -125,7 +126,7 @@ async function ensureAuth(): Promise<string | null> {
     const credential = await auth().signInAnonymously();
     return credential.user.uid;
   } catch (e) {
-    console.warn('[BackupService] Auth-Fehler:', e);
+    logger.warn('[BackupService] Auth-Fehler:', e);
     return null;
   }
 }
@@ -293,7 +294,7 @@ async function deleteBackupIOS(): Promise<{ success: boolean }> {
 export async function uploadBackup(): Promise<{ success: boolean; error?: string }> {
   const premium = await isPremium();
   if (!premium) {
-    return { success: false, error: 'Premium erforderlich fuer Cloud-Backup' };
+    return { success: false, error: 'Cloud-Backup ist nur mit Premium möglich.' };
   }
   
   if (Platform.OS === 'ios') {
@@ -315,7 +316,7 @@ export async function getBackupInfo(): Promise<BackupInfo | null> {
 export async function restoreBackup(): Promise<{ success: boolean; error?: string; medikamentCount?: number }> {
   const premium = await isPremium();
   if (!premium) {
-    return { success: false, error: 'Premium erforderlich' };
+    return { success: false, error: 'Cloud-Backup ist nur mit Premium möglich.' };
   }
   
   if (Platform.OS === 'ios') {

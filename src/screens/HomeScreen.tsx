@@ -37,6 +37,8 @@ import {
 } from '../services/EinnahmeErinnerungService';
 import { einnahmeVerbuchen } from '../database/MedikamentController';
 import EinnahmeErinnerungModal from '../components/EinnahmeErinnerungModal';
+import { logger } from '../utils/Logger';
+import { showPremiumRequiredAlert } from '../utils/PremiumAlerts';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
 
@@ -70,7 +72,7 @@ export default function HomeScreen({ navigation }: Props) {
   const [premiumStatus, setPremiumStatus] = useState(false);
   useEffect(() => { isPremium().then(setPremiumStatus); }, []);
 
-  // Hamburger-Menue im Header links
+  // Hamburger-Menü im Header links
   useEffect(() => {
     navigation.setOptions({
       headerLeft: () => (
@@ -90,10 +92,10 @@ export default function HomeScreen({ navigation }: Props) {
 
   // Urlaub-Kollisionen laden
   useEffect(() => {
-    calculateUrlaubsWarnungen().then(setUrlaubsWarnungen).catch(console.error);
+    calculateUrlaubsWarnungen().then(setUrlaubsWarnungen).catch(logger.error);
   }, []);
 
-  // Einnahme-Erinnerung pruefen beim Oeffnen
+  // Einnahme-Erinnerung prüfen beim Öffnen
   useEffect(() => {
     if (loading) return;
     let aktiv = true;
@@ -109,7 +111,7 @@ export default function HomeScreen({ navigation }: Props) {
         setOffeneEinnahmen(offene);
         setErinnerungOffen(true);
       } catch (e) {
-        console.error('Einnahme-Erinnerung fehlgeschlagen:', e);
+        logger.error('Einnahme-Erinnerung fehlgeschlagen:', e);
       }
     };
 
@@ -117,6 +119,15 @@ export default function HomeScreen({ navigation }: Props) {
     const timer = setTimeout(pruefeErinnerung, 1500);
     return () => { aktiv = false; clearTimeout(timer); };
   }, [loading]);
+
+  const openAddMedikament = async () => {
+    const max = await getMaxMedikamente();
+    if (medikamente.length >= max) {
+      showPremiumRequiredAlert(`Mehr als ${max} Medikamente sind nur mit Premium möglich.`, navigation);
+      return;
+    }
+    navigation.navigate('AddMedikament');
+  };
 
   if (loading) {
     return (
@@ -134,6 +145,8 @@ export default function HomeScreen({ navigation }: Props) {
     const isUnterSchwelle = item.aktueller_bestand <= item.warnung_ab_bestand;
     const reichweite = calculateReichweite(item);
     const staerkeText = premiumStatus ? formatStaerke(item.staerke_wert, item.staerke_einheit) : null;
+    const bestandText = formatCompactNumber(item.aktueller_bestand);
+    const reichweiteBis = formatReichweiteBis(reichweite.leerDatum);
 
     return (
       <TouchableOpacity
@@ -145,7 +158,7 @@ export default function HomeScreen({ navigation }: Props) {
         onPress={() => navigation.navigate('MedikamentDetail', { medikamentId: item.id })}
         activeOpacity={0.7}
         accessibilityRole="button"
-        accessibilityLabel={`${item.name}${staerkeText ? `, ${staerkeText}` : ''}, Bestand: ${item.aktueller_bestand} ${item.einheit}, Reichweite: ${reichweite.textKurz}${isUnterSchwelle ? ', Nachbestellen empfohlen' : ''}`}
+        accessibilityLabel={`${item.name}${staerkeText ? `, ${staerkeText}` : ''}, Bestand: ${bestandText} ${item.einheit}, Reichweite: ${reichweite.textKurz}${reichweiteBis ? `, bis ${reichweiteBis}` : ''}${isUnterSchwelle ? ', Nachbestellen empfohlen' : ''}`}
         accessibilityHint="Doppelt tippen für Details"
       >
         <View style={styles.cardContent}>
@@ -156,15 +169,24 @@ export default function HomeScreen({ navigation }: Props) {
           {staerkeText ? (
             <Text style={styles.medStaerke}>💊 {staerkeText}</Text>
           ) : null}
-          <Text style={styles.medDetail}>
-            Bestand: {item.aktueller_bestand} {item.einheit}
-          </Text>
-          <Text style={[
-            styles.medDetail,
-            reichweite.istKritisch && styles.reichweiteKritisch,
-          ]}>
-            📅 Reichweite: {reichweite.textKurz} – {reichweite.textLang}
-          </Text>
+          <View style={styles.reichweiteRow}>
+            <View style={[
+              styles.reichweiteBadge,
+              reichweite.istKritisch && styles.reichweiteBadgeCritical,
+            ]}>
+              <Text style={[
+                styles.reichweiteBadgeText,
+                reichweite.istKritisch && styles.reichweiteBadgeTextCritical,
+              ]}>
+                {reichweite.textKurz}
+              </Text>
+            </View>
+            {reichweiteBis ? (
+              <Text style={styles.reichweiteBis}>bis {reichweiteBis}</Text>
+            ) : (
+              <Text style={styles.reichweiteBis}>{reichweite.textLang}</Text>
+            )}
+          </View>
           {isUnterSchwelle && (
             <Text style={styles.warnungText}>
               ⚠ Nachbestellen empfohlen!
@@ -173,9 +195,9 @@ export default function HomeScreen({ navigation }: Props) {
         </View>
         <View style={styles.cardBestand}>
           <Text style={[styles.bestandZahl, isUnterSchwelle && styles.bestandWarning]} maxFontSizeMultiplier={1.3}>
-            {isUnterSchwelle ? '⚠' : '✓'} {item.aktueller_bestand}
+            {isUnterSchwelle ? '⚠' : '✓'} {bestandText}
           </Text>
-          <Text style={styles.bestandLabel}>übrig</Text>
+          <Text style={styles.bestandLabel}>{item.einheit}</Text>
         </View>
       </TouchableOpacity>
     );
@@ -223,7 +245,7 @@ export default function HomeScreen({ navigation }: Props) {
       )}
 
       {/* Warnungs-Banner */}
-      {gefilterteUnterSchwelle.length > 0 && (
+      {premiumStatus && gefilterteUnterSchwelle.length > 0 && (
         <View
           style={styles.warnBanner}
           accessibilityLiveRegion="polite"
@@ -241,10 +263,10 @@ export default function HomeScreen({ navigation }: Props) {
           onPress={() => navigation.navigate('ArztUrlaub')}
           activeOpacity={0.7}
           accessibilityRole="button"
-          accessibilityLabel={`${gefilterteWarnungen.length} Urlaub-Kollisionen. Medikamente werden waehrend Arzturlaub leer. Tippen fuer Details.`}
+          accessibilityLabel={`${gefilterteWarnungen.length} Urlaub-Kollisionen. Medikamente werden während Arzturlaub leer. Tippen für Details.`}
         >
           <Text style={styles.urlaubBannerText}>
-            📅 {gefilterteWarnungen.length} Urlaub-Kollision(en) – Medikamente werden waehrend Arzturlaub leer!
+            📅 {gefilterteWarnungen.length} Urlaub-Kollision(en) – Medikamente werden während Arzturlaub leer!
           </Text>
         </TouchableOpacity>
       )}
@@ -256,6 +278,17 @@ export default function HomeScreen({ navigation }: Props) {
           <Text style={styles.emptySubtitle}>
             Tippe auf "+" um dein erstes Medikament hinzuzufügen.
           </Text>
+          {__DEV__ && (
+            <TouchableOpacity
+              style={styles.e2eAddButton}
+              testID="e2e-add-medication-button"
+              onPress={openAddMedikament}
+              accessibilityRole="button"
+              accessibilityLabel="Medikament hinzufügen"
+            >
+              <Text style={styles.e2eAddButtonText}>Medikament hinzufügen</Text>
+            </TouchableOpacity>
+          )}
         </View>
       ) : (
         <FlatList
@@ -269,21 +302,8 @@ export default function HomeScreen({ navigation }: Props) {
       {/* Hinzufuegen-Button */}
       <TouchableOpacity
         style={styles.fab}
-        onPress={async () => {
-          const max = await getMaxMedikamente();
-          if (medikamente.length >= max) {
-            Alert.alert(
-              'Premium erforderlich',
-              `Kostenlose Version: maximal ${max} Medikamente. Premium = unbegrenzt.`,
-              [
-                { text: 'Abbrechen', style: 'cancel' },
-                { text: 'Premium', onPress: () => navigation.navigate('Premium') },
-              ]
-            );
-            return;
-          }
-          navigation.navigate('AddMedikament');
-        }}
+        testID="add-medication-button"
+        onPress={openAddMedikament}
         activeOpacity={0.8}
         accessibilityRole="button"
         accessibilityLabel="Neues Medikament hinzufügen"
@@ -302,7 +322,7 @@ export default function HomeScreen({ navigation }: Props) {
           <Pressable style={styles.menuePanel} onPress={() => {}}>
             {/* Menue-Header */}
             <View style={styles.menueHeader}>
-              <Text style={styles.menueTitle}>Meine Medikamente</Text>
+              <Text style={styles.menueTitle}>Mein MediPlan</Text>
               <TouchableOpacity onPress={() => setMenueOffen(false)} accessibilityLabel="Menü schließen">
                 <Text style={styles.menueClose}>✕</Text>
               </TouchableOpacity>
@@ -313,6 +333,7 @@ export default function HomeScreen({ navigation }: Props) {
               style={styles.menueItem}
               onPress={() => { setMenueOffen(false); navigation.navigate('Settings'); }}
               accessibilityRole="button"
+              accessibilityLabel="Einstellungen"
             >
               <Text style={styles.menueItemIcon}>⚙️</Text>
               <Text style={styles.menueItemText}>Einstellungen</Text>
@@ -322,6 +343,7 @@ export default function HomeScreen({ navigation }: Props) {
               style={styles.menueItem}
               onPress={() => { setMenueOffen(false); navigation.navigate('ArztUrlaub'); }}
               accessibilityRole="button"
+              accessibilityLabel="Arzt-Urlaub"
             >
               <Text style={styles.menueItemIcon}>📅</Text>
               <Text style={styles.menueItemText}>Arzt-Urlaub</Text>
@@ -331,6 +353,7 @@ export default function HomeScreen({ navigation }: Props) {
               style={styles.menueItem}
               onPress={() => { setMenueOffen(false); navigation.navigate('Premium'); }}
               accessibilityRole="button"
+              accessibilityLabel="Premium"
             >
               <Text style={styles.menueItemIcon}>⭐</Text>
               <Text style={styles.menueItemText}>Premium</Text>
@@ -340,6 +363,7 @@ export default function HomeScreen({ navigation }: Props) {
               style={styles.menueItem}
               onPress={() => { setMenueOffen(false); navigation.navigate('Backup'); }}
               accessibilityRole="button"
+              accessibilityLabel="Cloud-Backup"
             >
               <Text style={styles.menueItemIcon}>☁️</Text>
               <Text style={styles.menueItemText}>Cloud-Backup</Text>
@@ -358,7 +382,7 @@ export default function HomeScreen({ navigation }: Props) {
         visible={erinnerungOffen}
         offeneEinnahmen={offeneEinnahmen}
         onBestaetigen={async (medikamentId, dosis) => {
-          await einnahmeVerbuchen(medikamentId);
+          await einnahmeVerbuchen(medikamentId, dosis);
           await refresh();
           // Offene Liste aktualisieren
           const neueOffene = offeneEinnahmen.filter(
@@ -381,6 +405,23 @@ export default function HomeScreen({ navigation }: Props) {
       />
     </SafeAreaView>
   );
+}
+
+function formatCompactNumber(value: number): string {
+  if (Number.isInteger(value)) return String(value);
+  return value.toLocaleString('de-DE', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  });
+}
+
+function formatReichweiteBis(date: Date | null): string | null {
+  if (!date) return null;
+  return date.toLocaleDateString('de-DE', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
 }
 
 // --- Styles (Senioren-freundlich, WCAG AA Kontrast) ---
@@ -490,14 +531,38 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: 4,
   },
-  reichweiteKritisch: {
-    color: '#FF6D00',
-    fontWeight: '600',
-  },
   medDetail: {
     fontSize: 16,
     color: '#555',
     marginBottom: 2,
+  },
+  reichweiteRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 6,
+  },
+  reichweiteBadge: {
+    borderRadius: 8,
+    backgroundColor: '#E9F7EF',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  reichweiteBadgeCritical: {
+    backgroundColor: '#FFF3E0',
+  },
+  reichweiteBadgeText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1B5E20',
+  },
+  reichweiteBadgeTextCritical: {
+    color: '#E65100',
+  },
+  reichweiteBis: {
+    fontSize: 15,
+    color: '#666',
   },
   warnungText: {
     fontSize: 16,
@@ -543,6 +608,18 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#666',
     textAlign: 'center',
+  },
+  e2eAddButton: {
+    marginTop: 24,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: '#1a1a2e',
+  },
+  e2eAddButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
   fab: {
     position: 'absolute',

@@ -1,4 +1,5 @@
 import { getDatabase } from '../database/Database';
+import { logger } from '../utils/Logger';
 
 export interface PznLookupResult {
   name: string;
@@ -67,7 +68,7 @@ export async function lookupPznOnline(pzn: string): Promise<PznLookupResult> {
     const initHtml = await initResp.text();
     const csrfMatch = initHtml.match(/csrf-token"[^>]*content="([^"]+)"/);
     if (!csrfMatch) {
-      console.warn('[PznLookup] Kein CSRF-Token gefunden');
+      logger.warn('[PznLookup] Kein CSRF-Token gefunden');
       return notFound;
     }
     const csrfToken = csrfMatch[1];
@@ -100,7 +101,7 @@ export async function lookupPznOnline(pzn: string): Promise<PznLookupResult> {
         const prodResp = await fetch(BASE_URL + linkMatch[1]);
         finalHtml = await prodResp.text();
       } else {
-        console.warn('[PznLookup] Kein Produktlink in Antwort gefunden');
+        logger.warn('[PznLookup] Kein Produktlink in Antwort gefunden');
         return notFound;
       }
     }
@@ -126,14 +127,14 @@ export async function lookupPznOnline(pzn: string): Promise<PznLookupResult> {
       };
       // Im Cache speichern
       await cachePznResult(result);
-      console.log('[PznLookup] Gefunden:', name);
+      logger.log('[PznLookup] Gefunden:', name);
       return result;
     }
 
-    console.warn('[PznLookup] Kein og:title in Produktseite');
+    logger.warn('[PznLookup] Kein og:title in Produktseite');
     return notFound;
   } catch (e) {
-    console.warn('[PznLookup] Fehler bei PZN-Suche:', e);
+    logger.warn('[PznLookup] Fehler bei PZN-Suche:', e);
     return notFound;
   }
 }
@@ -148,7 +149,7 @@ export async function lookupPzn(pzn: string): Promise<PznLookupResult> {
   // Cache zuerst
   const cached = await lookupPznCached(normalizedPzn);
   if (cached) {
-    console.log('[PznLookup] Cache-Treffer:', cached.name);
+    logger.log('[PznLookup] Cache-Treffer:', cached.name);
     return cached;
   }
 

@@ -4,7 +4,7 @@
  * Senioren-optimiert: Ein-Spalten-Layout, sehr große Textfelder,
  * klare Abschnitte, 44x44+ Touch-Ziele, WCAG AA Kontrast.
  *
- * Alle Zahlenfelder unterstuetzen Float (halbe Tabletten = 0.5).
+ * Alle Zahlenfelder unterstützen Float (halbe Tabletten = 0.5).
  */
 
 import React, { useState, useEffect } from 'react';
@@ -30,17 +30,26 @@ import {
   TageszeitSlot,
   SLOT_META,
   SLOT_REIHENFOLGE,
+  WOCHENTAGE_META,
   toggleSlot,
   setSlotDosis,
   setSlotUhrzeit,
+  toggleSlotWochentag,
   serializeEinnahmeplan,
   parseEinnahmeplan,
   getAllDefaultUhrzeiten,
 } from '../utils/Einnahmeplan';
-import { getMaxReminderSlots, isPremium } from '../services/PremiumService';
+import { getMaxReminderSlots, isPremium, setDevPremiumOverride } from '../services/PremiumService';
 import { getAllAerzte } from '../database/ArztController';
 import type { ArztRow } from '../database/Database';
 import PremiumGate from '../components/PremiumGate';
+import { logger } from '../utils/Logger';
+import { MEDICATION_UNITS, isPremiumMedicationUnit } from '../constants/MedicationUnits';
+import {
+  getMedicationTestPreset,
+  MedicationTestPresetKey,
+} from '../constants/MedicationTestPresets';
+import { showPremiumRequiredAlert } from '../utils/PremiumAlerts';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AddMedikament'>;
 
@@ -97,6 +106,11 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
   }, [route.params?.scannedPZN, route.params?.suggestedName]);
 
   const handleSave = async () => {
+    if (isPremiumMedicationUnit(einheit) && !premium) {
+      showPremiumRequiredAlert('Erweiterte Darreichungsformen sind nur mit Premium möglich.', navigation);
+      return;
+    }
+
     if (!name.trim()) {
       Alert.alert('Pflichtfeld', 'Bitte gib den Namen des Medikaments ein.');
       return;
@@ -141,13 +155,74 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
       announceChange('Medikament wurde gespeichert');
       Alert.alert(
         'Gespeichert',
-        `"${name.trim()}" wurde hinzugefuegt.`,
+        `"${name.trim()}" wurde hinzugefügt.`,
         [{ text: 'OK', onPress: () => navigation.goBack() }]
       );
     } catch (error) {
       Alert.alert('Fehler', 'Medikament konnte nicht gespeichert werden.');
-      console.error(error);
+      logger.error(error);
     }
+  };
+
+  const applyTestPreset = (presetKey: MedicationTestPresetKey) => {
+    const preset = getMedicationTestPreset(presetKey);
+    setName(preset.name);
+    setEinheit(preset.unit);
+    setEinzeldosis(preset.singleDose);
+    setBestand(preset.stock);
+    setPackungsgroesse(preset.packageSize);
+    setWarnungAb(preset.warningThreshold);
+    if (presetKey === 'weekday') {
+      setErinnerungAktiv(true);
+      setEinnahmePlan([{ slot: 'morgens', uhrzeit: defaultUhrzeiten.morgens || '08:00' }]);
+      setAutoAbzugAktiv(false);
+    }
+  };
+
+  const saveTestPreset = async (presetKey: MedicationTestPresetKey) => {
+    const preset = getMedicationTestPreset(presetKey);
+    if (isPremiumMedicationUnit(preset.unit) && !premium) {
+      showPremiumRequiredAlert('Diese Testdaten sind nur mit Premium möglich.', navigation);
+      return;
+    }
+
+    try {
+      await addMedikament({
+        id: generateUUID(),
+        name: preset.name,
+        zusatz: '',
+        person_id: aktivePerson?.id || 'person-default-001',
+        aktueller_bestand: parseDeFloat(preset.stock) || 0,
+        einzeldosis: parseDeFloat(preset.singleDose) || 1,
+        einheit: preset.unit,
+        pzn: '',
+        packungsgroesse: parseDeFloat(preset.packageSize) || 0,
+        warnung_ab_bestand: parseDeFloat(preset.warningThreshold) || 7,
+        sync_status: 0,
+        erinnerung_aktiv: 0,
+        einnahme_uhrzeiten: serializeEinnahmeplan([]),
+        auto_abzug_aktiv: 0,
+        arzt_id: '',
+        staerke_wert: 0,
+        staerke_einheit: '',
+      });
+
+      announceChange('Medikament wurde gespeichert');
+      Alert.alert(
+        'Gespeichert',
+        `"${preset.name}" wurde hinzugefügt.`,
+        [{ text: 'OK', onPress: () => navigation.goBack() }]
+      );
+    } catch (error) {
+      Alert.alert('Fehler', 'Medikament konnte nicht gespeichert werden.');
+      logger.error(error);
+    }
+  };
+
+  const enableDevPremiumForE2E = async () => {
+    await setDevPremiumOverride('premium');
+    setPremiumStatus(true);
+    setMaxSlots(await getMaxReminderSlots());
   };
 
   return (
@@ -156,6 +231,81 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
       >
+        {__DEV__ && (
+          <View style={styles.testPresetBox}>
+            <Text style={styles.testPresetTitle}>Entwicklungsmodus</Text>
+            <Text style={styles.testPresetHint}>Testwerte für E2E-Flows setzen.</Text>
+            <View style={styles.testPresetRow}>
+              <TouchableOpacity
+                style={styles.testPresetButton}
+                onPress={() => applyTestPreset('tablet')}
+                accessibilityRole="button"
+                accessibilityLabel="Testdaten Tablette einsetzen"
+              >
+                <Text style={styles.testPresetButtonText}>Tablette</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.testPresetButton}
+                onPress={() => applyTestPreset('liquid')}
+                accessibilityRole="button"
+                accessibilityLabel="Testdaten Flüssigkeit einsetzen"
+              >
+                <Text style={styles.testPresetButtonText}>Flüssigkeit</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.testPresetButton}
+                onPress={() => applyTestPreset('spray')}
+                accessibilityRole="button"
+                accessibilityLabel="Testdaten Spray einsetzen"
+              >
+                <Text style={styles.testPresetButtonText}>Spray</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.testPresetButton}
+                onPress={enableDevPremiumForE2E}
+                accessibilityRole="button"
+                accessibilityLabel="Premium für E2E simulieren"
+              >
+                <Text style={styles.testPresetButtonText}>Premium</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.testPresetButton}
+                onPress={() => applyTestPreset('weekday')}
+                accessibilityRole="button"
+                accessibilityLabel="Testdaten Wochentage einsetzen"
+              >
+                <Text style={styles.testPresetButtonText}>Wochentage</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.testPresetRow}>
+              <TouchableOpacity
+                style={styles.testPresetButton}
+                onPress={() => saveTestPreset('tablet')}
+                accessibilityRole="button"
+                accessibilityLabel="E2E Tablette speichern"
+              >
+                <Text style={styles.testPresetButtonText}>Tablette speichern</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.testPresetButton}
+                onPress={() => saveTestPreset('liquid')}
+                accessibilityRole="button"
+                accessibilityLabel="E2E Flüssigkeit speichern"
+              >
+                <Text style={styles.testPresetButtonText}>Flüssigkeit speichern</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.testPresetButton}
+                onPress={() => saveTestPreset('spray')}
+                accessibilityRole="button"
+                accessibilityLabel="E2E Spray speichern"
+              >
+                <Text style={styles.testPresetButtonText}>Spray speichern</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
         {/* === ABSCHNITT: Medikament === */}
         <Text style={styles.sectionTitle} accessibilityRole="header">Medikament</Text>
 
@@ -164,6 +314,7 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
           <Text style={styles.label}>Name des Medikaments *</Text>
           <TextInput
             style={styles.input}
+            testID="medication-name-input"
             value={name}
             onChangeText={setName}
             placeholder="z.B. Aspirin 100"
@@ -285,6 +436,7 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
           <Text style={styles.label}>Einzeldosis *</Text>
           <TextInput
             style={styles.input}
+            testID="single-dose-input"
             value={einzeldosis}
             onChangeText={setEinzeldosis}
             placeholder="z.B. 0,5 für halbe Tablette"
@@ -299,18 +451,28 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
         <View style={styles.fieldGroup}>
           <Text style={styles.label}>Einheit</Text>
           <View style={styles.einheitRow}>
-            {['Tabletten', 'Kapseln', 'Tropfen', 'Stück'].map(e => (
+            {MEDICATION_UNITS.map(e => (
               <TouchableOpacity
                 key={e}
-                style={[styles.einheitButton, einheit === e && styles.einheitActive]}
-                onPress={() => setEinheit(e)}
+                style={[
+                  styles.einheitButton,
+                  einheit === e && styles.einheitActive,
+                  isPremiumMedicationUnit(e) && !premium && styles.einheitPremiumLocked,
+                ]}
+                onPress={() => {
+                  if (isPremiumMedicationUnit(e) && !premium) {
+                    showPremiumRequiredAlert('Erweiterte Darreichungsformen sind nur mit Premium möglich.', navigation);
+                    return;
+                  }
+                  setEinheit(e);
+                }}
                 activeOpacity={0.7}
                 accessibilityRole="button"
-                accessibilityLabel={`Einheit: ${e}`}
+                accessibilityLabel={`Einheit: ${e}${isPremiumMedicationUnit(e) && !premium ? ', nur mit Premium möglich' : ''}`}
                 accessibilityState={{ selected: einheit === e }}
               >
                 <Text style={[styles.einheitText, einheit === e && styles.einheitTextActive]}>
-                  {e}
+                  {e}{isPremiumMedicationUnit(e) && !premium ? ' ⭐' : ''}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -325,6 +487,7 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
           <Text style={styles.label}>Aktueller Bestand</Text>
           <TextInput
             style={styles.input}
+            testID="stock-input"
             value={bestand}
             onChangeText={setBestand}
             placeholder="z.B. 28.5"
@@ -348,20 +511,28 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
           />
         </View>
 
-        {/* Warnung ab */}
-        <View style={styles.fieldGroup}>
-          <Text style={styles.label}>Warnung ab Bestand</Text>
-          <TextInput
-            style={styles.input}
-            value={warnungAb}
-            onChangeText={setWarnungAb}
-            placeholder="z.B. 7"
-            placeholderTextColor="#999"
-            accessibilityLabel="Warnung ab Bestand"
-            keyboardType="decimal-pad"
+        {/* Warnung ab (Premium) */}
+        {premium ? (
+          <View style={styles.fieldGroup}>
+            <Text style={styles.label}>Warnung ab Bestand</Text>
+            <TextInput
+              style={styles.input}
+              value={warnungAb}
+              onChangeText={setWarnungAb}
+              placeholder="z.B. 7"
+              placeholderTextColor="#999"
+              accessibilityLabel="Warnung ab Bestand"
+              keyboardType="decimal-pad"
+            />
+            <Text style={styles.hint}>Warnung wenn Bestand darunter fällt</Text>
+          </View>
+        ) : (
+          <PremiumGate
+            featureName="Bestandswarnung"
+            description="Warnungen bei niedrigem Bestand sind nur mit Premium möglich."
+            navigation={navigation}
           />
-          <Text style={styles.hint}>Warnung wenn Bestand darunter fällt</Text>
-        </View>
+        )}
 
         {/* === ABSCHNITT: Erinnerung === */}
         <Text style={styles.sectionTitle} accessibilityRole="header">Erinnerung</Text>
@@ -407,13 +578,9 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
                         if (!isActive) {
                           const activeSlots = einnahmePlan.length;
                           if (activeSlots >= maxSlots) {
-                            Alert.alert(
-                              'Premium erforderlich',
-                              'Nur 1 Erinnerung-Slot pro Medikament in der kostenlosen Version. Premium = alle Slots.',
-                              [
-                                { text: 'Abbrechen', style: 'cancel' },
-                                { text: 'Premium', onPress: () => navigation.navigate('Premium') },
-                              ]
+                            showPremiumRequiredAlert(
+                              'Mehrere Erinnerung-Slots pro Medikament sind nur mit Premium möglich.',
+                              navigation,
                             );
                             return;
                           }
@@ -483,6 +650,42 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
                         <Text style={styles.slotDosisEinheit}>{einheit}</Text>
                       </View>
                     )}
+
+                    {isActive && (
+                      <View style={styles.wochentageBox}>
+                        <Text style={styles.wochentageLabel}>Tage:</Text>
+                        <View style={styles.wochentageRow}>
+                          {WOCHENTAGE_META.map(day => {
+                            const isSelected = Boolean(eintrag?.wochentage?.includes(day.value));
+                            return (
+                              <TouchableOpacity
+                                key={`${slot}-${day.value}`}
+                                style={[
+                                  styles.wochentagButton,
+                                  isSelected && styles.wochentagButtonActive,
+                                ]}
+                                onPress={() => {
+                                  setEinnahmePlan(prev =>
+                                    toggleSlotWochentag(prev, slot, day.value)
+                                  );
+                                }}
+                                accessibilityRole="switch"
+                                accessibilityLabel={`${meta.label} ${day.label} ${isSelected ? 'aktiv' : 'inaktiv'}`}
+                                accessibilityState={{ checked: isSelected }}
+                              >
+                                <Text style={[
+                                  styles.wochentagButtonText,
+                                  isSelected && styles.wochentagButtonTextActive,
+                                ]}>
+                                  {day.label}
+                                </Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+                        <Text style={styles.wochentageHint}>Keine Auswahl bedeutet täglich.</Text>
+                      </View>
+                    )}
                   </View>
                 );
               })}
@@ -492,7 +695,7 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
             {einnahmePlan.length > 0 && (
               <View style={styles.tagesdosisBox}>
                 <Text style={styles.tagesdosisLabel}>
-                  Tagesdosis gesamt: {(() => {
+                  {einnahmePlan.some(s => s.wochentage && s.wochentage.length > 0) ? 'Dosis an Einnahmetagen' : 'Tagesdosis gesamt'}: {(() => {
                     const dosis = parseDeFloat(einzeldosis) || 1;
                     const total = einnahmePlan.reduce((sum, s) =>
                       sum + (s.dosis !== undefined ? s.dosis : dosis), 0);
@@ -525,6 +728,7 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
         {/* Speichern */}
         <TouchableOpacity
           style={styles.saveButton}
+          testID="save-medication-button"
           onPress={handleSave}
           activeOpacity={0.7}
           accessibilityLabel="Medikament speichern"
@@ -559,7 +763,7 @@ const styles = StyleSheet.create({
 
   // Abschnitts-Ueberschriften
   sectionTitle: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '700',
     color: '#1a1a2e',
     marginTop: 16,
@@ -574,7 +778,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   label: {
-    fontSize: 22,
+    fontSize: 19,
     fontWeight: '600',
     color: '#1a1a2e',
     marginBottom: 10,
@@ -582,17 +786,60 @@ const styles = StyleSheet.create({
   input: {
     backgroundColor: '#FFFFFF',
     borderRadius: 14,
-    padding: 18,
-    fontSize: 24,
+    padding: 16,
+    fontSize: 20,
     color: '#1a1a2e',
     borderWidth: 2,
     borderColor: '#ccc',
-    minHeight: 64, // Große Touch-Ziele für Senioren
+    minHeight: 58, // Große Touch-Ziele für Senioren
   },
   hint: {
-    fontSize: 18,
+    fontSize: 16,
     color: '#777',
     marginTop: 6,
+  },
+
+  // Debug-only Testdaten
+  testPresetBox: {
+    backgroundColor: '#fff7e6',
+    borderColor: '#ff9800',
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 18,
+  },
+  testPresetTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#bf360c',
+    marginBottom: 4,
+  },
+  testPresetHint: {
+    fontSize: 16,
+    color: '#bf360c',
+    marginBottom: 10,
+  },
+  testPresetRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 10,
+  },
+  testPresetButton: {
+    flex: 1,
+    backgroundColor: '#fff',
+    borderColor: '#ff9800',
+    borderWidth: 2,
+    borderRadius: 10,
+    minHeight: 52,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+  },
+  testPresetButtonText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1a1a2e',
   },
 
   // PZN mit Scanner-Button
@@ -627,8 +874,8 @@ const styles = StyleSheet.create({
   einheitButton: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
-    paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderWidth: 2,
     borderColor: '#ccc',
     minHeight: 56, // 56px Touch-Ziel
@@ -639,8 +886,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#1a1a2e',
     borderColor: '#1a1a2e',
   },
+  einheitPremiumLocked: {
+    borderColor: '#FFB74D',
+    backgroundColor: '#FFF9F0',
+  },
   einheitText: {
-    fontSize: 20,
+    fontSize: 17,
     color: '#555',
   },
   einheitTextActive: {
@@ -652,14 +903,14 @@ const styles = StyleSheet.create({
   saveButton: {
     backgroundColor: '#1a1a2e',
     borderRadius: 16,
-    padding: 22,
+    padding: 18,
     alignItems: 'center',
     marginTop: 16,
-    minHeight: 64,
+    minHeight: 58,
     justifyContent: 'center',
   },
   saveButtonText: {
-    fontSize: 24,
+    fontSize: 21,
     fontWeight: '700',
     color: '#FFFFFF',
   },
@@ -693,11 +944,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#f0f0ee',
   },
   tageszeitEmoji: {
-    fontSize: 32,
+    fontSize: 28,
     marginRight: 14,
   },
   tageszeitLabel: {
-    fontSize: 22,
+    fontSize: 19,
     fontWeight: '600',
     color: '#888',
   },
@@ -720,7 +971,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   tageszeitCheck: {
-    fontSize: 28,
+    fontSize: 24,
     color: '#ccc',
   },
   tageszeitCheckActive: {
@@ -737,7 +988,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   slotDosisLabel: {
-    fontSize: 18,
+    fontSize: 16,
     color: '#666',
   },
   slotDosisInput: {
@@ -745,7 +996,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: 10,
     padding: 12,
-    fontSize: 20,
+    fontSize: 18,
     color: '#1a1a2e',
     borderWidth: 2,
     borderColor: '#ccc',
@@ -754,6 +1005,52 @@ const styles = StyleSheet.create({
   slotDosisEinheit: {
     fontSize: 16,
     color: '#888',
+  },
+
+  // Wochentage pro Slot
+  wochentageBox: {
+    paddingLeft: 56,
+    paddingTop: 6,
+    paddingBottom: 8,
+  },
+  wochentageLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#555',
+    marginBottom: 6,
+  },
+  wochentageRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  wochentagButton: {
+    minWidth: 42,
+    minHeight: 40,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#ccd3d7',
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+  },
+  wochentagButtonActive: {
+    backgroundColor: '#1a1a2e',
+    borderColor: '#1a1a2e',
+  },
+  wochentagButtonText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#4a5560',
+  },
+  wochentagButtonTextActive: {
+    color: '#fff',
+  },
+  wochentageHint: {
+    fontSize: 14,
+    color: '#777',
+    marginTop: 6,
   },
 
   // Tagesdosis-Vorschau

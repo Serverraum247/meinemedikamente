@@ -1,0 +1,24 @@
+appId: com.meinemedikamente
+name: Add medication
+tags:
+  - critical
+  - ios
+  - android
+---
+- launchApp:
+    clearState: true
+- assertVisible: "Keine Medikamente"
+- tapOn:
+    id: "e2e-add-medication-button"
+    retryTapIfNoChange: true
+- waitForAnimationToEnd
+- assertVisible:
+    id: "medication-name-input"
+- tapOn: "E2E Tablette speichern"
+- assertVisible: "Gespeichert"
+- tapOn: "OK"
+- assertVisible: "Ibuprofen Test"
+- assertVisible: "✓ 20"
+- assertVisible: "Tabletten"
+- assertVisible: "20 Tage"
+- assertVisible: "bis 29.05.2026"

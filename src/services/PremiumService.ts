@@ -8,6 +8,7 @@
 
 import { Platform } from 'react-native';
 import { getSetting, setSetting } from './SettingsService';
+import { logger } from '../utils/Logger';
 
 // ─── Lazy IAP Loading (Android only) ───────────────────────────────
 
@@ -16,7 +17,7 @@ let iapInitialized = false;
 
 async function getIAP() {
   if (Platform.OS !== 'android') {
-    console.log('[PremiumService] IAP nur auf Android verfuegbar');
+    logger.log('[PremiumService] IAP nur auf Android verfuegbar');
     return null;
   }
   if (iapModule !== null) return iapModule;
@@ -24,7 +25,7 @@ async function getIAP() {
     iapModule = await import('react-native-iap');
     return iapModule;
   } catch (e) {
-    console.warn('[PremiumService] react-native-iap nicht verfuegbar:', (e as Error).message);
+    logger.warn('[PremiumService] react-native-iap nicht verfuegbar:', (e as Error).message);
     return null;
   }
 }
@@ -36,7 +37,7 @@ const KEY_SCANS_TODAY = 'premium_scans_date';
 const KEY_CALENDAR_MONTH = 'premium_calendar_month';
 
 const FREE_SCAN_LIMIT = 3;
-const FREE_CALENDAR_LIMIT = 2;
+const FREE_CALENDAR_LIMIT = 0;
 const FREE_REMINDER_SLOTS = 1;
 const PREMIUM_REMINDER_SLOTS = 999;
 const FREE_MAX_MEDIKAMENTE = 3;
@@ -74,7 +75,7 @@ const KEY_DEV_PREMIUM_OVERRIDE = 'dev_premium_override';
 export async function setDevPremiumOverride(mode: 'premium' | 'free' | ''): Promise<void> {
   if (!__DEV__) return;
   await setSetting(KEY_DEV_PREMIUM_OVERRIDE, mode);
-  console.log(`[PremiumService] DEV Override gesetzt: ${mode || 'aus (echtes Premium)'}`);
+  logger.log(`[PremiumService] DEV Override gesetzt: ${mode || 'aus (echtes Premium)'}`);
 }
 
 /**
@@ -110,28 +111,28 @@ export async function initIAP(): Promise<void> {
   
   const iap = await getIAP();
   if (!iap) {
-    console.warn('[PremiumService] IAP nicht verfuegbar – Premium-Funktionen deaktiviert');
+    logger.warn('[PremiumService] IAP nicht verfuegbar – Premium-Funktionen deaktiviert');
     iapInitialized = true;
     return;
   }
 
   try {
     await iap.initConnection();
-    console.log('[PremiumService] IAP-Verbindung hergestellt');
+    logger.log('[PremiumService] IAP-Verbindung hergestellt');
 
     iap.purchaseUpdatedListener(async (purchase: any) => {
-      console.log('[PremiumService] Purchase successful:', purchase.productId);
+      logger.log('[PremiumService] Purchase successful:', purchase.productId);
       await setPremium(true);
       await iap.finishTransaction({ purchase, isConsumable: false });
     });
 
     iap.purchaseErrorListener((error: any) => {
-      console.warn('[PremiumService] Purchase error:', error.message, error.code);
+      logger.warn('[PremiumService] Purchase error:', error.message, error.code);
     });
 
     iapInitialized = true;
   } catch (e) {
-    console.warn('[PremiumService] IAP-Init fehlgeschlagen:', (e as Error).message);
+    logger.warn('[PremiumService] IAP-Init fehlgeschlagen:', (e as Error).message);
     iapInitialized = true;
   }
 }
@@ -144,7 +145,7 @@ export async function getProductInfo(): Promise<any> {
     const products = await iap.fetchProducts({ skus: [PREMIUM_SKU] });
     return (products && products.length > 0) ? products[0] : null;
   } catch (e) {
-    console.warn('[PremiumService] getProductInfo error:', e);
+    logger.warn('[PremiumService] getProductInfo error:', e);
     return null;
   }
 }
@@ -152,7 +153,7 @@ export async function getProductInfo(): Promise<any> {
 export async function purchasePremium(): Promise<boolean> {
   const iap = await getIAP();
   if (!iap) {
-    console.warn('[PremiumService] IAP nicht verfuegbar');
+    logger.warn('[PremiumService] IAP nicht verfuegbar');
     return false;
   }
   
@@ -160,7 +161,7 @@ export async function purchasePremium(): Promise<boolean> {
     await iap.requestPurchase({ skus: [PREMIUM_SKU] } as any);
     return true;
   } catch (e) {
-    console.warn('[PremiumService] purchasePremium error:', e);
+    logger.warn('[PremiumService] purchasePremium error:', e);
     return false;
   }
 }

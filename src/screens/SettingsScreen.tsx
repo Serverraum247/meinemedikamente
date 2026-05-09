@@ -16,6 +16,8 @@ import {
   StyleSheet,
   Alert,
   Modal,
+  Linking,
+  Platform,
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
@@ -39,6 +41,8 @@ import {
 import { isPremium, setDevPremiumOverride, getDevPremiumOverride } from '../services/PremiumService';
 import { usePersonen } from '../context/PersonenContext';
 import { AVATAR_EMOJIS } from '../database/PersonenController';
+import { showPremiumRequiredAlert } from '../utils/PremiumAlerts';
+import { version as APP_VERSION } from '../../package.json';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
 
@@ -47,7 +51,7 @@ export default function SettingsScreen({ navigation }: Props) {
   const {
     personen, aktivePerson, setAktivePerson,
     addPerson, editPerson, removePerson,
-    maxPersonen, premium: personenPremium, loading: personenLoading,
+    maxPersonen,
   } = usePersonen();
   const [neuePersonName, setNeuePersonName] = useState('');
   const [editPersonId, setEditPersonId] = useState<string | null>(null);
@@ -69,7 +73,6 @@ export default function SettingsScreen({ navigation }: Props) {
 
   // Aerzte-State
   const [aerzte, setAerzte] = useState<ArztRow[]>([]);
-  const [premium, setPremiumStatus] = useState(false);
   const [maxAerzte, setMaxAerzteState] = useState(1);
   const [editArzt, setEditArzt] = useState<ArztRow | null>(null);
   const [neuerArzt, setNeuerArzt] = useState(false);
@@ -95,7 +98,6 @@ export default function SettingsScreen({ navigation }: Props) {
       getMaxAerzte(),
     ]);
     setAerzte(list);
-    setPremiumStatus(isPrem);
     setMaxAerzteState(max);
   };
 
@@ -158,14 +160,7 @@ export default function SettingsScreen({ navigation }: Props) {
 
   const handleAddArzt = () => {
     if (aerzte.length >= maxAerzte) {
-      Alert.alert(
-        'Premium erforderlich',
-        `Kostenlose Version: nur 1 Arzt. Premium = unbegrenzte Ärzte.`,
-        [
-          { text: 'Abbrechen', style: 'cancel' },
-          { text: 'Premium', onPress: () => navigation.navigate('Premium') },
-        ],
-      );
+      showPremiumRequiredAlert('Mehr als ein Arzt ist nur mit Premium möglich.', navigation);
       return;
     }
     setNeuerArzt(true);
@@ -187,7 +182,7 @@ export default function SettingsScreen({ navigation }: Props) {
           fachgebiet: editArzt.fachgebiet.trim(),
         });
         if (!result.success) {
-          Alert.alert('Limit erreicht', result.error || 'Fehler beim Anlegen.');
+          showPremiumRequiredAlert(result.error || 'Weitere Ärzte sind nur mit Premium möglich.', navigation);
           return;
         }
       } else {
@@ -224,6 +219,34 @@ export default function SettingsScreen({ navigation }: Props) {
     );
   };
 
+  const handleSupportMail = async () => {
+    const constants = Platform.constants as Record<string, unknown>;
+    const geraet = [constants.Manufacturer, constants.Brand, constants.Model]
+      .filter(Boolean)
+      .join(' ');
+    const body = [
+      '',
+      '',
+      'Supportdaten:',
+      `App-Version: ${APP_VERSION}`,
+      `Plattform: ${Platform.OS}`,
+      `Systemversion: ${String(Platform.Version)}`,
+      `Gerät: ${geraet || 'unbekannt'}`,
+    ].join('\n');
+    const url = `mailto:kontakt@serverraum247.dev?subject=${encodeURIComponent('Anfrage Mein MediPlan')}&body=${encodeURIComponent(body)}`;
+
+    try {
+      const supported = await Linking.canOpenURL(url);
+      if (!supported) {
+        Alert.alert('E-Mail nicht verfügbar', 'Auf diesem Gerät ist keine E-Mail-App eingerichtet.');
+        return;
+      }
+      await Linking.openURL(url);
+    } catch (_e) {
+      Alert.alert('E-Mail nicht verfügbar', 'Die E-Mail-App konnte nicht geöffnet werden.');
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
@@ -244,7 +267,7 @@ export default function SettingsScreen({ navigation }: Props) {
                   setNeuePersonName('');
                   announceChange('Person hinzugefügt');
                 } else {
-                  Alert.alert('Premium erforderlich', result.error);
+                  showPremiumRequiredAlert('Mehrere Personen sind nur mit Premium möglich.', navigation);
                 }
               }}
               accessibilityRole="button"
@@ -254,11 +277,7 @@ export default function SettingsScreen({ navigation }: Props) {
             </TouchableOpacity>
           </View>
           <Text style={styles.sectionHint}>
-            Verwalte Medikamente für mehrere Personen.{'\n'}
-            {personenPremium
-              ? 'Premium: unbegrenzte Personen.'
-              : 'Kostenlos: 1 Person. Premium = unbegrenzt.'
-            }
+            Verwalte Medikamente für mehrere Personen.
           </Text>
 
           {/* Neue Person anlegen (nur wenn Premium oder < max) */}
@@ -447,11 +466,7 @@ export default function SettingsScreen({ navigation }: Props) {
             </TouchableOpacity>
           </View>
           <Text style={styles.sectionHint}>
-            Hinterlege Kontaktdaten deiner Ärzte.{'\n'}
-            {premium
-              ? 'Premium: unbegrenzte Ärzte.'
-              : `Kostenlos: 1 Arzt. Premium = unbegrenzt.`
-            }
+            Hinterlege Kontaktdaten deiner Ärzte.
           </Text>
 
           {aerzte.length === 0 && !editArzt && (
@@ -602,16 +617,19 @@ export default function SettingsScreen({ navigation }: Props) {
           </TouchableOpacity>
         )}
 
-        {/* Cloud-Backup */}
-        <TouchableOpacity
-          accessibilityRole="button"
-          accessibilityLabel="Cloud-Backup"
-          style={styles.backupButton}
-          onPress={() => navigation.navigate('Backup')}
-          activeOpacity={0.7}
+        <View
+          style={styles.disclaimerSection}
+          accessibilityRole="summary"
+          accessibilityLabel="Wichtiger Hinweis zur Medikamenteneinnahme"
         >
-          <Text style={styles.backupButtonText}>☁️ Cloud-Backup</Text>
-        </TouchableOpacity>
+          <Text style={styles.disclaimerTitle}>Wichtiger Hinweis</Text>
+          <Text style={styles.disclaimerText}>
+            Diese App unterstützt nur bei Übersicht, Erinnerung und Bestandsplanung. Sie ersetzt keine ärztliche oder pharmazeutische Beratung.
+          </Text>
+          <Text style={styles.disclaimerText}>
+            Wir übernehmen keine Haftung für eine fehlerhafte Einnahme von Medikamenten. Jeder Nutzer ist selbst dafür verantwortlich, Medikamente nach ärztlicher Vorgabe einzunehmen.
+          </Text>
+        </View>
 
         {/* Zuruecksetzen */}
         <TouchableOpacity
@@ -681,6 +699,25 @@ export default function SettingsScreen({ navigation }: Props) {
             </Text>
           </View>
         )}
+
+        <View
+          style={styles.contactSection}
+          accessibilityRole="summary"
+          accessibilityLabel="Kontakt und Herausgeber"
+        >
+          <Text style={styles.contactTitle}>Kontakt</Text>
+          <Text style={styles.contactText}>Serverraum247</Text>
+          <TouchableOpacity
+            onPress={handleSupportMail}
+            accessibilityRole="link"
+            accessibilityLabel="E-Mail an kontakt@serverraum247.dev schreiben"
+          >
+            <Text style={styles.contactMail}>kontakt@serverraum247.dev</Text>
+          </TouchableOpacity>
+          <Text style={styles.contactHint}>
+            App aus dem Saarland. Fragen, Vorschläge und Verbesserungsvorschläge kannst du an diese Adresse senden.
+          </Text>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -990,19 +1027,58 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
   },
-  backupButton: {
-    backgroundColor: '#2980b9',
+  disclaimerSection: {
+    backgroundColor: '#FFF8E1',
     borderRadius: 14,
-    padding: 18,
-    alignItems: 'center',
-    marginBottom: 12,
-    minHeight: 56,
-    justifyContent: 'center',
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#F3D27A',
   },
-  backupButtonText: {
-    color: '#fff',
+  disclaimerTitle: {
     fontSize: 18,
     fontWeight: '700',
+    color: '#4B3A10',
+    marginBottom: 8,
+  },
+  disclaimerText: {
+    fontSize: 15,
+    color: '#5D4A1A',
+    lineHeight: 21,
+    marginBottom: 6,
+  },
+  contactSection: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#DADDE2',
+  },
+  contactTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1a1a2e',
+    marginBottom: 8,
+  },
+  contactText: {
+    fontSize: 16,
+    color: '#1a1a2e',
+    lineHeight: 22,
+    fontWeight: '600',
+  },
+  contactMail: {
+    fontSize: 16,
+    color: '#0066CC',
+    lineHeight: 24,
+    fontWeight: '700',
+    textDecorationLine: 'underline',
+  },
+  contactHint: {
+    fontSize: 15,
+    color: '#555',
+    lineHeight: 21,
+    marginTop: 6,
   },
   resetButton: {
     borderRadius: 14,

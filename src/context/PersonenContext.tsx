@@ -19,6 +19,7 @@ import {
 } from '../database/PersonenController';
 import { isPremium } from '../services/PremiumService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { logger } from '../utils/Logger';
 
 // ---------- Context Typ ----------
 
@@ -71,7 +72,7 @@ export const PersonenProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
       setAktivePersonState(found);
     } catch (error) {
-      console.error('Fehler beim Laden der Personen:', error);
+      logger.error('Fehler beim Laden der Personen:', error);
       // Fallback: Standard-Person
       const standard = await getStandardPerson();
       setAktivePersonState(standard);

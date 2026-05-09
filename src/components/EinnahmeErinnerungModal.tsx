@@ -24,6 +24,7 @@ import {
 } from 'react-native';
 import type { OffeneEinnahme } from '../services/EinnahmeErinnerungService';
 import { announceChange } from '../utils/AccessibilityHelpers';
+import { formatMedicationUnit } from '../constants/MedicationUnits';
 
 interface Props {
   visible: boolean;
@@ -106,7 +107,7 @@ export default function EinnahmeErinnerungModal({
                     {einnahme.slotLabel} {einnahme.slotUhrzeit} Uhr
                   </Text>
                   <Text style={styles.dosisLabel}>
-                    {einnahme.dosis} {einnahme.dosis === 1 ? 'Tablette' : 'Tabletten'}
+                    {einnahme.dosis} {formatMedicationUnit(einnahme.dosis, einnahme.einheit)}
                   </Text>
                 </View>
                 {einnahme.stundenSeitUhrzeit > 0 && (

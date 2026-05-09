@@ -1,0 +1,40 @@
+appId: com.meinemedikamente
+name: Weekday medication plan
+tags:
+  - critical
+  - weekday
+  - ios
+  - android
+---
+- launchApp:
+    clearState: true
+- assertVisible: "Keine Medikamente"
+- tapOn:
+    id: "e2e-add-medication-button"
+    retryTapIfNoChange: true
+- waitForAnimationToEnd
+- assertVisible:
+    id: "medication-name-input"
+- tapOn: "Testdaten Wochentage einsetzen"
+- hideKeyboard
+- scrollUntilVisible:
+    element: "Morgens Mo inaktiv"
+    direction: DOWN
+    visibilityPercentage: 50
+- assertVisible: "Morgens Mo inaktiv"
+- tapOn: "Morgens Mo inaktiv"
+- assertVisible: "Morgens Mi inaktiv"
+- tapOn: "Morgens Mi inaktiv"
+- assertVisible: "Morgens Fr inaktiv"
+- tapOn: "Morgens Fr inaktiv"
+- scrollUntilVisible:
+    element: "Medikament speichern"
+    direction: DOWN
+- tapOn: "Medikament speichern"
+- assertVisible: "Gespeichert"
+- tapOn: "OK"
+- assertVisible: "Wochentag Test"
+- assertVisible: "✓ 6"
+- assertVisible: "Tabletten"
+- assertVisible: "13 Tage"
+- assertVisible: "bis 22.05.2026"

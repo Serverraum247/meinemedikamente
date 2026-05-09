@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-	<string>MeineMedikamente</string>
+	<string>Mein MediPlan</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -34,11 +34,11 @@
 		<true/>
 	</dict>
 	<key>NSCalendarsUsageDescription</key>
-	<string>Meine Medikamente moechte Kalendereintraege fuer Rezept-Abholtermine und Arzt-Urlaub erstellen.</string>
+	<string>Mein MediPlan möchte Kalendereinträge für Rezept-Abholtermine und Arzt-Urlaub erstellen.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>Meine Medikamente braucht die Kamera, um Barcodes auf Medikamentenpackungen zu scannen.</string>
+	<string>Mein MediPlan braucht die Kamera, um Barcodes auf Medikamentenpackungen zu scannen.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Meine Medikamente verwendet Ihren Standort nicht.</string>
+	<string>Mein MediPlan verwendet Ihren Standort nicht.</string>
 	<key>RCTNewArchEnabled</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>

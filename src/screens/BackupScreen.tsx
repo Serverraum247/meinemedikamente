@@ -16,6 +16,7 @@ import { uploadBackup, getBackupInfo, restoreBackup, BackupInfo as ServiceBackup
 import { isPremium as checkIsPremium } from '../services/PremiumService';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import PremiumGate from '../components/PremiumGate';
+import { logger } from '../utils/Logger';
 
 // Plattform-spezifische Labels
 const isIOS = Platform.OS === 'ios';
@@ -51,7 +52,7 @@ const BackupScreen: React.FC<BackupScreenProps> = ({ navigation }) => {
       const info = await getBackupInfo();
       setBackupInfo(info);
     } catch (error) {
-      console.error('Fehler beim Laden der Backup-Info:', error);
+      logger.error('Fehler beim Laden der Backup-Info:', error);
       setBackupInfo(null);
     } finally {
       setLoadingInfo(false);
@@ -67,7 +68,7 @@ const BackupScreen: React.FC<BackupScreenProps> = ({ navigation }) => {
           await loadBackupInfo();
         }
       } catch (error) {
-        console.error('Fehler beim Prüfen des Premium-Status:', error);
+        logger.error('Fehler beim Prüfen des Premium-Status:', error);
         setIsPremium(false);
       } finally {
         setLoadingInfo(false);
@@ -89,17 +90,22 @@ const BackupScreen: React.FC<BackupScreenProps> = ({ navigation }) => {
           onPress: async () => {
             try {
               setUploading(true);
-              await uploadBackup();
+              const result = await uploadBackup();
+              if (!result.success) {
+                throw new Error(result.error || 'Das Backup konnte nicht erstellt werden.');
+              }
               Alert.alert(
                 'Backup erfolgreich',
                 `Ihre Medikamentendaten wurden erfolgreich ${isIOS ? 'in iCloud' : 'in der Cloud'} gespeichert.`
               );
               await loadBackupInfo();
             } catch (error) {
-              console.error('Fehler beim Backup:', error);
+              logger.error('Fehler beim Backup:', error);
               Alert.alert(
                 'Fehler',
-                'Das Backup konnte nicht erstellt werden. Bitte prüfen Sie Ihre Internetverbindung und versuchen Sie es erneut.'
+                error instanceof Error
+                  ? error.message
+                  : 'Das Backup konnte nicht erstellt werden. Bitte prüfen Sie Ihre Internetverbindung und versuchen Sie es erneut.'
               );
             } finally {
               setUploading(false);
@@ -122,17 +128,22 @@ const BackupScreen: React.FC<BackupScreenProps> = ({ navigation }) => {
           onPress: async () => {
             try {
               setRestoring(true);
-              await restoreBackup();
+              const result = await restoreBackup();
+              if (!result.success) {
+                throw new Error(result.error || 'Die Wiederherstellung ist fehlgeschlagen.');
+              }
               Alert.alert(
                 'Wiederherstellung erfolgreich',
                 'Ihre Medikamentendaten wurden erfolgreich aus der Cloud wiederhergestellt.'
               );
               await loadBackupInfo();
             } catch (error) {
-              console.error('Fehler bei der Wiederherstellung:', error);
+              logger.error('Fehler bei der Wiederherstellung:', error);
               Alert.alert(
                 'Fehler',
-                'Die Wiederherstellung ist fehlgeschlagen. Bitte prüfen Sie Ihre Internetverbindung und versuchen Sie es erneut.'
+                error instanceof Error
+                  ? error.message
+                  : 'Die Wiederherstellung ist fehlgeschlagen. Bitte prüfen Sie Ihre Internetverbindung und versuchen Sie es erneut.'
               );
             } finally {
               setRestoring(false);

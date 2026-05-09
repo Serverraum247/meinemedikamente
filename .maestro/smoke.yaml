@@ -1,0 +1,12 @@
+appId: com.meinemedikamente
+name: Smoke - empty medication list
+tags:
+  - smoke
+  - ios
+  - android
+---
+- launchApp:
+    clearState: true
+- assertVisible: "Mein MediPlan"
+- assertVisible: "Keine Medikamente"
+- assertVisible: "Neues Medikament hinzufügen"

@@ -1,0 +1,8 @@
+android/
+ios/
+node_modules/
+vendor/
+.superpowers/
+.maestro/artifacts/
+coverage/
+docs/

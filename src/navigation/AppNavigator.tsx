@@ -51,7 +51,7 @@ export default function AppNavigator() {
         <Stack.Screen
           name="Home"
           component={HomeScreen}
-          options={{ title: 'Meine Medikamente' }}
+          options={{ title: 'Mein MediPlan' }}
         />
         <Stack.Screen
           name="MedikamentDetail"

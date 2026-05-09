@@ -1,14 +1,24 @@
 {
   "name": "MeineMedikamente",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "private": true,
   "scripts": {
     "android": "react-native run-android",
+    "e2e": "bash scripts/run-maestro-flows.sh",
+    "e2e:android": "bash scripts/run-maestro-flows.sh .maestro/smoke.yaml .maestro/add-medication.yaml .maestro/add-liquid-medication.yaml .maestro/weekday-plan.yaml .maestro/free-premium-gating.yaml .maestro/premium-advanced-unit.yaml",
+    "e2e:doctor": "bash scripts/check-e2e-env.sh",
+    "e2e:ios": "npm run e2e:ios:xctest",
+    "e2e:ios:maestro": "bash scripts/run-ios-maestro-smoke.sh",
+    "e2e:ios:xctest": "bash scripts/run-ios-xctest.sh",
     "ios": "react-native run-ios",
-    "lint": "eslint .",
+    "lint": "npm run typecheck && npm run static:quality",
     "postinstall": "bash scripts/postinstall.sh",
     "start": "react-native start",
-    "test": "jest"
+    "static:quality": "bash scripts/check-static-quality.sh",
+    "test": "jest",
+    "typecheck": "tsc --noEmit --pretty false --skipLibCheck",
+    "verify": "npm run lint && npm run typecheck && npm test -- --runInBand --forceExit",
+    "verify:prod": "npm run e2e:doctor && npm run typecheck && npm test -- --runInBand --forceExit"
   },
   "dependencies": {
     "@notifee/react-native": "^9.1.8",

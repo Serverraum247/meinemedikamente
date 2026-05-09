@@ -1,11 +1,12 @@
 /**
- * Database.ts – SQLite-Datenbankanbindung für "Meine Medikamente"
+ * Database.ts – SQLite-Datenbankanbindung für "Mein MediPlan"
  *
  * WICHTIG: aktueller_bestand und einzeldosis sind REAL (Float),
  * damit halbe Tabletten (0.5) korrekt gespeichert werden.
  */
 
 import SQLite from 'react-native-sqlite-storage';
+import { logger } from '../utils/Logger';
 
 // SQLite-Debug-Flags aktivieren (nur Entwicklung)
 SQLite.DEBUG(true);
@@ -87,6 +88,7 @@ export interface PackungRow {
 
 class Database {
   private db: SQLite.SQLiteDatabase | null = null;
+  private initPromise: Promise<SQLite.SQLiteDatabase> | null = null;
 
   /**
    * Datenbank öffnen und Schema initialisieren
@@ -96,14 +98,30 @@ class Database {
       return this.db;
     }
 
-    this.db = await SQLite.openDatabase({
-      name: DATABASE_NAME,
-      location: 'default',
-    });
+    if (this.initPromise) {
+      return this.initPromise;
+    }
 
-    await this.createSchema();
-    console.log('[DB] Datenbank erfolgreich initialisiert');
-    return this.db;
+    this.initPromise = (async () => {
+      const db = await SQLite.openDatabase({
+        name: DATABASE_NAME,
+        location: 'default',
+      });
+
+      this.db = db;
+      await this.createSchema();
+      logger.log('[DB] Datenbank erfolgreich initialisiert');
+      return db;
+    })();
+
+    try {
+      return await this.initPromise;
+    } catch (error) {
+      this.db = null;
+      throw error;
+    } finally {
+      this.initPromise = null;
+    }
   }
 
   /**
@@ -237,10 +255,10 @@ class Database {
         await this.db.executeSql(
           `ALTER TABLE medikamente ADD COLUMN sync_status INTEGER NOT NULL DEFAULT 0;`
         );
-        console.log('[DB] Migration V1->V2: sync_status Spalte hinzugefuegt');
+        logger.log('[DB] Migration V1->V2: sync_status Spalte hinzugefuegt');
       }
     } catch (error) {
-      console.warn('[DB] Migration V1->V2 Pruefung:', error);
+      logger.warn('[DB] Migration V1->V2 Pruefung:', error);
     }
   }
 
@@ -272,9 +290,9 @@ class Database {
           `ALTER TABLE medikamente ADD COLUMN auto_abzug_aktiv INTEGER NOT NULL DEFAULT 0;`
         );
       }
-      console.log('[DB] Migration V2->V3: Erinnerung + Auto-Abzug Felder geprueft');
+      logger.log('[DB] Migration V2->V3: Erinnerung + Auto-Abzug Felder geprueft');
     } catch (error) {
-      console.warn('[DB] Migration V2->V3 Pruefung:', error);
+      logger.warn('[DB] Migration V2->V3 Pruefung:', error);
     }
   }
 
@@ -301,9 +319,9 @@ class Database {
       await this.db.executeSql(
         `CREATE INDEX IF NOT EXISTS idx_packungen_medikament ON packungen(medikament_id);`
       );
-      console.log('[DB] Migration V3->V4: packungen Tabelle geprueft');
+      logger.log('[DB] Migration V3->V4: packungen Tabelle geprueft');
     } catch (error) {
-      console.warn('[DB] Migration V3->V4 Pruefung:', error);
+      logger.warn('[DB] Migration V3->V4 Pruefung:', error);
     }
   }
 
@@ -319,9 +337,9 @@ class Database {
           value TEXT NOT NULL
         );
       `);
-      console.log('[DB] Migration V4->V5: einstellungen Tabelle geprueft');
+      logger.log('[DB] Migration V4->V5: einstellungen Tabelle geprueft');
     } catch (error) {
-      console.warn('[DB] Migration V4->V5 Pruefung:', error);
+      logger.warn('[DB] Migration V4->V5 Pruefung:', error);
     }
   }
 
@@ -339,10 +357,10 @@ class Database {
         await this.db.executeSql(
           `ALTER TABLE arzt_urlaub ADD COLUMN telefon TEXT NOT NULL DEFAULT '';`
         );
-        console.log('[DB] Migration V5->V6: telefon Spalte in arzt_urlaub hinzugefuegt');
+        logger.log('[DB] Migration V5->V6: telefon Spalte in arzt_urlaub hinzugefuegt');
       }
     } catch (error) {
-      console.warn('[DB] Migration V5->V6 Pruefung:', error);
+      logger.warn('[DB] Migration V5->V6 Pruefung:', error);
     }
   }
 
@@ -358,10 +376,14 @@ class Database {
    * Datenbank schließen
    */
   async close(): Promise<void> {
+    if (this.initPromise) {
+      await this.initPromise;
+    }
+
     if (this.db) {
       await this.db.close();
       this.db = null;
-      console.log('[DB] Datenbank geschlossen');
+      logger.log('[DB] Datenbank geschlossen');
     }
   }
 
@@ -383,7 +405,7 @@ class Database {
           created_at  TEXT NOT NULL DEFAULT (datetime('now'))
         );
       `);
-      console.log('[DB] Migration V6->V7: aerzte Tabelle erstellt');
+      logger.log('[DB] Migration V6->V7: aerzte Tabelle erstellt');
     }
   }
 
@@ -404,10 +426,10 @@ class Database {
         await this.db.executeSql(
           `ALTER TABLE medikamente ADD COLUMN zusatz TEXT NOT NULL DEFAULT '';`
         );
-        console.log('[DB] Migration V7->V8: zusatz Spalte in medikamente hinzugefuegt');
+        logger.log('[DB] Migration V7->V8: zusatz Spalte in medikamente hinzugefuegt');
       }
     } catch (error) {
-      console.warn('[DB] Migration V7->V8 Pruefung:', error);
+      logger.warn('[DB] Migration V7->V8 Pruefung:', error);
     }
   }
 
@@ -436,7 +458,7 @@ class Database {
           `INSERT INTO personen (id, name, avatar_emoji, ist_standard) VALUES (?, 'Ich', '👤', 1);`,
           ['person-default-001']
         );
-        console.log('[DB] Migration V8->V9: personen Tabelle + Default-Person erstellt');
+        logger.log('[DB] Migration V8->V9: personen Tabelle + Default-Person erstellt');
       }
 
       // 2. person_id in medikamente
@@ -471,9 +493,9 @@ class Database {
         `CREATE INDEX IF NOT EXISTS idx_einnahmen_person ON einnahmen(person_id);`
       );
 
-      console.log('[DB] Migration V8->V9: person_id Spalten + Indices hinzugefuegt');
+      logger.log('[DB] Migration V8->V9: person_id Spalten + Indices hinzugefuegt');
     } catch (error) {
-      console.warn('[DB] Migration V8->V9 Pruefung:', error);
+      logger.warn('[DB] Migration V8->V9 Pruefung:', error);
     }
   }
 
@@ -499,7 +521,7 @@ class Database {
       await this.db!.executeSql(
         `ALTER TABLE medikamente ADD COLUMN arzt_id TEXT NOT NULL DEFAULT '';`
       );
-      console.log('[DB] Migration V9->V10: arzt_id Spalte in medikamente hinzugefuegt');
+      logger.log('[DB] Migration V9->V10: arzt_id Spalte in medikamente hinzugefuegt');
     }
   }
 
@@ -512,13 +534,13 @@ class Database {
       await this.db!.executeSql(
         `ALTER TABLE medikamente ADD COLUMN staerke_wert REAL NOT NULL DEFAULT 0;`
       );
-      console.log('[DB] Migration V10->V11: staerke_wert Spalte hinzugefuegt');
+      logger.log('[DB] Migration V10->V11: staerke_wert Spalte hinzugefuegt');
     }
     if (!medCols.includes('staerke_einheit')) {
       await this.db!.executeSql(
         `ALTER TABLE medikamente ADD COLUMN staerke_einheit TEXT NOT NULL DEFAULT '';`
       );
-      console.log('[DB] Migration V10->V11: staerke_einheit Spalte hinzugefuegt');
+      logger.log('[DB] Migration V10->V11: staerke_einheit Spalte hinzugefuegt');
     }
   }
 }

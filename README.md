@@ -1,4 +1,20 @@
-This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
+# Mein MediPlan
+
+This is a React Native app for tracking medication stock, reminders, purchases, doctors and backup flows.
+
+## Produktions-Checks
+
+Android und iOS haben ein gemeinsames funktionales Ziel. Neue Funktionen, Assets und kritische Bugfixes muessen deshalb fuer beide Plattformen bedacht und mit denselben Kern-Flows getestet werden.
+
+Die lokale Basispruefung steht in [docs/TESTING.md](docs/TESTING.md):
+
+```bash
+npm run e2e:doctor
+npm run typecheck
+npm test -- --runInBand --forceExit
+```
+
+E2E-Flows liegen in `.maestro/` und laufen mit Maestro gegen `com.meinemedikamente`.
 
 # Getting Started
 

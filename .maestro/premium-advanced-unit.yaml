@@ -1,0 +1,25 @@
+appId: com.meinemedikamente
+name: Premium allows advanced medication units
+tags:
+  - premium
+  - ios
+  - android
+---
+- launchApp:
+    clearState: true
+- tapOn:
+    id: "e2e-add-medication-button"
+    retryTapIfNoChange: true
+- waitForAnimationToEnd
+- assertVisible:
+    id: "medication-name-input"
+- hideKeyboard
+- tapOn: "Premium für E2E simulieren"
+- tapOn: "E2E Spray speichern"
+- assertVisible: "Gespeichert"
+- tapOn: "OK"
+- assertVisible: "Salbutamol Spray"
+- assertVisible: "✓ 200"
+- assertVisible: "Hübe"
+- assertVisible: "100 Tage"
+- assertVisible: "bis 17.08.2026"

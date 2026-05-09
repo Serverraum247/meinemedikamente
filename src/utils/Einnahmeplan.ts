@@ -20,11 +20,15 @@ import { getSetting, setSetting, deleteSetting } from '../services/SettingsServi
 /** Die vier klassischen Tageszeiten */
 export type TageszeitSlot = 'morgens' | 'mittags' | 'abends' | 'nachts';
 
+/** ISO-Wochentage: 1=Montag, 7=Sonntag */
+export type Wochentag = 1 | 2 | 3 | 4 | 5 | 6 | 7;
+
 /** Ein Einnahme-Slot pro Tag */
 export interface EinnahmeSlot {
   slot: TageszeitSlot;
   uhrzeit: string;       // HH:MM – Default-Uhrzeit pro Slot
   dosis?: number;        // Optional – abweichende Dosis, Fallback auf einzeldosis
+  wochentage?: Wochentag[]; // Optional – keine Angabe bedeutet täglich
 }
 
 /** Fallback-Standardzeiten (werden verwendet wenn nichts in DB steht) */
@@ -42,6 +46,17 @@ export const SLOT_META: Record<TageszeitSlot, { label: string; emoji: string }> 
   abends:   { label: 'Abends',   emoji: '🌆' },
   nachts:   { label: 'Nachts',   emoji: '🌙' },
 };
+
+/** Kompakte Wochentagsauswahl fuer Senioren-UI */
+export const WOCHENTAGE_META: Array<{ value: Wochentag; label: string }> = [
+  { value: 1, label: 'Mo' },
+  { value: 2, label: 'Di' },
+  { value: 3, label: 'Mi' },
+  { value: 4, label: 'Do' },
+  { value: 5, label: 'Fr' },
+  { value: 6, label: 'Sa' },
+  { value: 7, label: 'So' },
+];
 
 /** DB-Key fuer benutzerdefinierte Standard-Uhrzeiten */
 export const SETTINGS_KEY_UHRZEITEN = 'einnahmeplan_default_uhrzeiten';
@@ -139,6 +154,7 @@ export function parseEinnahmeplan(json: string): EinnahmeSlot[] {
         slot: s.slot as TageszeitSlot,
         uhrzeit: s.uhrzeit || '08:00',
         ...(s.dosis !== undefined && s.dosis !== null ? { dosis: Number(s.dosis) } : {}),
+        ...(normalizeWochentage(s.wochentage).length > 0 ? { wochentage: normalizeWochentage(s.wochentage) } : {}),
       }));
     }
 
@@ -158,6 +174,7 @@ export function serializeEinnahmeplan(slots: EinnahmeSlot[]): string {
       slot: s.slot,
       uhrzeit: s.uhrzeit || '08:00',
       ...(s.dosis !== undefined ? { dosis: s.dosis } : {}),
+      ...(s.wochentage && s.wochentage.length > 0 ? { wochentage: normalizeWochentage(s.wochentage) } : {}),
     }))
   );
 }
@@ -175,6 +192,47 @@ export function tagesdosisBerechnen(plan: EinnahmeSlot[], standardDosis: number)
     summe += slot.dosis !== undefined ? slot.dosis : standardDosis;
   }
   return summe;
+}
+
+export function getDosisFuerSlot(
+  plan: EinnahmeSlot[],
+  slot: TageszeitSlot,
+  standardDosis: number
+): number {
+  const eintrag = plan.find(s => s.slot === slot);
+  return eintrag?.dosis !== undefined ? eintrag.dosis : standardDosis;
+}
+
+/**
+ * Berechnet die Dosis fuer ein konkretes Kalenderdatum.
+ * Slots ohne Wochentage gelten weiter taeglich.
+ */
+export function tagesdosisBerechnenFuerDatum(
+  plan: EinnahmeSlot[],
+  standardDosis: number,
+  datum: Date
+): number {
+  if (plan.length === 0) return standardDosis;
+  let summe = 0;
+  for (const slot of plan) {
+    if (!istSlotAnDatumAktiv(slot, datum)) continue;
+    summe += slot.dosis !== undefined ? slot.dosis : standardDosis;
+  }
+  return summe;
+}
+
+export function planHatWochentage(plan: EinnahmeSlot[]): boolean {
+  return plan.some(slot => Boolean(slot.wochentage && slot.wochentage.length > 0));
+}
+
+export function istSlotAnDatumAktiv(slot: EinnahmeSlot, datum: Date): boolean {
+  if (!slot.wochentage || slot.wochentage.length === 0) return true;
+  return slot.wochentage.includes(getIsoWochentag(datum));
+}
+
+export function getIsoWochentag(datum: Date): Wochentag {
+  const tag = datum.getDay();
+  return (tag === 0 ? 7 : tag) as Wochentag;
 }
 
 // ─── Slot-Hilfsfunktionen ──────────────────────────────────────────
@@ -202,12 +260,49 @@ export function setSlotDosis(plan: EinnahmeSlot[], slot: TageszeitSlot, dosis: n
 }
 
 /**
+ * Wochentag fuer einen Slot toggeln.
+ * Keine gespeicherten Wochentage bedeutet taegliche Einnahme.
+ */
+export function toggleSlotWochentag(
+  plan: EinnahmeSlot[],
+  slot: TageszeitSlot,
+  wochentag: Wochentag
+): EinnahmeSlot[] {
+  return plan.map(s => {
+    if (s.slot !== slot) return s;
+    const current = normalizeWochentage(s.wochentage);
+    const next = current.includes(wochentag)
+      ? current.filter(tag => tag !== wochentag)
+      : [...current, wochentag].sort((a, b) => a - b);
+
+    if (next.length === 0 || next.length === WOCHENTAGE_META.length) {
+      const { wochentage, ...rest } = s;
+      return rest;
+    }
+
+    return { ...s, wochentage: next };
+  });
+}
+
+/**
  * Uhrzeit fuer einen Slot aktualisieren
  */
 export function setSlotUhrzeit(plan: EinnahmeSlot[], slot: TageszeitSlot, uhrzeit: string): EinnahmeSlot[] {
   return plan.map(s =>
     s.slot === slot ? { ...s, uhrzeit } : s
   );
+}
+
+function normalizeWochentage(value: unknown): Wochentag[] {
+  if (!Array.isArray(value)) return [];
+  const unique = new Set<Wochentag>();
+  for (const raw of value) {
+    const tag = Number(raw);
+    if (Number.isInteger(tag) && tag >= 1 && tag <= 7) {
+      unique.add(tag as Wochentag);
+    }
+  }
+  return [...unique].sort((a, b) => a - b);
 }
 
 /**

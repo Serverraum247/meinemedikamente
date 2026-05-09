@@ -16,6 +16,12 @@ import notifee, {
   RepeatFrequency,
 } from '@notifee/react-native';
 import { MedikamentRow } from '../database/Database';
+import { logger } from '../utils/Logger';
+import {
+  getIsoWochentag,
+  parseEinnahmeplan,
+  type Wochentag,
+} from '../utils/Einnahmeplan';
 
 // Eindeutiger Channel für Android
 const CHANNEL_ID = 'medikament-erinnerung';
@@ -72,58 +78,92 @@ export async function planeErinnerungen(
 
   if (!medikament.erinnerung_aktiv) return;
 
-  const uhrzeiten: string[] = JSON.parse(medikament.einnahme_uhrzeiten || '[]');
-  if (uhrzeiten.length === 0) return;
+  const plan = parseEinnahmeplan(medikament.einnahme_uhrzeiten || '[]');
+  if (plan.length === 0) return;
 
   const channelId = await createChannel();
   const now = new Date();
 
-  for (const uhrzeit of uhrzeiten) {
-    const [stunden, minuten] = uhrzeit.split(':').map(Number);
+  for (const slot of plan) {
+    const [stunden, minuten] = slot.uhrzeit.split(':').map(Number);
     if (isNaN(stunden) || isNaN(minuten)) continue;
 
-    // Nächste Auslösezeit berechnen
-    const triggerDate = new Date();
-    triggerDate.setHours(stunden, minuten, 0, 0);
+    const wochentage = slot.wochentage && slot.wochentage.length > 0
+      ? slot.wochentage
+      : null;
+    const triggerDates = wochentage
+      ? wochentage.map(tag => naechsterTerminFuerWochentag(tag, stunden, minuten, now))
+      : [naechsterTaeglicherTermin(stunden, minuten, now)];
+    const dosis = slot.dosis !== undefined ? slot.dosis : medikament.einzeldosis;
 
-    // Wenn die Uhrzeit heute schon vorbei ist, morgen planen
-    if (triggerDate <= now) {
-      triggerDate.setDate(triggerDate.getDate() + 1);
+    for (const triggerDate of triggerDates) {
+      const weekdaySuffix = wochentage ? `-${getIsoWochentag(triggerDate)}` : '';
+      const notifId = `med-${medikament.id}-${slot.uhrzeit.replace(':', '')}${weekdaySuffix}`;
+
+      await notifee.createTriggerNotification(
+        {
+          id: notifId,
+          title: `💊 ${medikament.name}`,
+          body: `Zeit für Ihre Einnahme: ${dosis} ${medikament.einheit}`,
+          android: {
+            channelId,
+            importance: AndroidImportance.HIGH,
+            pressAction: {
+              id: 'default',
+            },
+            autoCancel: true,
+          },
+          data: {
+            medikamentId: medikament.id,
+            autoAbzug: String(medikament.auto_abzug_aktiv),
+            dosis: String(dosis),
+          },
+        },
+        {
+          type: TriggerType.TIMESTAMP,
+          timestamp: triggerDate.getTime(),
+          repeatFrequency: wochentage ? RepeatFrequency.WEEKLY : RepeatFrequency.DAILY,
+          alarmManager: {
+            allowWhileIdle: true,
+          },
+        }
+      );
     }
 
-    // Notification ID: med-{medikamentId}-{uhrzeit}
-    const notifId = `med-${medikament.id}-${uhrzeit.replace(':', '')}`;
-
-    await notifee.createTriggerNotification(
-      {
-        id: notifId,
-        title: `💊 ${medikament.name}`,
-        body: `Zeit für Ihre Einnahme: ${medikament.einzeldosis} ${medikament.einheit}`,
-        android: {
-          channelId,
-          importance: AndroidImportance.HIGH,
-          pressAction: {
-            id: 'default',
-          },
-          autoCancel: true,
-        },
-        data: {
-          medikamentId: medikament.id,
-          autoAbzug: String(medikament.auto_abzug_aktiv),
-        },
-      },
-      {
-        type: TriggerType.TIMESTAMP,
-        timestamp: triggerDate.getTime(),
-        repeatFrequency: RepeatFrequency.DAILY,
-        alarmManager: {
-          allowWhileIdle: true,
-        },
-      }
+    logger.log(
+      `[Erinnerung] ${medikament.name} um ${slot.uhrzeit} geplant (${wochentage ? 'woechentlich' : 'taeglich'})`
     );
-
-    console.log(`[Erinnerung] ${medikament.name} um ${uhrzeit} geplant (täglich)`);
   }
+}
+
+function naechsterTaeglicherTermin(stunden: number, minuten: number, now: Date): Date {
+  const triggerDate = new Date(now);
+  triggerDate.setHours(stunden, minuten, 0, 0);
+
+  if (triggerDate <= now) {
+    triggerDate.setDate(triggerDate.getDate() + 1);
+  }
+
+  return triggerDate;
+}
+
+function naechsterTerminFuerWochentag(
+  wochentag: Wochentag,
+  stunden: number,
+  minuten: number,
+  now: Date
+): Date {
+  const triggerDate = new Date(now);
+  triggerDate.setHours(stunden, minuten, 0, 0);
+
+  const heute = getIsoWochentag(now);
+  let tageBisTermin = (wochentag - heute + 7) % 7;
+  if (tageBisTermin === 0 && triggerDate <= now) {
+    tageBisTermin = 7;
+  }
+  triggerDate.setDate(triggerDate.getDate() + tageBisTermin);
+
+  return triggerDate;
 }
 
 /**
@@ -145,13 +185,14 @@ export async function planeAlleErinnerungen(
  * Wird in App.tsx registriert
  */
 export function registerForegroundHandler(
-  onAutoAbzug: (medikamentId: string) => void
+  onAutoAbzug: (medikamentId: string, dosis?: number) => void
 ): () => void {
   return notifee.onForegroundEvent(async ({ type, detail }) => {
     if (type === 1) { // DELIVERED
       const data = detail.notification?.data;
       if (data?.medikamentId && data?.autoAbzug === '1') {
-        onAutoAbzug(String(data.medikamentId));
+        const dosis = data.dosis !== undefined ? Number(data.dosis) : undefined;
+        onAutoAbzug(String(data.medikamentId), Number.isFinite(dosis) ? dosis : undefined);
       }
     }
   });

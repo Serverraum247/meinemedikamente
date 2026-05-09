@@ -1,0 +1,23 @@
+appId: com.meinemedikamente
+name: Free blocks advanced medication units
+tags:
+  - free
+  - premium
+  - ios
+  - android
+---
+- launchApp:
+    clearState: true
+- tapOn:
+    id: "e2e-add-medication-button"
+    retryTapIfNoChange: true
+- waitForAnimationToEnd
+- assertVisible:
+    id: "medication-name-input"
+- hideKeyboard
+- scrollUntilVisible:
+    element: "Einheit: Hübe, nur mit Premium möglich"
+    direction: DOWN
+- tapOn: "Einheit: Hübe, nur mit Premium möglich"
+- assertVisible: "Nur mit Premium möglich"
+- tapOn: "Abbrechen"

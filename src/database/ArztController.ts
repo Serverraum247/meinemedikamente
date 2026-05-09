@@ -81,7 +81,7 @@ export async function createArzt(
   if (existing.length >= max) {
     return {
       success: false,
-      error: `Kostenlose Version: nur ${FREE_MAX_AERZTE} Arzt. Premium = unbegrenzt.`,
+      error: `Kostenlose Version: nur ${FREE_MAX_AERZTE} Arzt. Mehr Ärzte sind nur mit Premium möglich.`,
     };
   }
 

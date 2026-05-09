@@ -28,6 +28,7 @@ import { MedikamentRow } from '../database/Database';
 import { nachkaufErfassen } from '../database/PackungController';
 import { parseDeFloat } from '../utils/FloatUtils';
 import { announceChange } from '../utils/AccessibilityHelpers';
+import { logger } from '../utils/Logger';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Nachkauf'>;
 
@@ -86,7 +87,7 @@ export default function NachkaufScreen({ route, navigation }: Props) {
       );
     } catch (error) {
       Alert.alert('Fehler', 'Nachkauf konnte nicht gespeichert werden.');
-      console.error(error);
+      logger.error(error);
     }
   };
 

@@ -13,6 +13,7 @@ import { getAllMedikamente } from '../database/MedikamentController';
 import { getDatabase } from '../database/Database';
 import {
   parseEinnahmeplan,
+  istSlotAnDatumAktiv,
   SLOT_META,
   type EinnahmeSlot,
   type TageszeitSlot,
@@ -27,6 +28,7 @@ export interface OffeneEinnahme {
   slotLabel: string;     // "Morgens", "Mittags", etc.
   slotUhrzeit: string;   // "08:00"
   dosis: number;         // Einzeldosis oder slot-spezifische Dosis
+  einheit: string;       // Tabletten, ml, Tropfen, etc.
   stundenSeitUhrzeit: number; // Wie lange der Slot schon vorbei ist
 }
 
@@ -68,6 +70,7 @@ export async function getOffeneEinnahmen(
 
     // Offene Slots finden
     for (const slot of plan) {
+      if (!istSlotAnDatumAktiv(slot, jetzt)) continue;
       if (eingenommeneSlots.has(slot.slot)) continue; // schon eingenommen
 
       const [h, m] = slot.uhrzeit.split(':').map(Number);
@@ -87,6 +90,7 @@ export async function getOffeneEinnahmen(
           slotLabel: meta.label,
           slotUhrzeit: slot.uhrzeit,
           dosis,
+          einheit: med.einheit,
           stundenSeitUhrzeit: Math.max(0, Math.round(diff / 60 * 10) / 10),
         });
       }

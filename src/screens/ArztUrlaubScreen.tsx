@@ -2,7 +2,8 @@
  * ArztUrlaubScreen.tsx – Arzt-Urlaub verwalten
  *
  * Zeigt eine Liste aller Urlaube mit Warnungen.
- * Im Premium-Modus kann ein Urlaub eingetragen, bearbeitet und gelöscht werden.
+ * Urlaube eintragen, verwalten und löschen ist kostenlos.
+ * Premium ergänzt Komfortfunktionen wie direktes Anrufen und Kalender-Erinnerungen.
  * Verwendet die Arztdaten aus der Einstellungen-Sektion.
  */
 
@@ -35,6 +36,8 @@ import {
   type ArztRow,
 } from '../database/ArztController';
 import { isPremium } from '../services/PremiumService';
+import { logger } from '../utils/Logger';
+import { showPremiumRequiredAlert } from '../utils/PremiumAlerts';
 
 // ---------- Helper functions ----------
 
@@ -105,7 +108,7 @@ const ArztUrlaubScreen: React.FC<ArztUrlaubScreenProps> = ({ navigation }) => {
       setAerzte(aerzteList);
       setMaxAerzteState(max);
     } catch (error) {
-      console.error('Fehler beim Laden der Urlaubsdaten:', error);
+      logger.error('Fehler beim Laden der Urlaubsdaten:', error);
     }
   };
 
@@ -117,7 +120,7 @@ const ArztUrlaubScreen: React.FC<ArztUrlaubScreenProps> = ({ navigation }) => {
     setMenueOffen(false);
   };
 
-  // Neuen Arzt anlegen (Premium)
+  // Neuen Arzt anlegen (ein Arzt kostenlos, mehr mit Premium)
   const handleNeuenArztSpeichern = async () => {
     if (!neuArztName.trim()) {
       Alert.alert('Fehler', 'Bitte geben Sie einen Namen ein.');
@@ -130,7 +133,7 @@ const ArztUrlaubScreen: React.FC<ArztUrlaubScreenProps> = ({ navigation }) => {
       fachgebiet: neuArztFachgebiet.trim(),
     });
     if (!result.success) {
-      Alert.alert('Limit erreicht', result.error || 'Fehler beim Anlegen.');
+      showPremiumRequiredAlert('Mehr als ein Arzt ist nur mit Premium möglich.', navigation);
       return;
     }
     // Neuen Arzt zur Liste laden und auswählen
@@ -187,7 +190,7 @@ const ArztUrlaubScreen: React.FC<ArztUrlaubScreenProps> = ({ navigation }) => {
       await loadData();
       Alert.alert('Erfolg', 'Urlaub wurde eingetragen.');
     } catch (error) {
-      console.error('Fehler beim Eintragen:', error);
+      logger.error('Fehler beim Eintragen:', error);
       Alert.alert('Fehler', 'Urlaub konnte nicht eingetragen werden.');
     }
   };
@@ -206,7 +209,7 @@ const ArztUrlaubScreen: React.FC<ArztUrlaubScreenProps> = ({ navigation }) => {
               await deleteArztUrlaub(id);
               await loadData();
             } catch (error) {
-              console.error('Fehler beim Löschen:', error);
+              logger.error('Fehler beim Löschen:', error);
               Alert.alert('Fehler', 'Urlaub konnte nicht gelöscht werden.');
             }
           },
@@ -217,6 +220,11 @@ const ArztUrlaubScreen: React.FC<ArztUrlaubScreenProps> = ({ navigation }) => {
 
   // Anruf mit Bestaetigungsdialog
   const handleAnrufen = (praxisNameCall: string, telefonNummer: string) => {
+    if (!premium) {
+      showPremiumRequiredAlert('Arzt direkt anrufen ist nur mit Premium möglich.', navigation);
+      return;
+    }
+
     const nummer = telefonNummer.trim();
     if (!nummer) {
       Alert.alert('Keine Nummer', 'Für diese Praxis ist keine Telefonnummer hinterlegt.');
@@ -258,96 +266,81 @@ const ArztUrlaubScreen: React.FC<ArztUrlaubScreenProps> = ({ navigation }) => {
           <Text style={styles.headerTitle}>Arzt-Urlaub verwalten</Text>
         </View>
 
-        {/* ---------- Form Section (Premium) ---------- */}
-        {premium ? (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Neuen Urlaub eintragen</Text>
+        {/* ---------- Form Section ---------- */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Neuen Urlaub eintragen</Text>
 
-            {/* Arzt-Auswahl */}
-            <Text style={styles.label}>Arzt auswählen</Text>
-            <TouchableOpacity
-              style={[styles.input, styles.selectButton]}
-              onPress={() => setMenueOffen(true)}
-              accessibilityRole="button"
-              accessibilityLabel="Arzt aus Liste auswählen"
-            >
-              <Text style={styles.selectButtonText}>
-                {selectedArztId
-                  ? aerzte.find(a => a.id === selectedArztId)?.name || 'Arzt auswählen'
-                  : 'Arzt aus Liste auswählen'
-                }
-              </Text>
-              <Text style={styles.arrowIcon}>▼</Text>
-            </TouchableOpacity>
-
-            {/* Manuelle Eingabe (Fallback) */}
-            <Text style={styles.label}>Praxis-Name</Text>
-            <TextInput
-              style={styles.input}
-              value={praxisName}
-              onChangeText={setPraxisName}
-              placeholder="z.B. Praxis Dr. Müller"
-              placeholderTextColor="#999"
-              accessibilityLabel="Praxis-Name eingeben"
-            />
-
-            <Text style={styles.label}>Telefonnummer</Text>
-            <TextInput
-              style={styles.input}
-              value={telefon}
-              onChangeText={setTelefon}
-              placeholder="z.B. 0681 123456"
-              placeholderTextColor="#999"
-              keyboardType="phone-pad"
-              accessibilityLabel="Telefonnummer eingeben"
-            />
-
-            <Text style={styles.label}>Urlaub von</Text>
-            <TextInput
-              style={styles.input}
-              value={urlaubVon}
-              onChangeText={setUrlaubVon}
-              placeholder="TT.MM.JJJJ"
-              placeholderTextColor="#999"
-              keyboardType="numeric"
-              maxLength={10}
-              accessibilityLabel="Urlaub Startdatum eingeben"
-            />
-
-            <Text style={styles.label}>Urlaub bis</Text>
-            <TextInput
-              style={styles.input}
-              value={urlaubBis}
-              onChangeText={setUrlaubBis}
-              placeholder="TT.MM.JJJJ"
-              placeholderTextColor="#999"
-              keyboardType="numeric"
-              maxLength={10}
-              accessibilityLabel="Urlaub Enddatum eingeben"
-            />
-
-            <TouchableOpacity
-              style={styles.addButton}
-              onPress={handleAddUrlaub}
-              accessibilityLabel="Urlaub eintragen"
-            >
-              <Text style={styles.addButtonText}>Urlaub eintragen</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <View style={styles.premiumBanner}>
-            <Text style={styles.premiumBannerText}>
-              ⭐ Arzt-Urlaub verwalten und Arzt anrufen ist eine Premium-Funktion.
+          {/* Arzt-Auswahl */}
+          <Text style={styles.label}>Arzt auswählen</Text>
+          <TouchableOpacity
+            style={[styles.input, styles.selectButton]}
+            onPress={() => setMenueOffen(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Arzt aus Liste auswählen"
+          >
+            <Text style={styles.selectButtonText}>
+              {selectedArztId
+                ? aerzte.find(a => a.id === selectedArztId)?.name || 'Arzt auswählen'
+                : 'Arzt aus Liste auswählen'
+              }
             </Text>
-            <TouchableOpacity
-              style={styles.premiumBannerButton}
-              onPress={() => navigation?.navigate('Premium')}
-              accessibilityLabel="Premium freischalten"
-            >
-              <Text style={styles.premiumBannerButtonText}>Premium freischalten</Text>
-            </TouchableOpacity>
-          </View>
-        )}
+            <Text style={styles.arrowIcon}>▼</Text>
+          </TouchableOpacity>
+
+          {/* Manuelle Eingabe (Fallback) */}
+          <Text style={styles.label}>Praxis-Name</Text>
+          <TextInput
+            style={styles.input}
+            value={praxisName}
+            onChangeText={setPraxisName}
+            placeholder="z.B. Praxis Dr. Müller"
+            placeholderTextColor="#999"
+            accessibilityLabel="Praxis-Name eingeben"
+          />
+
+          <Text style={styles.label}>Telefonnummer</Text>
+          <TextInput
+            style={styles.input}
+            value={telefon}
+            onChangeText={setTelefon}
+            placeholder="z.B. 0681 123456"
+            placeholderTextColor="#999"
+            keyboardType="phone-pad"
+            accessibilityLabel="Telefonnummer eingeben"
+          />
+
+          <Text style={styles.label}>Urlaub von</Text>
+          <TextInput
+            style={styles.input}
+            value={urlaubVon}
+            onChangeText={setUrlaubVon}
+            placeholder="TT.MM.JJJJ"
+            placeholderTextColor="#999"
+            keyboardType="numeric"
+            maxLength={10}
+            accessibilityLabel="Urlaub Startdatum eingeben"
+          />
+
+          <Text style={styles.label}>Urlaub bis</Text>
+          <TextInput
+            style={styles.input}
+            value={urlaubBis}
+            onChangeText={setUrlaubBis}
+            placeholder="TT.MM.JJJJ"
+            placeholderTextColor="#999"
+            keyboardType="numeric"
+            maxLength={10}
+            accessibilityLabel="Urlaub Enddatum eingeben"
+          />
+
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={handleAddUrlaub}
+            accessibilityLabel="Urlaub eintragen"
+          >
+            <Text style={styles.addButtonText}>Urlaub eintragen</Text>
+          </TouchableOpacity>
+        </View>
 
         {/* ---------- Active Vacations List ---------- */}
         <View style={styles.section}>
@@ -375,7 +368,7 @@ const ArztUrlaubScreen: React.FC<ArztUrlaubScreenProps> = ({ navigation }) => {
                   ) : null}
                 </View>
                 <View style={styles.urlaubActions}>
-                  {urlaub.telefon && premium ? (
+                  {urlaub.telefon ? (
                     <TouchableOpacity
                       style={styles.callButton}
                       onPress={() => handleAnrufen(urlaub.praxis_name, urlaub.telefon || '')}
@@ -384,15 +377,13 @@ const ArztUrlaubScreen: React.FC<ArztUrlaubScreenProps> = ({ navigation }) => {
                       <Text style={styles.callButtonText}>📞</Text>
                     </TouchableOpacity>
                   ) : null}
-                  {premium ? (
-                    <TouchableOpacity
-                      style={styles.deleteButton}
-                      onPress={() => handleDeleteUrlaub(urlaub.id, urlaub.praxis_name)}
-                      accessibilityLabel={`Urlaub löschen: ${urlaub.praxis_name}`}
-                    >
-                      <Text style={styles.deleteButtonText}>Löschen</Text>
-                    </TouchableOpacity>
-                  ) : null}
+                  <TouchableOpacity
+                    style={styles.deleteButton}
+                    onPress={() => handleDeleteUrlaub(urlaub.id, urlaub.praxis_name)}
+                    accessibilityLabel={`Urlaub löschen: ${urlaub.praxis_name}`}
+                  >
+                    <Text style={styles.deleteButtonText}>Löschen</Text>
+                  </TouchableOpacity>
                 </View>
               </View>
             ))
@@ -464,19 +455,21 @@ const ArztUrlaubScreen: React.FC<ArztUrlaubScreenProps> = ({ navigation }) => {
                 />
               )}
 
-              {/* Neuen Arzt anlegen (Premium) */}
-              {premium && aerzte.length < maxAerzte && (
-                <TouchableOpacity
-                  style={styles.neuArztButton}
-                  onPress={() => {
-                    setMenueOffen(false);
-                    setNeuenArztAnlegen(true);
-                  }}
-                  accessibilityLabel="Neuen Arzt anlegen"
-                >
-                  <Text style={styles.neuArztButtonText}>+ Neuen Arzt anlegen</Text>
-                </TouchableOpacity>
-              )}
+              {/* Neuen Arzt anlegen: ein Arzt kostenlos, mehr mit Premium */}
+              <TouchableOpacity
+                style={styles.neuArztButton}
+                onPress={() => {
+                  if (aerzte.length >= maxAerzte) {
+                    showPremiumRequiredAlert('Mehr als ein Arzt ist nur mit Premium möglich.', navigation);
+                    return;
+                  }
+                  setMenueOffen(false);
+                  setNeuenArztAnlegen(true);
+                }}
+                accessibilityLabel="Neuen Arzt anlegen"
+              >
+                <Text style={styles.neuArztButtonText}>+ Neuen Arzt anlegen</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </Modal>
