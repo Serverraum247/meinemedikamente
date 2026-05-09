@@ -12,7 +12,7 @@ SQLite.DEBUG(true);
 SQLite.enablePromise(true);
 
 const DATABASE_NAME = 'meine_medikamente.db';
-const DATABASE_VERSION = 10; // V10: arzt_id in medikamente (Premium: Arzt-Zuordnung)
+const DATABASE_VERSION = 11; // V11: staerke_wert + staerke_einheit in medikamente (Premium: Dosierung)
 
 export interface MedikamentRow {
   id: string;
@@ -31,6 +31,8 @@ export interface MedikamentRow {
   einnahme_uhrzeiten: string;   // JSON-Array, z.B. '["08:00","20:00"]'
   auto_abzug_aktiv: number;     // 0=aus, 1=an – Bestand automatisch pro Einnahme abziehen
   arzt_id: string;              // verschreibender Arzt (Premium, '' = nicht zugeordnet)
+  staerke_wert: number;         // Staerke/Dosierung pro Einheit, z.B. 500.0 (Premium)
+  staerke_einheit: string;      // Einheit: 'mg', 'ml', 'µg', 'IE', '' (Premium)
   created_at: string;
   updated_at: string;
 }
@@ -211,6 +213,7 @@ class Database {
     await this.migrateV7toV8();
     await this.migrateV8toV9();
     await this.migrateV9toV10();
+    await this.migrateV10toV11();
   }
 
   /**
@@ -497,6 +500,25 @@ class Database {
         `ALTER TABLE medikamente ADD COLUMN arzt_id TEXT NOT NULL DEFAULT '';`
       );
       console.log('[DB] Migration V9->V10: arzt_id Spalte in medikamente hinzugefuegt');
+    }
+  }
+
+  /**
+   * Migration V10 -> V11: staerke_wert + staerke_einheit in medikamente (Dosierung, Premium)
+   */
+  private async migrateV10toV11(): Promise<void> {
+    const medCols = await this.getColumnNames('medikamente');
+    if (!medCols.includes('staerke_wert')) {
+      await this.db!.executeSql(
+        `ALTER TABLE medikamente ADD COLUMN staerke_wert REAL NOT NULL DEFAULT 0;`
+      );
+      console.log('[DB] Migration V10->V11: staerke_wert Spalte hinzugefuegt');
+    }
+    if (!medCols.includes('staerke_einheit')) {
+      await this.db!.executeSql(
+        `ALTER TABLE medikamente ADD COLUMN staerke_einheit TEXT NOT NULL DEFAULT '';`
+      );
+      console.log('[DB] Migration V10->V11: staerke_einheit Spalte hinzugefuegt');
     }
   }
 }

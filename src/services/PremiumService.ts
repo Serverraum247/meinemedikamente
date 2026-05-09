@@ -1,21 +1,24 @@
 /**
  * PremiumService.ts – IAP + Freemium-Logik
  *
- * WICHTIG: react-native-iap nutzt NitroModules (TurboModules).
- * Falls das native Modul nicht verfuegbar ist (z.B. falsche Build-Config),
- * faellt der Service elegant zurueck – die App startet trotzdem.
+ * WICHTIG: react-native-iap wird nur auf Android geladen (NitroModules
+ * JSI-Linker-Fehler auf iOS mit RN 0.85 Prebuilt Pods).
+ * iOS-IAP wird spaeter beim App Store Release aktiviert.
  */
 
+import { Platform } from 'react-native';
 import { getSetting, setSetting } from './SettingsService';
 
-// ─── Lazy IAP Loading ──────────────────────────────────────────────
-// Statischer Import crasht die App wenn NitroModules fehlt.
-// Daher: dynamisch laden und Fehler abfangen.
+// ─── Lazy IAP Loading (Android only) ───────────────────────────────
 
 let iapModule: any = null;
 let iapInitialized = false;
 
 async function getIAP() {
+  if (Platform.OS !== 'android') {
+    console.log('[PremiumService] IAP nur auf Android verfuegbar');
+    return null;
+  }
   if (iapModule !== null) return iapModule;
   try {
     iapModule = await import('react-native-iap');
@@ -56,9 +59,42 @@ function getMonthKey(): string {
   return `${y}-${m}`;
 }
 
+// ─── Dev-Mode Override ────────────────────────────────────────────
+
+const KEY_DEV_PREMIUM_OVERRIDE = 'dev_premium_override';
+// Werte: 'premium' | 'free' | '' (nicht gesetzt = echtes Premium)
+
+/**
+ * Nur in __DEV__ verfuegbar.
+ * Setzt einen kuenstlichen Premium-Status zum Testen.
+ * - 'premium': Premium simulieren
+ * - 'free': Free simulieren
+ * - '': Override entfernen (echtes IAP/Setting nutzen)
+ */
+export async function setDevPremiumOverride(mode: 'premium' | 'free' | ''): Promise<void> {
+  if (!__DEV__) return;
+  await setSetting(KEY_DEV_PREMIUM_OVERRIDE, mode);
+  console.log(`[PremiumService] DEV Override gesetzt: ${mode || 'aus (echtes Premium)'}`);
+}
+
+/**
+ * Liest den aktuellen Dev-Override.
+ * Returns: 'premium' | 'free' | '' (kein Override)
+ */
+export async function getDevPremiumOverride(): Promise<string> {
+  if (!__DEV__) return '';
+  return (await getSetting(KEY_DEV_PREMIUM_OVERRIDE)) || '';
+}
+
 // ─── Premium Status ───────────────────────────────────────────────
 
 export async function isPremium(): Promise<boolean> {
+  // Dev-Override hat hoechste Prioritaet
+  if (__DEV__) {
+    const override = await getSetting(KEY_DEV_PREMIUM_OVERRIDE);
+    if (override === 'premium') return true;
+    if (override === 'free') return false;
+  }
   const val = await getSetting(KEY_PREMIUM);
   return val === 'true' || val === '1';
 }

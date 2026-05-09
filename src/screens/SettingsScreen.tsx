@@ -36,7 +36,7 @@ import {
   getMaxAerzte,
   type ArztRow,
 } from '../database/ArztController';
-import { isPremium } from '../services/PremiumService';
+import { isPremium, setDevPremiumOverride, getDevPremiumOverride } from '../services/PremiumService';
 import { usePersonen } from '../context/PersonenContext';
 import { AVATAR_EMOJIS } from '../database/PersonenController';
 
@@ -54,6 +54,9 @@ export default function SettingsScreen({ navigation }: Props) {
   const [editPersonName, setEditPersonName] = useState('');
   const [editPersonEmoji, setEditPersonEmoji] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState<string | null>(null); // person id oder 'new'
+
+  // Dev-Premium-Override (nur in __DEV__)
+  const [devOverride, setDevOverrideState] = useState<string>('');
 
   // Uhrzeiten-State
   const [uhrzeiten, setUhrzeiten] = useState<Record<TageszeitSlot, string>>({
@@ -78,6 +81,11 @@ export default function SettingsScreen({ navigation }: Props) {
       setUhrzeiten(stored);
       await loadAerzte();
     })();
+
+    // Dev-Override laden
+    if (__DEV__) {
+      getDevPremiumOverride().then(setDevOverrideState);
+    }
   }, []);
 
   const loadAerzte = async () => {
@@ -615,6 +623,64 @@ export default function SettingsScreen({ navigation }: Props) {
         >
           <Text style={styles.resetButtonText}>Auf Standard zurücksetzen</Text>
         </TouchableOpacity>
+
+        {/* === DEV-MODE: Premium-Override (nur in Debug-Builds) === */}
+        {__DEV__ && (
+          <View style={styles.devSection}>
+            <Text style={styles.devSectionTitle}>🛠 Entwicklungsmodus</Text>
+            <Text style={styles.devSectionInfo}>
+              Premium-Status simulieren zum Testen.{'\n'}
+              Nur sichtbar in Debug-Builds.
+            </Text>
+            <View style={styles.devButtonRow}>
+              <TouchableOpacity
+                style={[styles.devButton, devOverride === 'premium' && styles.devButtonActive]}
+                onPress={async () => {
+                  await setDevPremiumOverride('premium');
+                  setDevOverrideState('premium');
+                  await loadAerzte();
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Premium simulieren"
+              >
+                <Text style={styles.devButtonText}>
+                  {devOverride === 'premium' ? '✓ Premium' : '⭐ Premium'}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.devButton, devOverride === 'free' && styles.devButtonActive]}
+                onPress={async () => {
+                  await setDevPremiumOverride('free');
+                  setDevOverrideState('free');
+                  await loadAerzte();
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Free simulieren"
+              >
+                <Text style={styles.devButtonText}>
+                  {devOverride === 'free' ? '✓ Free' : '🔒 Free'}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.devButton, devOverride === '' && styles.devButtonActive]}
+                onPress={async () => {
+                  await setDevPremiumOverride('');
+                  setDevOverrideState('');
+                  await loadAerzte();
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Override entfernen"
+              >
+                <Text style={styles.devButtonText}>
+                  {devOverride === '' ? '✓ Echtes' : '↩ Echtes'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.devStatusText}>
+              Aktiv: {devOverride === 'premium' ? '⭐ Premium (simuliert)' : devOverride === 'free' ? '🔒 Free (simuliert)' : '📡 Echte IAP-Prüfung'}
+            </Text>
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -951,5 +1017,59 @@ const styles = StyleSheet.create({
     color: '#888',
     fontSize: 16,
     fontWeight: '600',
+  },
+  // Dev-Mode Styles
+  devSection: {
+    marginTop: 24,
+    padding: 16,
+    backgroundColor: '#FFF3E0',
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: '#FF9800',
+    borderStyle: 'dashed',
+  },
+  devSectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#E65100',
+    marginBottom: 6,
+  },
+  devSectionInfo: {
+    fontSize: 14,
+    color: '#BF360C',
+    marginBottom: 12,
+    lineHeight: 20,
+  },
+  devButtonRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 10,
+  },
+  devButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: 10,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#FFB74D',
+    minHeight: 48,
+    justifyContent: 'center',
+  },
+  devButtonActive: {
+    backgroundColor: '#FF9800',
+    borderColor: '#E65100',
+  },
+  devButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#333',
+  },
+  devStatusText: {
+    fontSize: 14,
+    color: '#E65100',
+    fontWeight: '600',
+    textAlign: 'center',
   },
 });

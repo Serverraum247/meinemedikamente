@@ -23,8 +23,6 @@
     "react-native": "0.85.2",
     "react-native-calendar-events": "^2.2.0",
     "react-native-camera-kit": "^17.0.1",
-    "react-native-iap": "^15.2.0",
-    "react-native-nitro-modules": "^0.35.6",
     "react-native-safe-area-context": "^5.7.0",
     "react-native-screens": "^4.24.0",
     "react-native-sqlite-storage": "^6.0.1"
@@ -55,5 +53,8 @@
   },
   "engines": {
     "node": ">= 22.11.0"
+  },
+  "optionalDependencies": {
+    "react-native-iap": "^15.2.0"
   }
 }

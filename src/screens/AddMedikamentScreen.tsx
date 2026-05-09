@@ -40,6 +40,7 @@ import {
 import { getMaxReminderSlots, isPremium } from '../services/PremiumService';
 import { getAllAerzte } from '../database/ArztController';
 import type { ArztRow } from '../database/Database';
+import PremiumGate from '../components/PremiumGate';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AddMedikament'>;
 
@@ -66,6 +67,8 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
   const [premium, setPremiumStatus] = useState(false);
   const [aerzte, setAerzte] = useState<ArztRow[]>([]);
   const [gewaehlterArzt, setGewaehlterArzt] = useState('');
+  const [staerkeWert, setStaerkeWert] = useState('');
+  const [staerkeEinheit, setStaerkeEinheit] = useState('');
 
   // Default-Uhrzeiten aus Einstellungen laden
   useEffect(() => {
@@ -131,6 +134,8 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
         einnahme_uhrzeiten: serializeEinnahmeplan(einnahmePlan),
         auto_abzug_aktiv: autoAbzugAktiv ? 1 : 0,
         arzt_id: gewaehlterArzt,
+        staerke_wert: premium ? (parseDeFloat(staerkeWert) || 0) : 0,
+        staerke_einheit: premium ? staerkeEinheit : '',
       });
 
       announceChange('Medikament wurde gespeichert');
@@ -242,6 +247,35 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
             )}
           </View>
         )}
+
+        {/* === ABSCHNITT: Stärke / Wirkstoffmenge (Premium) === */}
+        <PremiumGate
+          featureName="Stärke & Dosierung"
+          description="Erfassen Sie mg/ml-Dosierungen für Ihre Medikamente. z.B. 500mg pro Tablette."
+          navigation={navigation}
+        >
+          <View style={styles.fieldGroup}>
+            <Text style={styles.label}>💊 Stärke pro Einheit</Text>
+            <Text style={styles.hint}>Wie viel Wirkstoff enthält eine Tablette / 1ml?</Text>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <TextInput
+                style={[styles.input, { flex: 1 }]}
+                value={staerkeWert}
+                onChangeText={setStaerkeWert}
+                placeholder="z.B. 500"
+                keyboardType="decimal-pad"
+                accessibilityLabel="Stärke Wert"
+              />
+              <TextInput
+                style={[styles.input, { flex: 1 }]}
+                value={staerkeEinheit}
+                onChangeText={setStaerkeEinheit}
+                placeholder="mg, ml, µg, IE"
+                accessibilityLabel="Stärke Einheit"
+              />
+            </View>
+          </View>
+        </PremiumGate>
 
         {/* === ABSCHNITT: Dosierung === */}
         <Text style={styles.sectionTitle} accessibilityRole="header">Dosierung</Text>

@@ -134,7 +134,7 @@ class CloudKitBackup: NSObject {
       var medCount = 0
       if let data = jsonString.data(using: .utf8),
          let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-         let medications = json["medikamenten"] as? [[String: Any]] {
+         let medications = json["medikamente"] as? [[String: Any]] {
         medCount = medications.count
       }
 

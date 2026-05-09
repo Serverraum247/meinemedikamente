@@ -18,6 +18,9 @@ import {
   ScrollView,
   SafeAreaView,
   FlatList,
+  Platform,
+  Modal,
+  TextInput,
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
@@ -37,6 +40,7 @@ import { announceChange } from '../utils/AccessibilityHelpers';
 import { erstelleRezeptAbholtermin } from '../services/KalenderService';
 import { canCreateCalendarEvent, recordCalendarEvent, isPremium } from '../services/PremiumService';
 import { getArztById } from '../database/ArztController';
+import { calculateReichweite, formatStaerke } from '../utils/ReichweitenCalc';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'MedikamentDetail'>;
 
@@ -52,6 +56,8 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
   const [zeigeHistorie, setZeigeHistorie] = useState(false);
   const [premium, setPremiumStatus] = useState(false);
   const [arztName, setArztName] = useState('');
+  const [korrekturModal, setKorrekturModal] = useState(false);
+  const [korrekturWert, setKorrekturWert] = useState('');
 
   // Medikament + Historie laden
   const loadData = useCallback(async () => {
@@ -175,40 +181,46 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
     );
   }, [medikament, loadData]);
 
-  // Bestandskorrektur (Premium)
+  // Bestandskorrektur (Premium) – Platform-abhaengig
   const handleBestandskorrektur = useCallback(() => {
     if (!medikament) return;
 
-    Alert.prompt(
-      'Bestandskorrektur',
-      `Aktueller Bestand: ${medikament.aktueller_bestand} ${medikament.einheit}\nNeuer Bestand:`,
-      [
-        { text: 'Abbrechen', style: 'cancel' },
-        {
-          text: 'Korrigieren',
-          onPress: async (value?: string) => {
-            const input = (value || '').replace(',', '.');
-            const neuerBestand = parseFloat(input);
-            if (isNaN(neuerBestand) || neuerBestand < 0) {
-              Alert.alert('Ungültig', 'Bitte eine gültige Zahl eingeben (z.B. 28.5).');
-              return;
-            }
-            try {
-              await aktualisiereBestand(medikament.id, neuerBestand);
-              Alert.alert(
-                'Bestand korrigiert',
-                `${medikament.aktueller_bestand} → ${neuerBestand} ${medikament.einheit}`
-              );
-              await loadData();
-            } catch {
-              Alert.alert('Fehler', 'Bestand konnte nicht korrigiert werden.');
-            }
+    if (Platform.OS === 'ios') {
+      Alert.prompt(
+        'Bestandskorrektur',
+        `Aktueller Bestand: ${medikament.aktueller_bestand} ${medikament.einheit}\nNeuer Bestand:`,
+        [
+          { text: 'Abbrechen', style: 'cancel' },
+          {
+            text: 'Korrigieren',
+            onPress: async (value?: string) => {
+              const input = (value || '').replace(',', '.');
+              const neuerBestand = parseFloat(input);
+              if (isNaN(neuerBestand) || neuerBestand < 0) {
+                Alert.alert('Ungültig', 'Bitte eine gültige Zahl eingeben (z.B. 28.5).');
+                return;
+              }
+              try {
+                await aktualisiereBestand(medikament.id, neuerBestand);
+                Alert.alert(
+                  'Bestand korrigiert',
+                  `${medikament.aktueller_bestand} → ${neuerBestand} ${medikament.einheit}`
+                );
+                await loadData();
+              } catch {
+                Alert.alert('Fehler', 'Bestand konnte nicht korrigiert werden.');
+              }
+            },
           },
-        },
-      ],
-      'plain-text',
+        ],
+        'plain-text',
       String(medikament.aktueller_bestand)
     );
+    } else {
+      // Android: Eigenes Modal statt Alert.prompt
+      setKorrekturWert(String(medikament.aktueller_bestand));
+      setKorrekturModal(true);
+    }
   }, [medikament, aktualisiereBestand, loadData]);
 
   if (!medikament) {
@@ -221,20 +233,9 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
 
   const isUnterSchwelle = medikament.aktueller_bestand <= medikament.warnung_ab_bestand;
 
-  // Berechne Tage verbleibend basierend auf Einnahmeplan
-  const tageVerbleibend = (() => {
-    if (medikament.einzeldosis <= 0) return 0;
-    try {
-      const plan = parseEinnahmeplan(medikament.einnahme_uhrzeiten || '[]');
-      if (plan.length > 0) {
-        const tagesDosis = tagesdosisBerechnen(plan, medikament.einzeldosis);
-        return tagesDosis > 0
-          ? Math.floor(medikament.aktueller_bestand / tagesDosis)
-          : 0;
-      }
-    } catch { /* Fallback */ }
-    return Math.floor(medikament.aktueller_bestand / medikament.einzeldosis);
-  })();
+  // Reichweite berechnen (zentrale Utility)
+  const reichweite = calculateReichweite(medikament);
+  const staerkeText = premium ? formatStaerke(medikament.staerke_wert, medikament.staerke_einheit) : null;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -246,8 +247,8 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
 
         {/* Bestand-Anzeige */}
         <View
-          style={[styles.bestandCard, isUnterSchwelle && styles.bestandCardWarning]}
-          accessibilityLabel={`Bestand: ${medikament.aktueller_bestand} ${medikament.einheit}${tageVerbleibend > 0 ? `, reicht für ca. ${tageVerbleibend} Tag(e)` : ''}`}
+          style={[styles.bestandCard, isUnterSchwelle && styles.bestandCardWarning, reichweite.istKritisch && styles.bestandCardCritical]}
+          accessibilityLabel={`Bestand: ${medikament.aktueller_bestand} ${medikament.einheit}${staerkeText ? `, Stärke: ${staerkeText}` : ''}, Reichweite: ${reichweite.textKurz}`}
           accessibilityLiveRegion="polite"
         >
           <Text style={styles.bestandLabel} accessibilityRole="header">Aktueller Bestand</Text>
@@ -255,14 +256,15 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
             {isUnterSchwelle ? '⚠' : '✓'} {medikament.aktueller_bestand}
           </Text>
           <Text style={styles.bestandEinheit}>{medikament.einheit}</Text>
+          {staerkeText ? (
+            <Text style={styles.staerkeInfo}>💊 Stärke: {staerkeText}</Text>
+          ) : null}
           <Text style={[styles.bestandStatusLabel, isUnterSchwelle ? styles.bestandStatusWarning : styles.bestandStatusOk]}>
             {isUnterSchwelle ? '⚠ Nachbestellen empfohlen' : '✓ Bestand OK'}
           </Text>
-          {tageVerbleibend > 0 && (
-            <Text style={styles.tageInfo}>
-              Reicht für ca. {tageVerbleibend} Tag(e)
-            </Text>
-          )}
+          <Text style={[styles.tageInfo, reichweite.istKritisch && styles.tageInfoCritical]}>
+            📅 Reichweite: {reichweite.textKurz} – {reichweite.textLang}
+          </Text>
           {premium && (
             <TouchableOpacity
               style={styles.korrekturButton}
@@ -533,6 +535,66 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
           </TouchableOpacity>
         )}
       </ScrollView>
+
+      {/* Android Bestandskorrektur Modal */}
+      <Modal
+        visible={korrekturModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setKorrekturModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Bestandskorrektur</Text>
+            <Text style={styles.modalHint}>
+              Aktueller Bestand: {medikament?.aktueller_bestand} {medikament?.einheit}
+            </Text>
+            <TextInput
+              style={styles.modalInput}
+              value={korrekturWert}
+              onChangeText={setKorrekturWert}
+              keyboardType="decimal-pad"
+              placeholder="Neuer Bestand"
+              autoFocus
+              accessibilityLabel="Neuer Bestand"
+            />
+            <View style={styles.modalButtonRow}>
+              <TouchableOpacity
+                style={styles.modalButtonCancel}
+                onPress={() => setKorrekturModal(false)}
+                accessibilityRole="button"
+                accessibilityLabel="Abbrechen"
+              >
+                <Text style={styles.modalButtonCancelText}>Abbrechen</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalButtonOk}
+                onPress={async () => {
+                  const input = korrekturWert.replace(',', '.');
+                  const neuerBestand = parseFloat(input);
+                  if (isNaN(neuerBestand) || neuerBestand < 0) {
+                    Alert.alert('Ungültig', 'Bitte eine gültige Zahl eingeben (z.B. 28.5).');
+                    return;
+                  }
+                  try {
+                    if (medikament) {
+                      await aktualisiereBestand(medikament.id, neuerBestand);
+                      setKorrekturModal(false);
+                      await loadData();
+                    }
+                  } catch {
+                    Alert.alert('Fehler', 'Bestand konnte nicht korrigiert werden.');
+                  }
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Bestand korrigieren"
+              >
+                <Text style={styles.modalButtonOkText}>Korrigieren</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -618,6 +680,20 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#888',
     marginTop: 8,
+  },
+  tageInfoCritical: {
+    color: '#FF6D00',
+    fontWeight: '600',
+  },
+  staerkeInfo: {
+    fontSize: 16,
+    color: '#2196F3',
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  bestandCardCritical: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#FF6D00',
   },
   korrekturButton: {
     marginTop: 12,
@@ -928,6 +1004,70 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '600',
     color: '#FFFFFF',
+  },
+  // Android Bestandskorrektur Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 24,
+    width: '85%',
+    maxWidth: 400,
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#1a1a2e',
+    marginBottom: 8,
+  },
+  modalHint: {
+    fontSize: 16,
+    color: '#666',
+    marginBottom: 16,
+  },
+  modalInput: {
+    borderWidth: 2,
+    borderColor: '#1a1a2e',
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 24,
+    fontWeight: '600',
+    color: '#1a1a2e',
+    marginBottom: 20,
+  },
+  modalButtonRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  modalButtonCancel: {
+    flex: 1,
+    paddingVertical: 16,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#ddd',
+    alignItems: 'center',
+  },
+  modalButtonCancelText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#888',
+  },
+  modalButtonOk: {
+    flex: 1,
+    paddingVertical: 16,
+    borderRadius: 12,
+    backgroundColor: '#1a1a2e',
+    alignItems: 'center',
+  },
+  modalButtonOkText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#fff',
   },
 });
 

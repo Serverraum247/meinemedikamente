@@ -5,7 +5,7 @@
  * klare Anzeige der Bestände (inkl. Float-Werte wie 28.5)
  */
 
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -21,6 +21,7 @@ import {
   Pressable,
 } from 'react-native';
 import { useMedikamente } from '../context/MedikamentContext';
+import { calculateReichweite, formatStaerke } from '../utils/ReichweitenCalc';
 import { usePersonen } from '../context/PersonenContext';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
@@ -28,14 +29,46 @@ import { calculateUrlaubsWarnungen } from '../database/UrlaubController';
 import type { UrlaubsWarnung } from '../database/UrlaubController';
 import { getMaxMedikamente, isPremium } from '../services/PremiumService';
 import { version as APP_VERSION } from '../../package.json';
+import {
+  getOffeneEinnahmen,
+  sollErinnerungZeigen,
+  setzteLetzteErinnerung,
+  type OffeneEinnahme,
+} from '../services/EinnahmeErinnerungService';
+import { einnahmeVerbuchen } from '../database/MedikamentController';
+import EinnahmeErinnerungModal from '../components/EinnahmeErinnerungModal';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
 
 export default function HomeScreen({ navigation }: Props) {
-  const { medikamente, medikamenteUnterSchwelle, loading } = useMedikamente();
+  const { medikamente, medikamenteUnterSchwelle, loading, refresh } = useMedikamente();
   const { personen, aktivePerson, setAktivePerson, maxPersonen, premium } = usePersonen();
   const [urlaubsWarnungen, setUrlaubsWarnungen] = useState<UrlaubsWarnung[]>([]);
   const [menueOffen, setMenueOffen] = useState(false);
+  const [erinnerungOffen, setErinnerungOffen] = useState(false);
+  const [offeneEinnahmen, setOffeneEinnahmen] = useState<OffeneEinnahme[]>([]);
+
+  // Medikamente nach aktiver Person filtern
+  const gefilterteMedikamente = useMemo(() => {
+    if (!aktivePerson) return medikamente;
+    return medikamente.filter(m => m.person_id === aktivePerson.id);
+  }, [medikamente, aktivePerson]);
+
+  // Warnungen nach aktiver Person filtern
+  const gefilterteWarnungen = useMemo(() => {
+    if (!aktivePerson) return urlaubsWarnungen;
+    return urlaubsWarnungen.filter(w => w.medikament.person_id === aktivePerson.id);
+  }, [urlaubsWarnungen, aktivePerson]);
+
+  // Unter-Schwelle nach aktiver Person filtern
+  const gefilterteUnterSchwelle = useMemo(() => {
+    if (!aktivePerson) return medikamenteUnterSchwelle;
+    return medikamenteUnterSchwelle.filter(m => m.person_id === aktivePerson.id);
+  }, [medikamenteUnterSchwelle, aktivePerson]);
+
+  // Premium-Status einmal laden
+  const [premiumStatus, setPremiumStatus] = useState(false);
+  useEffect(() => { isPremium().then(setPremiumStatus); }, []);
 
   // Hamburger-Menue im Header links
   useEffect(() => {
@@ -60,6 +93,31 @@ export default function HomeScreen({ navigation }: Props) {
     calculateUrlaubsWarnungen().then(setUrlaubsWarnungen).catch(console.error);
   }, []);
 
+  // Einnahme-Erinnerung pruefen beim Oeffnen
+  useEffect(() => {
+    if (loading) return;
+    let aktiv = true;
+
+    const pruefeErinnerung = async () => {
+      try {
+        const sollZeigen = await sollErinnerungZeigen(60);
+        if (!sollZeigen || !aktiv) return;
+
+        const offene = await getOffeneEinnahmen(0);
+        if (!aktiv || offene.length === 0) return;
+
+        setOffeneEinnahmen(offene);
+        setErinnerungOffen(true);
+      } catch (e) {
+        console.error('Einnahme-Erinnerung fehlgeschlagen:', e);
+      }
+    };
+
+    // Leichte Verzoegerung damit die UI erst aufbaut
+    const timer = setTimeout(pruefeErinnerung, 1500);
+    return () => { aktiv = false; clearTimeout(timer); };
+  }, [loading]);
+
   if (loading) {
     return (
       <View style={styles.center}>
@@ -74,17 +132,20 @@ export default function HomeScreen({ navigation }: Props) {
 
   const renderMedikament = ({ item }: { item: typeof medikamente[0] }) => {
     const isUnterSchwelle = item.aktueller_bestand <= item.warnung_ab_bestand;
+    const reichweite = calculateReichweite(item);
+    const staerkeText = premiumStatus ? formatStaerke(item.staerke_wert, item.staerke_einheit) : null;
 
     return (
       <TouchableOpacity
         style={[
           styles.card,
           isUnterSchwelle && styles.cardWarning,
+          reichweite.istKritisch && styles.cardCritical,
         ]}
         onPress={() => navigation.navigate('MedikamentDetail', { medikamentId: item.id })}
         activeOpacity={0.7}
         accessibilityRole="button"
-        accessibilityLabel={`${item.name}, Bestand: ${item.aktueller_bestand} ${item.einheit}${isUnterSchwelle ? ', Nachbestellen empfohlen' : ''}`}
+        accessibilityLabel={`${item.name}${staerkeText ? `, ${staerkeText}` : ''}, Bestand: ${item.aktueller_bestand} ${item.einheit}, Reichweite: ${reichweite.textKurz}${isUnterSchwelle ? ', Nachbestellen empfohlen' : ''}`}
         accessibilityHint="Doppelt tippen für Details"
       >
         <View style={styles.cardContent}>
@@ -92,11 +153,17 @@ export default function HomeScreen({ navigation }: Props) {
           {item.zusatz ? (
             <Text style={styles.medZusatz}>{item.zusatz}</Text>
           ) : null}
+          {staerkeText ? (
+            <Text style={styles.medStaerke}>💊 {staerkeText}</Text>
+          ) : null}
           <Text style={styles.medDetail}>
             Bestand: {item.aktueller_bestand} {item.einheit}
           </Text>
-          <Text style={styles.medDetail}>
-            Dosis: {item.einzeldosis} {item.einheit} pro Einnahme
+          <Text style={[
+            styles.medDetail,
+            reichweite.istKritisch && styles.reichweiteKritisch,
+          ]}>
+            📅 Reichweite: {reichweite.textKurz} – {reichweite.textLang}
           </Text>
           {isUnterSchwelle && (
             <Text style={styles.warnungText}>
@@ -156,34 +223,34 @@ export default function HomeScreen({ navigation }: Props) {
       )}
 
       {/* Warnungs-Banner */}
-      {medikamenteUnterSchwelle.length > 0 && (
+      {gefilterteUnterSchwelle.length > 0 && (
         <View
           style={styles.warnBanner}
           accessibilityLiveRegion="polite"
         >
           <Text style={styles.warnBannerText}>
-            ⚠ {medikamenteUnterSchwelle.length} Medikament(e) unter Warnschwelle
+            ⚠ {gefilterteUnterSchwelle.length} Medikament(e) unter Warnschwelle
           </Text>
         </View>
       )}
 
       {/* Urlaub-Kollisions-Banner */}
-      {urlaubsWarnungen.length > 0 && (
+      {gefilterteWarnungen.length > 0 && (
         <TouchableOpacity
           style={styles.urlaubBanner}
           onPress={() => navigation.navigate('ArztUrlaub')}
           activeOpacity={0.7}
           accessibilityRole="button"
-          accessibilityLabel={`${urlaubsWarnungen.length} Urlaub-Kollisionen. Medikamente werden waehrend Arzturlaub leer. Tippen fuer Details.`}
+          accessibilityLabel={`${gefilterteWarnungen.length} Urlaub-Kollisionen. Medikamente werden waehrend Arzturlaub leer. Tippen fuer Details.`}
         >
           <Text style={styles.urlaubBannerText}>
-            📅 {urlaubsWarnungen.length} Urlaub-Kollision(en) – Medikamente werden waehrend Arzturlaub leer!
+            📅 {gefilterteWarnungen.length} Urlaub-Kollision(en) – Medikamente werden waehrend Arzturlaub leer!
           </Text>
         </TouchableOpacity>
       )}
 
       {/* Leerer Zustand */}
-      {medikamente.length === 0 ? (
+      {gefilterteMedikamente.length === 0 ? (
         <View style={styles.center}>
           <Text style={styles.emptyTitle}>Keine Medikamente</Text>
           <Text style={styles.emptySubtitle}>
@@ -192,7 +259,7 @@ export default function HomeScreen({ navigation }: Props) {
         </View>
       ) : (
         <FlatList
-          data={medikamente}
+          data={gefilterteMedikamente}
           keyExtractor={item => item.id}
           renderItem={renderMedikament}
           contentContainerStyle={styles.list}
@@ -285,6 +352,33 @@ export default function HomeScreen({ navigation }: Props) {
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* Einnahme-Erinnerung Modal */}
+      <EinnahmeErinnerungModal
+        visible={erinnerungOffen}
+        offeneEinnahmen={offeneEinnahmen}
+        onBestaetigen={async (medikamentId, dosis) => {
+          await einnahmeVerbuchen(medikamentId);
+          await refresh();
+          // Offene Liste aktualisieren
+          const neueOffene = offeneEinnahmen.filter(
+            e => e.medikamentId !== medikamentId
+          );
+          setOffeneEinnahmen(neueOffene);
+          if (neueOffene.length === 0) {
+            setErinnerungOffen(false);
+          }
+          await setzteLetzteErinnerung();
+        }}
+        onSpaeter={async () => {
+          setErinnerungOffen(false);
+          await setzteLetzteErinnerung();
+        }}
+        onSchliessen={async () => {
+          setErinnerungOffen(false);
+          await setzteLetzteErinnerung();
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -371,6 +465,10 @@ const styles = StyleSheet.create({
     borderLeftWidth: 4,
     borderLeftColor: '#e74c3c',
   },
+  cardCritical: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#FF6D00',
+  },
   cardContent: {
     flex: 1,
   },
@@ -385,6 +483,16 @@ const styles = StyleSheet.create({
     color: '#777',
     fontStyle: 'italic',
     marginBottom: 4,
+  },
+  medStaerke: {
+    fontSize: 14,
+    color: '#2196F3',
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  reichweiteKritisch: {
+    color: '#FF6D00',
+    fontWeight: '600',
   },
   medDetail: {
     fontSize: 16,

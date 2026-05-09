@@ -15,6 +15,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { uploadBackup, getBackupInfo, restoreBackup, BackupInfo as ServiceBackupInfo } from '../services/BackupService';
 import { isPremium as checkIsPremium } from '../services/PremiumService';
 import { RootStackParamList } from '../navigation/AppNavigator';
+import PremiumGate from '../components/PremiumGate';
 
 // Plattform-spezifische Labels
 const isIOS = Platform.OS === 'ios';
@@ -142,29 +143,6 @@ const BackupScreen: React.FC<BackupScreenProps> = ({ navigation }) => {
     );
   };
 
-  const handleGoPremium = () => {
-    navigation.navigate('Premium');
-  };
-
-  const renderPremiumGate = () => (
-    <View style={styles.premiumGateContainer}>
-      <Text style={styles.premiumIcon}>⭐</Text>
-      <Text style={styles.premiumGateTitle}>Premium-Funktion</Text>
-      <Text style={styles.premiumGateText}>
-        Cloud-Backup ist eine Premium-Funktion.{'\n'}
-        Sichern Sie Ihre Medikamentendaten sicher in der Cloud und stellen Sie sie auf jedem Gerät wieder her.
-      </Text>
-      <TouchableOpacity
-        style={styles.premiumButton}
-        onPress={handleGoPremium}
-        accessibilityLabel="Zu Premium wechseln"
-        accessibilityRole="button"
-      >
-        <Text style={styles.premiumButtonText}>Jetzt Premium werden</Text>
-      </TouchableOpacity>
-    </View>
-  );
-
   const renderBackupStatus = () => {
     if (loadingInfo) {
       return (
@@ -246,7 +224,11 @@ const BackupScreen: React.FC<BackupScreenProps> = ({ navigation }) => {
         contentContainerStyle={styles.scrollContent}
       >
         {!isPremium && !loadingInfo ? (
-          renderPremiumGate()
+          <PremiumGate
+            featureName="Cloud-Backup"
+            description="Sichern Sie Ihre Medikamentendaten sicher in der Cloud und stellen Sie sie auf jedem Gerät wieder her."
+            navigation={navigation}
+          />
         ) : (
           <>
             {renderBackupStatus()}
@@ -362,51 +344,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-  },
-  premiumGateContainer: {
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
-    padding: 32,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  premiumIcon: {
-    fontSize: 48,
-    marginBottom: 12,
-  },
-  premiumGateTitle: {
-    fontSize: 26,
-    fontWeight: 'bold',
-    color: '#1a1a2e',
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  premiumGateText: {
-    fontSize: 20,
-    color: '#555555',
-    textAlign: 'center',
-    lineHeight: 28,
-    marginBottom: 24,
-  },
-  premiumButton: {
-    backgroundColor: '#27ae60',
-    minHeight: 56,
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 32,
-    width: '100%',
-  },
-  premiumButtonText: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#ffffff',
-    textAlign: 'center',
   },
 });
 

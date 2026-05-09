@@ -8,16 +8,18 @@ require Pod::Executable.execute_command('node', ['-p',
 platform :ios, min_ios_version_supported
 prepare_react_native_project!
 
-# Statische Framework-Verknuepfung fuer RN 0.85 Prebuilt Pods
-# Behebt "no such module 'React'" Fehler mit Swift-Modulauflösung
-use_frameworks! :linkage => :static
+# FIX: Build from Source statt Prebuilt Pods
+# RN 0.85 Prebuilt Pods liefern JSI-Symbole (HostObject::set etc.) nicht
+# als exportierte Symbole. Ohne Prebuilt-Artifacts kompiliert rncore.rb
+# React-jsi aus Quelle -> libReact-jsi.a mit allen Symbolen.
+# Siehe Skill: meine-medikamente-dev "iOS Build: ReactCodegen JSI-Linker-Fehler"
+ENV['RCT_USE_PREBUILT_RNCORE'] = '0'
 
 target 'MeineMedikamente' do
   config = use_native_modules!
 
   use_react_native!(
     :path => config[:reactNativePath],
-    # An absolute path to your application root.
     :app_path => "#{Pod::Config.instance.installation_root}/.."
   )
 
@@ -26,15 +28,43 @@ target 'MeineMedikamente' do
       installer,
       config[:reactNativePath],
       :mac_catalyst_enabled => false,
-      # :ccache_enabled => true
     )
 
     # Fix: @react-native-firebase + RN 0.85 Prebuilt Pods
-    # "include of non-modular header" wird als Error gewertet
     installer.pods_project.targets.each do |target|
       target.build_configurations.each do |config|
         config.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
       end
+    end
+
+    # Fix: ReactNativeDependencies XCFramework manuell entpacken
+    # pod install laedt die tarballs herunter aber entpackt sie nicht
+    # immer korrekt. Wir entpacken und setzen die framework-Symlinks.
+    artifacts_dir = File.join(__dir__, 'Pods', 'ReactNativeDependencies-artifacts')
+    deps_dir = File.join(__dir__, 'Pods', 'ReactNativeDependencies')
+    fw_dir = File.join(deps_dir, 'framework')
+
+    if Dir.exist?(artifacts_dir) && !Dir.exist?(fw_dir)
+      Dir.glob(File.join(artifacts_dir, '*-debug.tar.gz')).each do |tarball|
+        system("tar -xzf '#{tarball}' -C '#{deps_dir}'")
+      end
+      FileUtils.ln_s('.', fw_dir) unless File.exist?(fw_dir)
+      # Symlink: expected path -> actual path
+      xc_fw_dir = File.join(deps_dir, 'packages', 'react-native', 'third-party', 'ReactNativeDependencies.xcframework')
+      expected = File.join(deps_dir, 'packages', 'react-native', 'ReactNativeDependencies.xcframework')
+      FileUtils.ln_s(xc_fw_dir, expected) unless File.exist?(expected)
+    end
+
+    # Fix: Hermes engine artifacts entpacken
+    hermes_artifacts = File.join(__dir__, 'Pods', 'hermes-engine-artifacts')
+    hermes_dir = File.join(__dir__, 'Pods', 'hermes-engine')
+    hermes_fw = File.join(hermes_dir, 'framework')
+
+    if Dir.exist?(hermes_artifacts) && !Dir.exist?(hermes_fw)
+      Dir.glob(File.join(hermes_artifacts, '*-debug.tar.gz')).each do |tarball|
+        system("chmod -R u+w '#{hermes_dir}/destroot' 2>/dev/null; tar -xzf '#{tarball}' -C '#{hermes_dir}'")
+      end
+      FileUtils.ln_s('.', hermes_fw) unless File.exist?(hermes_fw)
     end
   end
 end
