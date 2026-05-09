@@ -71,6 +71,12 @@ def enableProguardInReleaseBuilds = false
  * this variant is about 6MiB larger per architecture than default.
  */
 def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
+def releaseSigningConfigured = [
+    'MYAPP_UPLOAD_STORE_FILE',
+    'MYAPP_UPLOAD_STORE_PASSWORD',
+    'MYAPP_UPLOAD_KEY_ALIAS',
+    'MYAPP_UPLOAD_KEY_PASSWORD'
+].every { project.findProperty(it)?.toString()?.trim() }
 
 android {
     ndkVersion rootProject.ext.ndkVersion
@@ -82,8 +88,8 @@ android {
         applicationId "com.meinemedikamente"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 3
-        versionName "0.1.2"
+        versionCode 4
+        versionName "0.1.3"
     }
     signingConfigs {
         debug {
@@ -92,18 +98,40 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
+        release {
+            if (releaseSigningConfigured) {
+                storeFile file(project.property('MYAPP_UPLOAD_STORE_FILE'))
+                storePassword project.property('MYAPP_UPLOAD_STORE_PASSWORD')
+                keyAlias project.property('MYAPP_UPLOAD_KEY_ALIAS')
+                keyPassword project.property('MYAPP_UPLOAD_KEY_PASSWORD')
+            }
+        }
     }
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
         }
         release {
-            // Caution! In production, you need to generate your own keystore file.
-            // see https://reactnative.dev/docs/signed-apk-android.
-            signingConfig signingConfigs.debug
+            if (releaseSigningConfigured) {
+                signingConfig signingConfigs.release
+            }
             minifyEnabled enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
         }
+    }
+}
+
+tasks.register("validateReleaseSigning") {
+    doLast {
+        if (!releaseSigningConfigured) {
+            throw new GradleException("Release signing is not configured. Set MYAPP_UPLOAD_STORE_FILE, MYAPP_UPLOAD_STORE_PASSWORD, MYAPP_UPLOAD_KEY_ALIAS, and MYAPP_UPLOAD_KEY_PASSWORD outside Git.")
+        }
+    }
+}
+
+tasks.matching { it.name in ["assembleRelease", "bundleRelease"] }.configureEach {
+    if (project.hasProperty("requireReleaseSigning")) {
+        dependsOn("validateReleaseSigning")
     }
 }
 

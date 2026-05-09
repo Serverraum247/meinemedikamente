@@ -31,7 +31,7 @@ async function getIAP() {
 }
 
 // ─── Constants ────────────────────────────────────────────────────
-const PREMIUM_SKU = 'meine_medikamente_premium';
+const PREMIUM_SKU = 'mein_mediplan_premium';
 const KEY_PREMIUM = 'premium_aktiv';
 const KEY_SCANS_TODAY = 'premium_scans_date';
 const KEY_CALENDAR_MONTH = 'premium_calendar_month';

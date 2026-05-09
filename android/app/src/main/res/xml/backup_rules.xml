@@ -1,9 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <full-backup-content>
-    <!-- SQLite-Datenbank sichern -->
-    <include domain="database" path="." />
-    <!-- Shared Preferences sichern (Settings, Premium-Status) -->
-    <include domain="sharedpref" path="." />
-    <!-- Interne Dateien sichern (Medikamenten-Bilder, Exporte) -->
-    <include domain="file" path="." />
+    <exclude domain="database" path="." />
+    <exclude domain="sharedpref" path="." />
+    <exclude domain="file" path="." />
 </full-backup-content>
