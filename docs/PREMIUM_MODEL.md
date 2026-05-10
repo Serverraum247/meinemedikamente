@@ -10,10 +10,11 @@ Free must remain medically usable for basic medication tracking:
 - 1 person
 - 1 doctor
 - 1 reminder slot per medication
-- Stock warnings and intake tracking
+- Intake tracking
 - Basic units: `Tabletten`, `Kapseln`, `Tropfen`, `ml`, `Stück`
 - Barcode scans: 3 per day
-- Calendar entries: 2 per month
+- No calendar entries
+- No stock warnings
 
 ## Premium In-App Purchase
 
@@ -23,7 +24,9 @@ Premium unlocks larger households and more detailed workflows:
 - Unlimited people and doctors
 - All reminder slots and custom reminder times
 - Doctor assignment, doctor vacation management and calling
+- Stock warnings
 - Stock correction
+- Calendar entries for prescription pickup or similar appointments
 - Cloud backup
 - Unlimited barcode scans and calendar entries
 - Advanced units: `Hübe`, `g`, `Pflaster`, `Zäpfchen`, `Ampullen`, `Spritzen`

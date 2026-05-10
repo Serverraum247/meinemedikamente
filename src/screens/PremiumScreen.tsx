@@ -182,7 +182,7 @@ export default function PremiumScreen({ navigation }: { navigation: any }) {
             ) : (
               <>
                 {price ? (
-                  <Text style={styles.priceText}>{price} / Monat</Text>
+                  <Text style={styles.priceText}>{price} einmalig</Text>
                 ) : (
                   <Text style={styles.priceText}>In-App Kauf</Text>
                 )}
