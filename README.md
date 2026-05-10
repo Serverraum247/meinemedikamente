@@ -14,7 +14,7 @@ npm run typecheck
 npm test -- --runInBand --forceExit
 ```
 
-E2E-Flows liegen in `.maestro/` und laufen mit Maestro gegen `com.meinemedikamente`.
+E2E-Flows liegen in `.maestro/` und laufen mit Maestro gegen `dev.serverraum247.meinmediplan`.
 
 # Getting Started
 

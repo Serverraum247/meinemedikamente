@@ -1,4 +1,4 @@
-package com.meinemedikamente
+package dev.serverraum247.meinmediplan
 
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate

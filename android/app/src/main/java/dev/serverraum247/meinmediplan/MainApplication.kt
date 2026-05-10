@@ -1,4 +1,4 @@
-package com.meinemedikamente
+package dev.serverraum247.meinmediplan
 
 import android.app.Application
 import com.facebook.react.PackageList

@@ -1,4 +1,4 @@
-appId: com.meinemedikamente
+appId: dev.serverraum247.meinmediplan
 name: Weekday medication plan
 tags:
   - critical

@@ -73,7 +73,7 @@ adb -s emulator-5554 reverse tcp:8081 tcp:8081
 MAESTRO_DEVICE=emulator-5554 npm run e2e:android
 ```
 
-The current critical flows clear app state, launch `com.meinemedikamente`, add tablet, liquid and premium spray medications, confirm the success dialog, and verify the medication appears on the home screen. Android also checks that free users cannot choose premium units.
+The current critical flows clear app state, launch `dev.serverraum247.meinmediplan`, add tablet, liquid and premium spray medications, confirm the success dialog, and verify the medication appears on the home screen. Android also checks that free users cannot choose premium units.
 
 Android numeric keyboard automation can be unreliable for stock fields in debug builds. The add-medication E2E flows therefore use debug-only preset buttons in `AddMedikamentScreen` to save deterministic preset records through the same database path and success confirmation as the production save flow:
 

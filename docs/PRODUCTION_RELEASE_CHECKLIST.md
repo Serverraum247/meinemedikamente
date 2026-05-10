@@ -7,7 +7,8 @@ Diese Checkliste trennt lokale technische Vorbereitung von Schritten, die nur in
 ## Lokal erledigt
 
 - [x] App-Name ist in Android/iOS auf `Mein MediPlan` umgestellt.
-- [x] Version erhoeht auf `0.1.3`, Android `versionCode` auf `4`, iOS `CURRENT_PROJECT_VERSION` auf `4`.
+- [x] Version erhoeht auf `0.1.4`, Android `versionCode` auf `5`, iOS `CURRENT_PROJECT_VERSION` auf `5`.
+- [x] Android Package-Name fuer Google Play auf `dev.serverraum247.meinmediplan` umgestellt.
 - [x] Android Release-Signing nutzt nicht mehr den Debug-Key.
 - [x] Signaturdaten werden nicht in `build.gradle` gespeichert, sondern ueber Gradle-Properties erwartet.
 - [x] Android Auto Backup und Device Transfer fuer lokale Daten deaktiviert.
@@ -63,7 +64,7 @@ Offizielle Referenz: https://developer.android.com/studio/publish/app-signing
 ## Google Play Console
 
 - [ ] Entwicklerkonto erstellen oder bestehendes Konto verwenden.
-- [ ] App mit Package-Name `com.meinemedikamente` anlegen.
+- [ ] App mit Package-Name `dev.serverraum247.meinmediplan` anlegen.
 - [ ] Play App Signing aktivieren.
 - [ ] Signiertes `.aab` in internen Testtrack hochladen.
 - [ ] Interne Tester per E-Mail hinterlegen.

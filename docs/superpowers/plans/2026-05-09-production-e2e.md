@@ -38,7 +38,7 @@ Ignore `.superpowers/`, Maestro artifacts, and generated test reports so brainst
 
 - [x] **Step 1: Add smoke launch flow**
 
-Create a flow that clears app state, launches `com.meinemedikamente`, and verifies the empty medication list plus the add button.
+Create a flow that clears app state, launches `dev.serverraum247.meinmediplan`, and verifies the empty medication list plus the add button.
 
 - [x] **Step 2: Add medication creation flow**
 
