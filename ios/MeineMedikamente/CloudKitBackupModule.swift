@@ -23,6 +23,7 @@ class CloudKitBackup: NSObject {
 
   private let containerIdentifier = "iCloud.com.meinemedikamente.backup"
   private let recordType = "AppBackup"
+  private let recordName = "currentBackup"
   private let backupField = "backupData"
 
   // MARK: - Helper
@@ -31,31 +32,24 @@ class CloudKitBackup: NSObject {
     return CKContainer(identifier: containerIdentifier)
   }
 
-  private func fetchBackupRecords(from db: CKDatabase,
-                                  sortedByTimestamp: Bool = false,
-                                  completion: @escaping (Result<[CKRecord], Error>) -> Void) {
-    let query = CKQuery(recordType: recordType, predicate: NSPredicate(value: true))
-    if sortedByTimestamp {
-      query.sortDescriptors = [NSSortDescriptor(key: "timestamp", ascending: false)]
-    }
+  private func getBackupRecordID() -> CKRecord.ID {
+    return CKRecord.ID(recordName: recordName, zoneID: CKRecordZone.default().zoneID)
+  }
 
-    db.fetch(withQuery: query,
-             inZoneWith: CKRecordZone.default().zoneID,
-             desiredKeys: nil,
-             resultsLimit: CKQueryOperation.maximumResults) { result in
-      switch result {
-      case .success(let queryResult):
-        do {
-          let records = try queryResult.matchResults.map { _, recordResult in
-            try recordResult.get()
-          }
-          completion(.success(records))
-        } catch {
-          completion(.failure(error))
+  private func fetchBackupRecord(from db: CKDatabase,
+                                 completion: @escaping (Result<CKRecord?, Error>) -> Void) {
+    db.fetch(withRecordID: getBackupRecordID()) { record, error in
+      if let error = error {
+        if let ckError = error as? CKError, ckError.code == .unknownItem {
+          completion(.success(nil))
+          return
         }
-      case .failure(let error):
+
         completion(.failure(error))
+        return
       }
+
+      completion(.success(record))
     }
   }
 
@@ -66,39 +60,20 @@ class CloudKitBackup: NSObject {
     let container = getContainer()
     let privateDB = container.privateCloudDatabase
 
-    let record = CKRecord(recordType: recordType)
-    record[backupField] = jsonString as CKRecordValue
-    record["timestamp"] = Date() as CKRecordValue
-
-    // Altes Backup loeschen, dann neues erstellen
-    fetchBackupRecords(from: privateDB) { [weak self] result in
+    fetchBackupRecord(from: privateDB) { [weak self] result in
       switch result {
-      case .success(let recordsToDelete):
-        let deleteOperations = recordsToDelete.map { $0.recordID }
-
-        guard !deleteOperations.isEmpty else {
-          self?.saveRecord(record, to: privateDB, resolve: resolve, reject: reject)
+      case .success(let existingRecord):
+        guard let self = self else {
           return
         }
 
-        let deleteOp = CKModifyRecordsOperation(recordsToSave: nil, recordIDsToDelete: deleteOperations)
-        deleteOp.modifyRecordsResultBlock = { result in
-          if case .failure(let error) = result {
-            // Wenn nichts zu loeschen war, trotzdem weitermachen
-            print("[CloudKit] Loeschen alter Backups: \(error.localizedDescription)")
-          }
-          self?.saveRecord(record, to: privateDB, resolve: resolve, reject: reject)
-        }
-        privateDB.add(deleteOp)
+        let record = existingRecord ?? CKRecord(recordType: self.recordType, recordID: self.getBackupRecordID())
+        record[self.backupField] = jsonString as CKRecordValue
+        record["timestamp"] = Date() as CKRecordValue
+        self.saveRecord(record, to: privateDB, resolve: resolve, reject: reject)
 
       case .failure(let error):
-        // Zone nicht gefunden = noch kein Backup vorhanden, einfach erstellen
-        if (error as? CKError)?.errorCode == CKError.unknownItem.rawValue {
-          self?.saveRecord(record, to: privateDB, resolve: resolve, reject: reject)
-          return
-        }
-
-        reject("CLOUDKIT_QUERY_ERROR", "Backup-Pruefung fehlgeschlagen: \(error.localizedDescription)", error)
+        reject("CLOUDKIT_FETCH_ERROR", "Backup-Pruefung fehlgeschlagen: \(error.localizedDescription)", error)
       }
     }
   }
@@ -118,15 +93,15 @@ class CloudKitBackup: NSObject {
   // MARK: - Backup wiederherstellen
 
   @objc func restoreBackup(_ resolve: @escaping RCTPromiseResolveBlock,
-                             reject: @escaping RCTPromiseRejectBlock) {
+                             rejecter reject: @escaping RCTPromiseRejectBlock) {
     let container = getContainer()
     let privateDB = container.privateCloudDatabase
 
-    fetchBackupRecords(from: privateDB, sortedByTimestamp: true) { result in
+    fetchBackupRecord(from: privateDB) { result in
       switch result {
-      case .success(let records):
-        guard let latestRecord = records.first,
-              let jsonString = latestRecord[self.backupField] as? String else {
+      case .success(let record):
+        guard let record = record,
+              let jsonString = record[self.backupField] as? String else {
           resolve(nil)
           return
         }
@@ -142,15 +117,15 @@ class CloudKitBackup: NSObject {
   // MARK: - Backup-Info
 
   @objc func getBackupInfo(_ resolve: @escaping RCTPromiseResolveBlock,
-                            reject: @escaping RCTPromiseRejectBlock) {
+                            rejecter reject: @escaping RCTPromiseRejectBlock) {
     let container = getContainer()
     let privateDB = container.privateCloudDatabase
 
-    fetchBackupRecords(from: privateDB, sortedByTimestamp: true) { result in
-      guard case .success(let records) = result,
-            let latestRecord = records.first,
-            let jsonString = latestRecord[self.backupField] as? String,
-            let timestamp = latestRecord["timestamp"] as? Date else {
+    fetchBackupRecord(from: privateDB) { result in
+      guard case .success(let record) = result,
+            let record = record,
+            let jsonString = record[self.backupField] as? String,
+            let timestamp = record["timestamp"] as? Date else {
         resolve(nil)
         return
       }
@@ -178,28 +153,18 @@ class CloudKitBackup: NSObject {
     let container = getContainer()
     let privateDB = container.privateCloudDatabase
 
-    fetchBackupRecords(from: privateDB) { result in
-      switch result {
-      case .success(let records):
-        guard !records.isEmpty else {
+    privateDB.delete(withRecordID: getBackupRecordID()) { _, error in
+      if let error = error {
+        if let ckError = error as? CKError, ckError.code == .unknownItem {
           resolve(true)
           return
         }
 
-        let recordIDs = records.map { $0.recordID }
-        let deleteOp = CKModifyRecordsOperation(recordsToSave: nil, recordIDsToDelete: recordIDs)
-        deleteOp.modifyRecordsResultBlock = { result in
-          if case .failure(let error) = result {
-            reject("CLOUDKIT_DELETE_ERROR", "Löschen fehlgeschlagen: \(error.localizedDescription)", error)
-            return
-          }
-          resolve(true)
-        }
-        privateDB.add(deleteOp)
-
-      case .failure(let error):
         reject("CLOUDKIT_DELETE_ERROR", "Löschen fehlgeschlagen: \(error.localizedDescription)", error)
+        return
       }
+
+      resolve(true)
     }
   }
 

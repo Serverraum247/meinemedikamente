@@ -61,6 +61,46 @@ final class MeineMedikamenteUITests: XCTestCase {
     waitForMedicationCardLabelContaining("bis 22.05.2026")
   }
 
+  func testICloudBackupCreateStatusAndRestore() throws {
+    openAddMedication()
+    enablePremiumOverrideFromCurrentForm()
+
+    app.terminate()
+    app.launch()
+
+    openBackup()
+
+    XCTAssertTrue(firstElement(label: "Lokale Daten auf diesem Gerät").waitForExistence(timeout: 10))
+
+    let createButton = app.buttons["Cloud-Backup erstellen"]
+    scrollUntilHittable(createButton)
+    createButton.tap()
+
+    let createAlert = app.alerts["iCloud-Backup erstellen"]
+    XCTAssertTrue(createAlert.waitForExistence(timeout: 10))
+    createAlert.buttons["Backup erstellen"].tap()
+
+    let createSuccess = app.alerts["Backup erfolgreich"]
+    XCTAssertTrue(createSuccess.waitForExistence(timeout: 30))
+    createSuccess.buttons["OK"].tap()
+
+    waitForBackupStatus()
+
+    let restoreButton = app.buttons["Backup wiederherstellen"]
+    scrollUntilHittable(restoreButton)
+    restoreButton.tap()
+
+    let restoreAlert = app.alerts["Backup wiederherstellen"]
+    XCTAssertTrue(restoreAlert.waitForExistence(timeout: 10))
+    restoreAlert.buttons["Wiederherstellen"].tap()
+
+    let restoreSuccess = app.alerts["Wiederherstellung erfolgreich"]
+    XCTAssertTrue(restoreSuccess.waitForExistence(timeout: 30))
+    restoreSuccess.buttons["OK"].tap()
+
+    waitForBackupStatus()
+  }
+
   private func addMedication(
     presetButton: String,
     expectedName: String,
@@ -123,6 +163,16 @@ final class MeineMedikamenteUITests: XCTestCase {
     }
   }
 
+  private func openBackup() {
+    let menuButton = app.buttons["Menü öffnen"]
+    XCTAssertTrue(menuButton.waitForExistence(timeout: 10))
+    menuButton.tap()
+
+    let backupButton = app.buttons["Cloud-Backup"]
+    XCTAssertTrue(backupButton.waitForExistence(timeout: 10))
+    backupButton.tap()
+  }
+
   private func scrollUntilHittable(_ element: XCUIElement, maxScrolls: Int = 8) {
     for _ in 0..<maxScrolls where !element.isHittable {
       app.swipeUp()
@@ -169,5 +219,12 @@ final class MeineMedikamenteUITests: XCTestCase {
   private func waitForMedicationCardLabelContaining(_ text: String) {
     let predicate = NSPredicate(format: "label CONTAINS %@", text)
     XCTAssertTrue(app.buttons.matching(predicate).firstMatch.waitForExistence(timeout: 10))
+  }
+
+  private func waitForBackupStatus() {
+    let lastBackupPredicate = NSPredicate(format: "label CONTAINS %@", "Letztes Backup:")
+    let medicationCountPredicate = NSPredicate(format: "label CONTAINS %@", "Medikamente gesichert")
+    XCTAssertTrue(app.staticTexts.matching(lastBackupPredicate).firstMatch.waitForExistence(timeout: 20))
+    XCTAssertTrue(app.staticTexts.matching(medicationCountPredicate).firstMatch.waitForExistence(timeout: 20))
   }
 }

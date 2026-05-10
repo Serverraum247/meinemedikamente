@@ -146,6 +146,7 @@
 				00E356EA1AD99517003FC87E /* Sources */,
 				00E356EB1AD99517003FC87E /* Frameworks */,
 				00E356F21AD99517003FC87E /* Resources */,
+				7D4B8C6B2F3E4D5C9A1B0E7F /* Strip test runner attributes before signing */,
 			);
 			buildRules = (
 			);
@@ -168,6 +169,7 @@
 				00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */,
 				00EEFC60759A1932668264C0 /* [CP] Embed Pods Frameworks */,
 				E235C05ADACE081382539298 /* [CP] Copy Pods Resources */,
+				7D4B8C6A2F3E4D5C9A1B0E7F /* Strip extended attributes before signing */,
 			);
 			buildRules = (
 			);
@@ -316,6 +318,44 @@
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-MeineMedikamente/Pods-MeineMedikamente-resources.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
+		7D4B8C6A2F3E4D5C9A1B0E7F /* Strip extended attributes before signing */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Strip extended attributes before signing";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -e\nAPP_PATH=\"${TARGET_BUILD_DIR}/${FULL_PRODUCT_NAME}\"\nif [ -d \"$APP_PATH\" ]; then\n  /usr/bin/xattr -c \"$APP_PATH\" 2>/dev/null || true\n  /usr/bin/xattr -r -c \"$APP_PATH\" 2>/dev/null || true\nfi\n";
+			showEnvVarsInLog = 0;
+		};
+		7D4B8C6B2F3E4D5C9A1B0E7F /* Strip test runner attributes before signing */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Strip test runner attributes before signing";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -e\nfor APP_PATH in \"${TARGET_BUILD_DIR}/${FULL_PRODUCT_NAME}\" \"${TARGET_BUILD_DIR}/${PRODUCT_NAME}-Runner.app\"; do\n  if [ -d \"$APP_PATH\" ]; then\n    /usr/bin/xattr -c \"$APP_PATH\" 2>/dev/null || true\n    /usr/bin/xattr -r -c \"$APP_PATH\" 2>/dev/null || true\n  fi\ndone\n";
+			showEnvVarsInLog = 0;
+		};
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -413,7 +453,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = MeineMedikamente/MeineMedikamente.entitlements;
-				CURRENT_PROJECT_VERSION = 7;
+				CURRENT_PROJECT_VERSION = 8;
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = MeineMedikamente/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Mein MediPlan";
@@ -423,7 +463,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.1.6;
+				MARKETING_VERSION = 0.1.7;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-ObjC",
@@ -446,7 +486,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = MeineMedikamente/MeineMedikamente.entitlements;
-				CURRENT_PROJECT_VERSION = 7;
+				CURRENT_PROJECT_VERSION = 8;
 				INFOPLIST_FILE = MeineMedikamente/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Mein MediPlan";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.medical";
@@ -455,7 +495,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.1.6;
+				MARKETING_VERSION = 0.1.7;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-ObjC",

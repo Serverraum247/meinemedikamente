@@ -318,12 +318,20 @@ export default function HomeScreen({ navigation }: Props) {
         animationType="fade"
         onRequestClose={() => setMenueOffen(false)}
       >
-        <Pressable style={styles.menueOverlay} onPress={() => setMenueOffen(false)}>
-          <Pressable style={styles.menuePanel} onPress={() => {}}>
+        <Pressable
+          style={styles.menueOverlay}
+          onPress={() => setMenueOffen(false)}
+          accessible={false}
+        >
+          <Pressable style={styles.menuePanel} onPress={() => {}} accessible={false}>
             {/* Menue-Header */}
             <View style={styles.menueHeader}>
               <Text style={styles.menueTitle}>Mein MediPlan</Text>
-              <TouchableOpacity onPress={() => setMenueOffen(false)} accessibilityLabel="Menü schließen">
+              <TouchableOpacity
+                onPress={() => setMenueOffen(false)}
+                accessibilityRole="button"
+                accessibilityLabel="Menü schließen"
+              >
                 <Text style={styles.menueClose}>✕</Text>
               </TouchableOpacity>
             </View>
