@@ -15,6 +15,8 @@ import {
   ScrollView,
   Alert,
   Switch,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -79,7 +81,59 @@ export default function EditMedikamentScreen({ route, navigation }: Props) {
   const [gewaehlterArzt, setGewaehlterArzt] = useState('');
   const [staerkeWert, setStaerkeWert] = useState('');
   const [staerkeEinheit, setStaerkeEinheit] = useState('');
+  const skipUnsavedPromptRef = React.useRef(false);
   const nameSuggestions = useMemo(() => getMedicationNameSuggestions(name), [name]);
+
+  const isDirty = useMemo(() => {
+    if (!medikament) {
+      return false;
+    }
+
+    let originalPlan = '[]';
+    try {
+      originalPlan = serializeEinnahmeplan(parseEinnahmeplan(medikament.einnahme_uhrzeiten || '[]'));
+    } catch {
+      originalPlan = '[]';
+    }
+
+    return (
+      name !== medikament.name ||
+      zusatz !== (medikament.zusatz || '') ||
+      bestand !== String(medikament.aktueller_bestand) ||
+      einzeldosis !== String(medikament.einzeldosis) ||
+      einheit !== medikament.einheit ||
+      pzn !== medikament.pzn ||
+      packungsgroesse !== String(medikament.packungsgroesse) ||
+      warnungAb !== String(medikament.warnung_ab_bestand) ||
+      erinnerungAktiv !== (medikament.erinnerung_aktiv === 1) ||
+      serializeEinnahmeplan(einnahmePlan) !== originalPlan ||
+      autoAbzugAktiv !== (medikament.auto_abzug_aktiv === 1) ||
+      gewaehlterArzt !== (medikament.arzt_id || '') ||
+      staerkeWert !== (medikament.staerke_wert ? String(medikament.staerke_wert) : '') ||
+      staerkeEinheit !== (medikament.staerke_einheit || '')
+    );
+  }, [
+    autoAbzugAktiv,
+    bestand,
+    einheit,
+    einnahmePlan,
+    einzeldosis,
+    erinnerungAktiv,
+    gewaehlterArzt,
+    medikament,
+    name,
+    packungsgroesse,
+    pzn,
+    staerkeEinheit,
+    staerkeWert,
+    warnungAb,
+    zusatz,
+  ]);
+
+  const goBackAfterSave = React.useCallback(() => {
+    skipUnsavedPromptRef.current = true;
+    navigation.goBack();
+  }, [navigation]);
 
   const applyNameSuggestion = (suggestion: string) => {
     setName(suggestion);
@@ -129,7 +183,7 @@ export default function EditMedikamentScreen({ route, navigation }: Props) {
     }
   }, [medikamente, medikamentId, navigation]);
 
-  const handleSave = async (duplicateConfirmed = false) => {
+  const handleSave = React.useCallback(async (duplicateConfirmed = false) => {
     if (!medikament) return;
 
     if (isPremiumMedicationUnit(einheit) && !premium) {
@@ -199,13 +253,76 @@ export default function EditMedikamentScreen({ route, navigation }: Props) {
       Alert.alert(
         'Gespeichert',
         `"${name.trim()}" wurde aktualisiert.`,
-        [{ text: 'OK', onPress: () => navigation.goBack() }]
+        [{ text: 'OK', onPress: goBackAfterSave }]
       );
     } catch (error) {
       Alert.alert('Fehler', 'Änderung konnte nicht gespeichert werden.');
       logger.error(error);
     }
-  };
+  }, [
+    autoAbzugAktiv,
+    bearbeiteMedikament,
+    bestand,
+    einheit,
+    einnahmePlan,
+    einzeldosis,
+    erinnerungAktiv,
+    gewaehlterArzt,
+    goBackAfterSave,
+    medikament,
+    medikamente,
+    name,
+    navigation,
+    packungsgroesse,
+    premium,
+    pzn,
+    staerkeEinheit,
+    staerkeWert,
+    warnungAb,
+    zusatz,
+  ]);
+
+  React.useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <TouchableOpacity
+          style={styles.headerSaveButton}
+          onPress={() => handleSave()}
+          accessibilityRole="button"
+          accessibilityLabel="Änderungen speichern"
+        >
+          <Text style={styles.headerSaveButtonText}>Speichern</Text>
+        </TouchableOpacity>
+      ),
+    });
+  }, [handleSave, navigation]);
+
+  React.useEffect(() => {
+    return navigation.addListener('beforeRemove', event => {
+      if (skipUnsavedPromptRef.current || !isDirty) {
+        return;
+      }
+
+      event.preventDefault();
+
+      Alert.alert(
+        'Änderungen speichern?',
+        'Willst du die Änderungen speichern, bevor du gehst?',
+        [
+          { text: 'Abbrechen', style: 'cancel' },
+          {
+            text: 'Verwerfen',
+            style: 'destructive',
+            onPress: () => {
+              skipUnsavedPromptRef.current = true;
+              navigation.dispatch(event.data.action);
+            },
+          },
+          { text: 'Speichern', onPress: () => void handleSave() },
+        ],
+      );
+    });
+  }, [handleSave, isDirty, navigation]);
 
   if (!medikament) {
     return (
@@ -217,7 +334,16 @@ export default function EditMedikamentScreen({ route, navigation }: Props) {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <KeyboardAvoidingView
+        style={styles.keyboardAvoidingContainer}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'none'}
+      >
         {/* Name */}
         <View style={styles.fieldGroup}>
           <Text style={styles.label}>Name des Medikaments *</Text>
@@ -608,7 +734,10 @@ export default function EditMedikamentScreen({ route, navigation }: Props) {
           </View>
         </PremiumGate>
 
+        </ScrollView>
+
         {/* Speichern */}
+        <View style={styles.saveFooter}>
         <TouchableOpacity
           style={styles.saveButton}
           accessibilityLabel="Änderungen speichern"
@@ -618,7 +747,8 @@ export default function EditMedikamentScreen({ route, navigation }: Props) {
         >
           <Text style={styles.saveButtonText}>Änderungen speichern</Text>
         </TouchableOpacity>
-      </ScrollView>
+        </View>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -635,9 +765,25 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  keyboardAvoidingContainer: {
+    flex: 1,
+  },
+  scroll: {
+    flex: 1,
+  },
+  headerSaveButton: {
+    minHeight: 40,
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  headerSaveButtonText: {
+    color: '#0B63CE',
+    fontSize: 17,
+    fontWeight: '700',
+  },
   content: {
     padding: 16,
-    paddingBottom: 40,
+    paddingBottom: 24,
   },
   fieldGroup: {
     marginBottom: 20,
@@ -718,9 +864,16 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 20,
     alignItems: 'center',
-    marginTop: 8,
     minHeight: 56,
     justifyContent: 'center',
+  },
+  saveFooter: {
+    backgroundColor: '#f5f5f5',
+    borderTopWidth: 1,
+    borderTopColor: '#E0E0E0',
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 14,
   },
   saveButtonText: {
     fontSize: 20,

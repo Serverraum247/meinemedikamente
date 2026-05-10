@@ -16,6 +16,8 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -84,7 +86,47 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
   const [gewaehlterArzt, setGewaehlterArzt] = useState('');
   const [staerkeWert, setStaerkeWert] = useState('');
   const [staerkeEinheit, setStaerkeEinheit] = useState('');
+  const skipUnsavedPromptRef = React.useRef(false);
   const nameSuggestions = useMemo(() => getMedicationNameSuggestions(name), [name]);
+
+  const isDirty = useMemo(
+    () =>
+      name.trim().length > 0 ||
+      zusatz.trim().length > 0 ||
+      bestand.trim().length > 0 ||
+      einzeldosis !== '1' ||
+      einheit !== 'Tabletten' ||
+      pzn.trim().length > 0 ||
+      packungsgroesse.trim().length > 0 ||
+      warnungAb !== '7' ||
+      erinnerungAktiv ||
+      einnahmePlan.length > 0 ||
+      autoAbzugAktiv ||
+      gewaehlterArzt.trim().length > 0 ||
+      staerkeWert.trim().length > 0 ||
+      staerkeEinheit.trim().length > 0,
+    [
+      autoAbzugAktiv,
+      bestand,
+      einheit,
+      einnahmePlan.length,
+      einzeldosis,
+      erinnerungAktiv,
+      gewaehlterArzt,
+      name,
+      packungsgroesse,
+      pzn,
+      staerkeEinheit,
+      staerkeWert,
+      warnungAb,
+      zusatz,
+    ],
+  );
+
+  const goBackAfterSave = React.useCallback(() => {
+    skipUnsavedPromptRef.current = true;
+    navigation.goBack();
+  }, [navigation]);
 
   const applyNameSuggestion = (suggestion: string) => {
     setName(suggestion);
@@ -120,7 +162,7 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
     }
   }, [route.params?.scannedPZN, route.params?.suggestedName]);
 
-  const handleSave = async (duplicateConfirmed = false) => {
+  const handleSave = React.useCallback(async (duplicateConfirmed = false) => {
     if (isPremiumMedicationUnit(einheit) && !premium) {
       showPremiumRequiredAlert('Erweiterte Darreichungsformen sind nur mit Premium möglich.', navigation);
       return;
@@ -191,13 +233,76 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
       Alert.alert(
         'Gespeichert',
         `"${name.trim()}" wurde hinzugefügt.`,
-        [{ text: 'OK', onPress: () => navigation.goBack() }]
+        [{ text: 'OK', onPress: goBackAfterSave }]
       );
     } catch (error) {
       Alert.alert('Fehler', 'Medikament konnte nicht gespeichert werden.');
       logger.error(error);
     }
-  };
+  }, [
+    aktivePerson?.id,
+    addMedikament,
+    autoAbzugAktiv,
+    bestand,
+    einheit,
+    einnahmePlan,
+    einzeldosis,
+    erinnerungAktiv,
+    gewaehlterArzt,
+    goBackAfterSave,
+    medikamente,
+    name,
+    navigation,
+    packungsgroesse,
+    premium,
+    pzn,
+    staerkeEinheit,
+    staerkeWert,
+    warnungAb,
+    zusatz,
+  ]);
+
+  React.useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <TouchableOpacity
+          style={styles.headerSaveButton}
+          onPress={() => handleSave()}
+          accessibilityRole="button"
+          accessibilityLabel="Medikament speichern"
+        >
+          <Text style={styles.headerSaveButtonText}>Speichern</Text>
+        </TouchableOpacity>
+      ),
+    });
+  }, [handleSave, navigation]);
+
+  React.useEffect(() => {
+    return navigation.addListener('beforeRemove', event => {
+      if (skipUnsavedPromptRef.current || !isDirty) {
+        return;
+      }
+
+      event.preventDefault();
+
+      Alert.alert(
+        'Änderungen speichern?',
+        'Willst du die Eingaben speichern, bevor du gehst?',
+        [
+          { text: 'Abbrechen', style: 'cancel' },
+          {
+            text: 'Verwerfen',
+            style: 'destructive',
+            onPress: () => {
+              skipUnsavedPromptRef.current = true;
+              navigation.dispatch(event.data.action);
+            },
+          },
+          { text: 'Speichern', onPress: () => void handleSave() },
+        ],
+      );
+    });
+  }, [handleSave, isDirty, navigation]);
 
   const applyTestPreset = (presetKey: MedicationTestPresetKey) => {
     const preset = getMedicationTestPreset(presetKey);
@@ -246,7 +351,7 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
       Alert.alert(
         'Gespeichert',
         `"${preset.name}" wurde hinzugefügt.`,
-        [{ text: 'OK', onPress: () => navigation.goBack() }]
+        [{ text: 'OK', onPress: goBackAfterSave }]
       );
     } catch (error) {
       Alert.alert('Fehler', 'Medikament konnte nicht gespeichert werden.');
@@ -268,10 +373,16 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView
-        contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled"
+      <KeyboardAvoidingView
+        style={styles.keyboardAvoidingContainer}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'none'}
+        >
         {__DEV__ && (
           <View style={styles.testPresetBox}>
             <Text style={styles.testPresetTitle}>Entwicklungsmodus</Text>
@@ -793,7 +904,10 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
           </>
         )}
 
+        </ScrollView>
+
         {/* Speichern */}
+        <View style={styles.saveFooter}>
         <TouchableOpacity
           style={styles.saveButton}
           testID="save-medication-button"
@@ -804,7 +918,8 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
         >
           <Text style={styles.saveButtonText}>Medikament speichern</Text>
         </TouchableOpacity>
-      </ScrollView>
+        </View>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -824,9 +939,25 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8f8f6',
   },
+  keyboardAvoidingContainer: {
+    flex: 1,
+  },
+  scroll: {
+    flex: 1,
+  },
+  headerSaveButton: {
+    minHeight: 40,
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  headerSaveButtonText: {
+    color: '#0B63CE',
+    fontSize: 17,
+    fontWeight: '700',
+  },
   content: {
     padding: 20,
-    paddingBottom: 60,
+    paddingBottom: 24,
   },
 
   // Abschnitts-Ueberschriften
@@ -992,9 +1123,16 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 18,
     alignItems: 'center',
-    marginTop: 16,
     minHeight: 58,
     justifyContent: 'center',
+  },
+  saveFooter: {
+    backgroundColor: '#f8f8f6',
+    borderTopWidth: 1,
+    borderTopColor: '#E2E2DC',
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 14,
   },
   saveButtonText: {
     fontSize: 21,
