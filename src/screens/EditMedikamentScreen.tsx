@@ -5,7 +5,7 @@
  * Senioren-freundlich: Groesse Eingabefelder, klare Labels, Zurück-Button.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -43,6 +43,11 @@ import type { ArztRow } from '../database/Database';
 import PremiumGate from '../components/PremiumGate';
 import { logger } from '../utils/Logger';
 import { MEDICATION_UNITS, isPremiumMedicationUnit } from '../constants/MedicationUnits';
+import {
+  formatMedicationNameSuggestion,
+  getMedicationNameSuggestionMetadata,
+  getMedicationNameSuggestions,
+} from '../constants/MedicationNameSuggestions';
 import { showPremiumRequiredAlert } from '../utils/PremiumAlerts';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'EditMedikament'>;
@@ -73,6 +78,15 @@ export default function EditMedikamentScreen({ route, navigation }: Props) {
   const [gewaehlterArzt, setGewaehlterArzt] = useState('');
   const [staerkeWert, setStaerkeWert] = useState('');
   const [staerkeEinheit, setStaerkeEinheit] = useState('');
+  const nameSuggestions = useMemo(() => getMedicationNameSuggestions(name), [name]);
+
+  const applyNameSuggestion = (suggestion: string) => {
+    setName(suggestion);
+    const activeIngredient = getMedicationNameSuggestionMetadata(suggestion)?.activeIngredient;
+    if (activeIngredient && !zusatz.trim()) {
+      setZusatz(activeIngredient);
+    }
+  };
 
   // Medikament-Daten laden
 
@@ -198,6 +212,21 @@ export default function EditMedikamentScreen({ route, navigation }: Props) {
             autoComplete="off"
             textContentType="none"
           />
+          {nameSuggestions.length > 0 && (
+            <View style={styles.suggestionBox} accessibilityLabel="Namensvorschläge">
+              {nameSuggestions.map((suggestion) => (
+                <TouchableOpacity
+                  key={suggestion}
+                  style={styles.suggestionButton}
+                  onPress={() => applyNameSuggestion(suggestion)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${suggestion} übernehmen`}
+                >
+                  <Text style={styles.suggestionText}>{formatMedicationNameSuggestion(suggestion)}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
         </View>
 
         {/* Zusatz / Wirkstoff-Alias */}
@@ -612,6 +641,25 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#888',
     marginTop: 4,
+  },
+  suggestionBox: {
+    marginTop: 10,
+    gap: 8,
+  },
+  suggestionButton: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#B8C2CC',
+    borderWidth: 2,
+    borderRadius: 12,
+    minHeight: 52,
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  suggestionText: {
+    color: '#1a1a2e',
+    fontSize: 19,
+    fontWeight: '600',
   },
   einheitRow: {
     flexDirection: 'row',
