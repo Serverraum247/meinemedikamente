@@ -320,6 +320,10 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
             placeholder="z.B. Aspirin 100"
             placeholderTextColor="#999"
             accessibilityLabel="Name"
+            autoCorrect={false}
+            spellCheck={false}
+            autoComplete="off"
+            textContentType="none"
             autoFocus
           />
         </View>

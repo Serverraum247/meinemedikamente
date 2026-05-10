@@ -193,6 +193,10 @@ export default function EditMedikamentScreen({ route, navigation }: Props) {
             onChangeText={setName}
             placeholder="z.B. Aspirin"
             placeholderTextColor="#999"
+            autoCorrect={false}
+            spellCheck={false}
+            autoComplete="off"
+            textContentType="none"
           />
         </View>
 
