@@ -7,7 +7,7 @@ Diese Checkliste trennt lokale technische Vorbereitung von Schritten, die nur in
 ## Lokal erledigt
 
 - [x] App-Name ist in Android/iOS auf `Mein MediPlan` umgestellt.
-- [x] Version erhoeht auf `0.1.5`, Android `versionCode` auf `6`, iOS `CURRENT_PROJECT_VERSION` auf `6`.
+- [x] Version erhoeht auf `0.1.6`, Android `versionCode` auf `7`, iOS `CURRENT_PROJECT_VERSION` auf `7`.
 - [x] Android Package-Name fuer Google Play auf `dev.serverraum247.meinmediplan` umgestellt.
 - [x] Android Release-Signing nutzt nicht mehr den Debug-Key.
 - [x] Signaturdaten werden nicht in `build.gradle` gespeichert, sondern ueber Gradle-Properties erwartet.
@@ -163,6 +163,7 @@ Offizielle Referenz: https://support.google.com/googleplay/android-developer/ans
 - [ ] Free/Premium-Grenzen pruefen.
 - [ ] PZN-/Barcode-Scan pruefen.
 - [ ] Cloud-Backup erstellen, App neu öffnen und Backup-Status prüfen.
+- [ ] Premium-Export pruefen: Plan der aktiven Person als Text und PDF teilen.
 - [ ] Medikamentenvarianten testen: Tabletten, Flüssigkeit/ml, Hübe, Mo/Mi/Fr, nur 3 Einnahmetage.
 - [ ] Senioren-UI-Check auf echtem Android-Geraet.
 - [ ] Haftungsausschluss, Kontakt und Datenschutzerklaerung in der App pruefen.

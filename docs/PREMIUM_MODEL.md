@@ -28,6 +28,7 @@ Premium unlocks larger households and more detailed workflows:
 - Stock correction
 - Calendar entries for prescription pickup or similar appointments
 - Cloud backup
+- Share the current person's medication plan as text or PDF
 - Unlimited barcode scans and calendar entries
 - Advanced units: `Hübe`, `g`, `Pflaster`, `Zäpfchen`, `Ampullen`, `Spritzen`
 
@@ -38,6 +39,7 @@ E2E must verify both sides:
 - Free can create a basic solid medication and a basic liquid medication.
 - Free is blocked when selecting an advanced unit.
 - Premium/dev override can create at least one advanced unit medication.
+- Premium/dev override can share the selected person's medication plan as text/PDF.
 
 Implemented flow files:
 

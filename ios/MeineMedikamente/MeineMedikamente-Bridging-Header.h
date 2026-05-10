@@ -8,3 +8,4 @@
 #import <React-Core/React/RCTBridgeModule.h>
 #import <React-Core/React/RCTBridge.h>
 #import <React-Core/React/RCTEventDispatcher.h>
+#import <React-Core/React/RCTUtils.h>

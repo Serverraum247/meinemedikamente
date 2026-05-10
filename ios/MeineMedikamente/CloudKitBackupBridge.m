@@ -23,3 +23,13 @@ RCT_EXTERN_METHOD(deleteBackup:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 
 @end
+
+@interface RCT_EXTERN_MODULE(MedicationPlanShare, NSObject)
+
+RCT_EXTERN_METHOD(sharePdf:(NSString *)title
+                  body:(NSString *)body
+                  fileName:(NSString *)fileName
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
+@end

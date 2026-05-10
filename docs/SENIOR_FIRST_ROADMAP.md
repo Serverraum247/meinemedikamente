@@ -24,13 +24,15 @@ Premium darf Komfort und Umfang freischalten:
 - Bestandwarnung
 - Kalendertermine
 - Cloud-Backup
+- Medikamentenplan als Text/PDF teilen
 - direkte Arzt-Anrufe aus der App
 
 ## Nächste Funktionsblöcke
 
 1. Notfall-/Arztliste als Export oder Teilen-Funktion
    - Ziel: Eine aktuelle Medikamentenliste kann beim Arzt, in der Apotheke, im Notfall oder mit Angehörigen geteilt werden.
-   - MVP: Teilen als Text oder PDF mit Medikament, Wirkstärke, Einnahmeplan, Bestand, Arztkontakt und App-Version.
+   - MVP: Teilen als Text oder PDF mit Medikament, Wirkstärke, Einnahmeplan, PZN und Arztkontakt.
+   - Bewusst nicht im Export: aktueller Bestand, Reichweite, Warnschwelle und technische IDs.
 
 2. Angehörigen-Modus ohne Zwangs-Cloud
    - Ziel: Angehörige können helfen, ohne dass ältere Nutzer sofort ein Konto oder Sync verstehen müssen.

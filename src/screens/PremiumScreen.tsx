@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, SafeAreaView, StyleSheet, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Alert, ActivityIndicator } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { isPremium, purchasePremium, getProductInfo, initIAP } from '../services/PremiumService';
 
 interface FeatureItem {
@@ -22,6 +23,7 @@ const FEATURES: FeatureItem[] = [
   { icon: '⏰', label: 'Erinnerungen', freeText: 'Standard', premiumText: 'Unbegrenzt', isPremiumOnly: true },
   { icon: '🕐', label: 'Uhrzeiten', freeText: 'Standard', premiumText: 'Individuell', isPremiumOnly: true },
   { icon: '☁️', label: 'Cloud-Backup', freeText: 'Nein', premiumText: 'Ja', isPremiumOnly: true },
+  { icon: '📄', label: 'Plan teilen', freeText: 'Nein', premiumText: 'Text + PDF', isPremiumOnly: true },
 ];
 
 export default function PremiumScreen({ navigation }: { navigation: any }) {

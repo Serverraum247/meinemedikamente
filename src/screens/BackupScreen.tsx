@@ -5,11 +5,11 @@ import {
   StyleSheet,
   TouchableOpacity,
   Alert,
-  SafeAreaView,
   ActivityIndicator,
   ScrollView,
   Platform,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import { uploadBackup, getBackupInfo, restoreBackup, BackupInfo as ServiceBackupInfo } from '../services/BackupService';
@@ -234,10 +234,18 @@ const BackupScreen: React.FC<BackupScreenProps> = ({ navigation }) => {
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
       >
+        <View style={styles.localInfoContainer}>
+          <Text style={styles.localInfoIcon}>📱</Text>
+          <Text style={styles.localInfoTitle}>Lokale Daten auf diesem Gerät</Text>
+          <Text style={styles.localInfoText}>
+            Ihre App-Daten liegen zuerst lokal auf diesem Handy. Ein Cloud-Backup ist eine zusätzliche Premium-Sicherung.
+          </Text>
+        </View>
+
         {!isPremium && !loadingInfo ? (
           <PremiumGate
             featureName="Cloud-Backup"
-            description="Sichern Sie Ihre Medikamentendaten sicher in der Cloud und stellen Sie sie auf jedem Gerät wieder her."
+            description="Sichern Sie Ihre Medikamentendaten zusätzlich in der Cloud und stellen Sie sie bei Bedarf wieder her."
             navigation={navigation}
           />
         ) : (
@@ -286,6 +294,32 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+  },
+  localInfoContainer: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 22,
+    alignItems: 'center',
+    marginBottom: 18,
+    borderWidth: 1,
+    borderColor: '#E7E7E0',
+  },
+  localInfoIcon: {
+    fontSize: 38,
+    marginBottom: 8,
+  },
+  localInfoTitle: {
+    fontSize: 21,
+    fontWeight: 'bold',
+    color: '#1a1a2e',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  localInfoText: {
+    fontSize: 17,
+    lineHeight: 24,
+    color: '#444444',
+    textAlign: 'center',
   },
   statusIcon: {
     fontSize: 40,

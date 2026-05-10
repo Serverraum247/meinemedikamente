@@ -16,6 +16,7 @@
 
 import CloudKit
 import Foundation
+import UIKit
 
 @objc(CloudKitBackup)
 class CloudKitBackup: NSObject {
@@ -203,6 +204,112 @@ class CloudKitBackup: NSObject {
   }
 
   // MARK: - React Native Bridge Setup
+
+  @objc static func requiresMainQueueSetup() -> Bool {
+    return false
+  }
+}
+
+@objc(MedicationPlanShare)
+class MedicationPlanShare: NSObject {
+
+  @objc func sharePdf(_ title: String,
+                      body: String,
+                      fileName: String,
+                      resolver resolve: @escaping RCTPromiseResolveBlock,
+                      rejecter reject: @escaping RCTPromiseRejectBlock) {
+    DispatchQueue.main.async {
+      do {
+        let url = try self.createPdf(title: title, body: body, fileName: fileName)
+        guard let presenter = RCTPresentedViewController() else {
+          reject("PDF_SHARE_ERROR", "Kein aktives Fenster zum Teilen gefunden.", nil)
+          return
+        }
+
+        let controller = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+        controller.popoverPresentationController?.sourceView = presenter.view
+        controller.completionWithItemsHandler = { _, _, _, _ in
+          resolve(true)
+        }
+        presenter.present(controller, animated: true)
+      } catch {
+        reject("PDF_SHARE_ERROR", "PDF konnte nicht geteilt werden: \(error.localizedDescription)", error)
+      }
+    }
+  }
+
+  private func createPdf(title: String, body: String, fileName: String) throws -> URL {
+    let safeName = sanitizeFileName(fileName)
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent(safeName)
+    let pageRect = CGRect(x: 0, y: 0, width: 595, height: 842)
+    let margin: CGFloat = 48
+    let renderer = UIGraphicsPDFRenderer(bounds: pageRect)
+
+    try renderer.writePDF(to: url) { context in
+      context.beginPage()
+
+      let titleAttributes: [NSAttributedString.Key: Any] = [
+        .font: UIFont.boldSystemFont(ofSize: 20),
+        .foregroundColor: UIColor(red: 0.10, green: 0.10, blue: 0.18, alpha: 1.0)
+      ]
+      let bodyAttributes: [NSAttributedString.Key: Any] = [
+        .font: UIFont.systemFont(ofSize: 12),
+        .foregroundColor: UIColor(red: 0.13, green: 0.13, blue: 0.13, alpha: 1.0)
+      ]
+
+      var y = margin
+      title.draw(at: CGPoint(x: margin, y: y), withAttributes: titleAttributes)
+      y += 36
+
+      let maxWidth = pageRect.width - (margin * 2)
+      let bottom = pageRect.height - margin
+      let lineHeight: CGFloat = 18
+
+      for paragraph in body.components(separatedBy: "\n") {
+        let lines = self.wrapLine(paragraph, attributes: bodyAttributes, maxWidth: maxWidth)
+        for line in lines {
+          if y > bottom {
+            context.beginPage()
+            y = margin
+          }
+          line.draw(at: CGPoint(x: margin, y: y), withAttributes: bodyAttributes)
+          y += line.isEmpty ? 10 : lineHeight
+        }
+      }
+    }
+
+    return url
+  }
+
+  private func wrapLine(_ line: String,
+                        attributes: [NSAttributedString.Key: Any],
+                        maxWidth: CGFloat) -> [String] {
+    if line.isEmpty { return [""] }
+    let words = line.components(separatedBy: " ")
+    var lines: [String] = []
+    var current = ""
+
+    for word in words {
+      let candidate = current.isEmpty ? word : "\(current) \(word)"
+      let width = (candidate as NSString).size(withAttributes: attributes).width
+      if width <= maxWidth {
+        current = candidate
+      } else {
+        if !current.isEmpty { lines.append(current) }
+        current = word
+      }
+    }
+
+    if !current.isEmpty { lines.append(current) }
+    return lines
+  }
+
+  private func sanitizeFileName(_ value: String) -> String {
+    let allowed = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-")
+    let sanitized = value.unicodeScalars.map { allowed.contains($0) ? Character($0) : "-" }
+    let name = String(sanitized)
+    return name.hasSuffix(".pdf") ? name : "\(name).pdf"
+  }
 
   @objc static func requiresMainQueueSetup() -> Bool {
     return false

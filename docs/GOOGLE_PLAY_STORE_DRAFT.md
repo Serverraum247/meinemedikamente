@@ -27,7 +27,7 @@ Funktionen:
 - Arztkontakte hinterlegen
 - Barcode-/PZN-Erfassung für einen leichteren Start
 - Premium: unbegrenzte Medikamente, Personen, Ärzte und Erinnerungen
-- Premium: individuelle Uhrzeiten, Cloud-Backup, Kalendertermine und Bestandswarnung
+- Premium: individuelle Uhrzeiten, Cloud-Backup, Kalendertermine, Bestandswarnung und Teilen als Text/PDF
 
 Wichtiger Hinweis:
 Mein MediPlan ist keine medizinische Beratung und ersetzt keine ärztliche oder pharmazeutische Beratung. Die App unterstützt nur bei Übersicht, Erinnerung und Planung. Jeder Nutzer bleibt selbst dafür verantwortlich, Medikamente nach ärztlicher Vorgabe einzunehmen.
@@ -52,6 +52,7 @@ Erwachsene Nutzer, ältere Nutzer, Angehörige und pflegende Personen, die eine 
 - Die App enthält keine medizinische Diagnosefunktion.
 - Die App ersetzt keine ärztliche Beratung.
 - Cloud-Backup ist optional und nur für Premium vorgesehen.
+- Medikamentenplan-Export als Text/PDF ist nur für Premium vorgesehen.
 - Kontakt und Haftungsausschluss sind in den Einstellungen sichtbar.
 
 ## Screenshot-Plan
@@ -73,4 +74,3 @@ Bitte prüfe:
 - Ein Arztkontakt kostenlos möglich.
 - Premium-Grenzen erscheinen erst beim Limit.
 - E-Mail-Kontakt öffnet eine Mail mit App- und Gerätedaten.
-

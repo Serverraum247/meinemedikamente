@@ -14,12 +14,12 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
-  SafeAreaView,
   Alert,
   Modal,
   Animated,
   Pressable,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useMedikamente } from '../context/MedikamentContext';
 import { calculateReichweite, formatStaerke } from '../utils/ReichweitenCalc';
 import { usePersonen } from '../context/PersonenContext';
@@ -357,6 +357,16 @@ export default function HomeScreen({ navigation }: Props) {
             >
               <Text style={styles.menueItemIcon}>⭐</Text>
               <Text style={styles.menueItemText}>Premium</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.menueItem}
+              onPress={() => { setMenueOffen(false); navigation.navigate('MedicationPlanExport'); }}
+              accessibilityRole="button"
+              accessibilityLabel="Plan teilen"
+            >
+              <Text style={styles.menueItemIcon}>📄</Text>
+              <Text style={styles.menueItemText}>Plan teilen</Text>
             </TouchableOpacity>
 
             <TouchableOpacity

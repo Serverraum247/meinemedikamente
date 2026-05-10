@@ -16,6 +16,7 @@ import SettingsScreen from '../screens/SettingsScreen';
 import ArztUrlaubScreen from '../screens/ArztUrlaubScreen';
 import PremiumScreen from '../screens/PremiumScreen';
 import BackupScreen from '../screens/BackupScreen';
+import MedicationPlanExportScreen from '../screens/MedicationPlanExportScreen';
 
 export type RootStackParamList = {
   Home: undefined;
@@ -28,6 +29,7 @@ export type RootStackParamList = {
   ArztUrlaub: undefined;
   Premium: undefined;
   Backup: undefined;
+  MedicationPlanExport: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -86,6 +88,7 @@ export default function AppNavigator() {
         <Stack.Screen name="ArztUrlaub" component={ArztUrlaubScreen} options={{ title: 'Arzt-Urlaub' }} />
         <Stack.Screen name="Premium" component={PremiumScreen} options={{ title: 'Premium' }} />
         <Stack.Screen name="Backup" component={BackupScreen} options={{ title: 'Cloud-Backup' }} />
+        <Stack.Screen name="MedicationPlanExport" component={MedicationPlanExportScreen} options={{ title: 'Plan teilen' }} />
       </Stack.Navigator>
     </NavigationContainer>
   );
