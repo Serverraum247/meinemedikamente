@@ -26,6 +26,7 @@ final class MeineMedikamenteUITests: XCTestCase {
 
   func testFreeBlocksPremiumUnitsAndPremiumAllowsSprayPreset() throws {
     openAddMedication()
+    enableFreeOverrideFromCurrentForm()
     assertPremiumUnitIsBlocked()
 
     enablePremiumOverrideFromCurrentForm()
@@ -56,9 +57,49 @@ final class MeineMedikamenteUITests: XCTestCase {
     XCTAssertTrue(savedAlert.waitForExistence(timeout: 10))
     savedAlert.buttons["OK"].tap()
 
+    let expectedForecast = expectedMoMiFrForecast(stock: 6)
     waitForMedicationCard(name: "Wochentag Test", stock: "Bestand: 6 Tabletten")
-    waitForMedicationCardLabelContaining("Reichweite: 13 Tage")
-    waitForMedicationCardLabelContaining("bis 22.05.2026")
+    waitForMedicationCardLabelContaining("Reichweite: \(expectedForecast.days) Tage")
+    waitForMedicationCardLabelContaining("bis \(expectedForecast.dateText)")
+  }
+
+  func testDuplicateMedicationShowsWarningButAllowsSave() throws {
+    let duplicateName = "Duplikat E2E \(Int(Date().timeIntervalSince1970))"
+
+    addManualMedication(name: duplicateName)
+
+    openAddMedication()
+    fillMedicationName(duplicateName)
+
+    let saveButton = app.buttons["Medikament speichern"]
+    scrollUntilHittable(saveButton)
+    saveButton.tap()
+
+    let duplicateAlert = app.alerts["Mögliches Duplikat"]
+    XCTAssertTrue(duplicateAlert.waitForExistence(timeout: 10))
+    duplicateAlert.buttons["Trotzdem speichern"].tap()
+
+    let savedAlert = app.alerts["Gespeichert"]
+    XCTAssertTrue(savedAlert.waitForExistence(timeout: 10))
+    savedAlert.buttons["OK"].tap()
+
+    waitForMedicationCardLabelContaining(duplicateName)
+  }
+
+  private func addManualMedication(name: String) {
+    openAddMedication()
+    enablePremiumOverrideFromCurrentForm()
+    fillMedicationName(name)
+
+    let saveButton = app.buttons["Medikament speichern"]
+    scrollUntilHittable(saveButton)
+    saveButton.tap()
+
+    let savedAlert = app.alerts["Gespeichert"]
+    XCTAssertTrue(savedAlert.waitForExistence(timeout: 10))
+    savedAlert.buttons["OK"].tap()
+
+    waitForMedicationCardLabelContaining(name)
   }
 
   func testICloudBackupCreateStatusAndRestore() throws {
@@ -152,6 +193,14 @@ final class MeineMedikamenteUITests: XCTestCase {
     XCTAssertTrue(app.buttons["Testdaten Spray einsetzen"].waitForExistence(timeout: 10))
   }
 
+  private func enableFreeOverrideFromCurrentForm() {
+    let freeButton = app.buttons["Free für E2E simulieren"]
+    scrollTowardTopUntilExists(freeButton)
+    freeButton.tap()
+
+    XCTAssertTrue(app.buttons["Einheit: Hübe, nur mit Premium möglich"].waitForExistence(timeout: 10))
+  }
+
   private func openAddMedication() {
     let addButton = app.buttons["add-medication-button"]
     XCTAssertTrue(addButton.waitForExistence(timeout: 20))
@@ -160,6 +209,26 @@ final class MeineMedikamenteUITests: XCTestCase {
       addButton.tap()
     } else {
       app.coordinate(withNormalizedOffset: CGVector(dx: 0.87, dy: 0.90)).tap()
+    }
+  }
+
+  private func fillMedicationName(_ name: String) {
+    let nameInputByIdentifier = app.textFields["medication-name-input"]
+    let nameInput = nameInputByIdentifier.exists ? nameInputByIdentifier : app.textFields["Name"]
+    XCTAssertTrue(nameInput.waitForExistence(timeout: 10))
+    nameInput.tap()
+    nameInput.typeText(name)
+    dismissKeyboardIfNeeded()
+  }
+
+  private func dismissKeyboardIfNeeded() {
+    guard app.keyboards.element.exists else { return }
+
+    let returnButton = app.keyboards.buttons["Return"]
+    if returnButton.exists {
+      returnButton.tap()
+    } else {
+      app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.15)).tap()
     }
   }
 
@@ -226,5 +295,26 @@ final class MeineMedikamenteUITests: XCTestCase {
     let medicationCountPredicate = NSPredicate(format: "label CONTAINS %@", "Medikamente gesichert")
     XCTAssertTrue(app.staticTexts.matching(lastBackupPredicate).firstMatch.waitForExistence(timeout: 20))
     XCTAssertTrue(app.staticTexts.matching(medicationCountPredicate).firstMatch.waitForExistence(timeout: 20))
+  }
+
+  private func expectedMoMiFrForecast(stock: Int) -> (days: Int, dateText: String) {
+    let calendar = Calendar.current
+    let intakeWeekdays: Set<Int> = [2, 4, 6] // Calendar weekday: So=1, Mo=2, Mi=4, Fr=6
+    var remaining = stock
+    var days = 0
+    var date = Date()
+
+    while remaining > 0 {
+      days += 1
+      date = calendar.date(byAdding: .day, value: 1, to: date) ?? date
+      if intakeWeekdays.contains(calendar.component(.weekday, from: date)) {
+        remaining -= 1
+      }
+    }
+
+    let formatter = DateFormatter()
+    formatter.locale = Locale(identifier: "de_DE")
+    formatter.dateFormat = "dd.MM.yyyy"
+    return (days, formatter.string(from: date))
   }
 }

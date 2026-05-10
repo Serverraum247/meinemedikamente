@@ -49,6 +49,7 @@ import {
   getMedicationNameSuggestions,
 } from '../constants/MedicationNameSuggestions';
 import { showPremiumRequiredAlert } from '../utils/PremiumAlerts';
+import { findPotentialDuplicateMedication } from '../utils/MedicationDuplicate';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'EditMedikament'>;
 
@@ -128,7 +129,7 @@ export default function EditMedikamentScreen({ route, navigation }: Props) {
     }
   }, [medikamente, medikamentId, navigation]);
 
-  const handleSave = async () => {
+  const handleSave = async (duplicateConfirmed = false) => {
     if (!medikament) return;
 
     if (isPremiumMedicationUnit(einheit) && !premium) {
@@ -152,6 +153,26 @@ export default function EditMedikamentScreen({ route, navigation }: Props) {
     }
     if (isNaN(dosisFloat) || dosisFloat <= 0) {
       Alert.alert('Ungültig', 'Einzeldosis muss größer als 0 sein.');
+      return;
+    }
+
+    const duplicate = findPotentialDuplicateMedication(medikamente, {
+      id: medikament.id,
+      name: name.trim(),
+      zusatz: zusatz.trim(),
+      person_id: medikament.person_id,
+      pzn: pzn.trim(),
+    });
+
+    if (duplicate && !duplicateConfirmed) {
+      Alert.alert(
+        'Mögliches Duplikat',
+        `Dieses Medikament scheint bereits vorhanden zu sein: "${duplicate.medication.name}". Bitte prüfen Sie, ob es wirklich erneut gespeichert werden soll.`,
+        [
+          { text: 'Abbrechen', style: 'cancel' },
+          { text: 'Trotzdem speichern', onPress: () => void handleSave(true) },
+        ],
+      );
       return;
     }
 
@@ -592,7 +613,7 @@ export default function EditMedikamentScreen({ route, navigation }: Props) {
           style={styles.saveButton}
           accessibilityLabel="Änderungen speichern"
           accessibilityRole="button"
-          onPress={handleSave}
+          onPress={() => handleSave()}
           activeOpacity={0.7}
         >
           <Text style={styles.saveButtonText}>Änderungen speichern</Text>

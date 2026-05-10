@@ -55,11 +55,12 @@ import {
   getMedicationNameSuggestions,
 } from '../constants/MedicationNameSuggestions';
 import { showPremiumRequiredAlert } from '../utils/PremiumAlerts';
+import { findPotentialDuplicateMedication } from '../utils/MedicationDuplicate';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AddMedikament'>;
 
 export default function AddMedikamentScreen({ navigation, route }: Props) {
-  const { addMedikament } = useMedikamente();
+  const { addMedikament, medikamente } = useMedikamente();
   const { aktivePerson } = usePersonen();
 
   const [name, setName] = useState('');
@@ -119,7 +120,7 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
     }
   }, [route.params?.scannedPZN, route.params?.suggestedName]);
 
-  const handleSave = async () => {
+  const handleSave = async (duplicateConfirmed = false) => {
     if (isPremiumMedicationUnit(einheit) && !premium) {
       showPremiumRequiredAlert('Erweiterte Darreichungsformen sind nur mit Premium möglich.', navigation);
       return;
@@ -144,13 +145,33 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
       return;
     }
 
+    const personId = aktivePerson?.id || 'person-default-001';
+    const duplicate = findPotentialDuplicateMedication(medikamente, {
+      name: name.trim(),
+      zusatz: zusatz.trim(),
+      person_id: personId,
+      pzn: pzn.trim(),
+    });
+
+    if (duplicate && !duplicateConfirmed) {
+      Alert.alert(
+        'Mögliches Duplikat',
+        `Dieses Medikament scheint bereits vorhanden zu sein: "${duplicate.medication.name}". Bitte prüfen Sie, ob es wirklich erneut angelegt werden soll.`,
+        [
+          { text: 'Abbrechen', style: 'cancel' },
+          { text: 'Trotzdem speichern', onPress: () => void handleSave(true) },
+        ],
+      );
+      return;
+    }
+
     try {
       const id = generateUUID();
       await addMedikament({
         id,
         name: name.trim(),
         zusatz: zusatz.trim(),
-        person_id: aktivePerson?.id || 'person-default-001',
+        person_id: personId,
         aktueller_bestand: bestandFloat,
         einzeldosis: dosisFloat,
         einheit,
@@ -239,6 +260,12 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
     setMaxSlots(await getMaxReminderSlots());
   };
 
+  const enableDevFreeForE2E = async () => {
+    await setDevPremiumOverride('free');
+    setPremiumStatus(false);
+    setMaxSlots(await getMaxReminderSlots());
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView
@@ -281,6 +308,14 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
                 accessibilityLabel="Premium für E2E simulieren"
               >
                 <Text style={styles.testPresetButtonText}>Premium</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.testPresetButton}
+                onPress={enableDevFreeForE2E}
+                accessibilityRole="button"
+                accessibilityLabel="Free für E2E simulieren"
+              >
+                <Text style={styles.testPresetButtonText}>Free</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.testPresetButton}
@@ -762,7 +797,7 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
         <TouchableOpacity
           style={styles.saveButton}
           testID="save-medication-button"
-          onPress={handleSave}
+          onPress={() => handleSave()}
           activeOpacity={0.7}
           accessibilityLabel="Medikament speichern"
           accessibilityRole="button"
