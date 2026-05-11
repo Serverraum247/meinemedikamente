@@ -270,9 +270,14 @@ class MedicationPlanShare: NSObject {
   }
 
   private func sanitizeFileName(_ value: String) -> String {
-    let allowed = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-")
-    let sanitized = value.unicodeScalars.map { allowed.contains($0) ? Character($0) : "-" }
+    let readable = value
+      .replacingOccurrences(of: "ß", with: "ss")
+      .replacingOccurrences(of: "ẞ", with: "SS")
+    let allowed = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 ._-")
+    let sanitized = readable.unicodeScalars.map { allowed.contains($0) ? Character($0) : " " }
     let name = String(sanitized)
+      .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+      .trimmingCharacters(in: .whitespacesAndNewlines)
     return name.hasSuffix(".pdf") ? name : "\(name).pdf"
   }
 

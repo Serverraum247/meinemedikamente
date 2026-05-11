@@ -13,7 +13,7 @@ SQLite.DEBUG(true);
 SQLite.enablePromise(true);
 
 const DATABASE_NAME = 'meine_medikamente.db';
-const DATABASE_VERSION = 11; // V11: staerke_wert + staerke_einheit in medikamente (Premium: Dosierung)
+const DATABASE_VERSION = 13; // V13: Einnahme-Slot fuer verlaesslichen Tagesstatus
 
 export interface MedikamentRow {
   id: string;
@@ -44,12 +44,14 @@ export interface EinnahmeRow {
   person_id: string;     // zugehoerige Person
   menge: number;      // Float – eingenommene Menge
   timestamp: string;  // ISO 8601
+  slot: string;        // morgens, mittags, abends, nachts oder ''
   notiz: string;
 }
 
 export interface ArztUrlaubRow {
   id: string;
   person_id: string;    // zugehoerige Person
+  arzt_id?: string;     // Optionaler Bezug auf gespeicherten Arzt
   praxis_name: string;
   telefon?: string;       // Telefonnummer des Arztes (optional)
   urlaub_start: string; // ISO Date YYYY-MM-DD
@@ -155,7 +157,8 @@ class Database {
         id              TEXT PRIMARY KEY NOT NULL,
         medikament_id   TEXT NOT NULL,
         menge           REAL NOT NULL,
-        timestamp       TEXT NOT NULL DEFAULT (datetime('now')),
+        timestamp       TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+        slot            TEXT NOT NULL DEFAULT '',
         notiz           TEXT NOT NULL DEFAULT '',
         FOREIGN KEY (medikament_id) REFERENCES medikamente(id) ON DELETE CASCADE
       );
@@ -164,6 +167,7 @@ class Database {
     await this.db.executeSql(`
       CREATE TABLE IF NOT EXISTS arzt_urlaub (
         id          TEXT PRIMARY KEY NOT NULL,
+        arzt_id     TEXT NOT NULL DEFAULT '',
         praxis_name TEXT NOT NULL,
         urlaub_start TEXT NOT NULL,
         urlaub_ende  TEXT NOT NULL,
@@ -232,6 +236,8 @@ class Database {
     await this.migrateV8toV9();
     await this.migrateV9toV10();
     await this.migrateV10toV11();
+    await this.migrateV11toV12();
+    await this.migrateV12toV13();
   }
 
   /**
@@ -541,6 +547,33 @@ class Database {
         `ALTER TABLE medikamente ADD COLUMN staerke_einheit TEXT NOT NULL DEFAULT '';`
       );
       logger.log('[DB] Migration V10->V11: staerke_einheit Spalte hinzugefuegt');
+    }
+  }
+
+  /**
+   * Migration V11 -> V12: arzt_id in arzt_urlaub fuer exakte Urlaub-Zuordnung
+   */
+  private async migrateV11toV12(): Promise<void> {
+    const urlCols = await this.getColumnNames('arzt_urlaub');
+    if (!urlCols.includes('arzt_id')) {
+      await this.db!.executeSql(
+        `ALTER TABLE arzt_urlaub ADD COLUMN arzt_id TEXT NOT NULL DEFAULT '';`
+      );
+      logger.log('[DB] Migration V11->V12: arzt_id Spalte in arzt_urlaub hinzugefuegt');
+    }
+  }
+
+  /**
+   * Migration V12 -> V13: Slot in Einnahmen speichern.
+   * Dadurch bleibt eine spaet bestaetigte Morgen-Einnahme auch "morgens" erledigt.
+   */
+  private async migrateV12toV13(): Promise<void> {
+    const einnahmeCols = await this.getColumnNames('einnahmen');
+    if (!einnahmeCols.includes('slot')) {
+      await this.db!.executeSql(
+        `ALTER TABLE einnahmen ADD COLUMN slot TEXT NOT NULL DEFAULT '';`
+      );
+      logger.log('[DB] Migration V12->V13: slot Spalte in einnahmen hinzugefuegt');
     }
   }
 }

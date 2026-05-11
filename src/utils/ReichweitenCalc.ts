@@ -150,7 +150,7 @@ function berechneWochentagsReichweite(
 }
 
 /**
- * Formatiert die Stärke-Anzeige (Premium)
+ * Formatiert die Stärke-Anzeige
  * z.B. "500 mg", "10 ml", "25 µg", "100 IE"
  */
 export function formatStaerke(wert: number, einheit: string): string | null {

@@ -703,10 +703,10 @@ export default function SettingsScreen({ navigation }: Props) {
         <View
           style={styles.contactSection}
           accessibilityRole="summary"
-          accessibilityLabel="Kontakt und Herausgeber"
+          accessibilityLabel="Support und Herausgeber"
         >
-          <Text style={styles.contactTitle}>Kontakt</Text>
-          <Text style={styles.contactText}>Serverraum247</Text>
+          <Text style={styles.contactTitle}>Support</Text>
+          <Text style={styles.contactText}>Herausgeber: Serverraum247</Text>
           <TouchableOpacity
             onPress={handleSupportMail}
             accessibilityRole="link"
@@ -715,8 +715,9 @@ export default function SettingsScreen({ navigation }: Props) {
             <Text style={styles.contactMail}>kontakt@serverraum247.dev</Text>
           </TouchableOpacity>
           <Text style={styles.contactHint}>
-            App aus dem Saarland. Fragen, Vorschläge und Verbesserungsvorschläge kannst du an diese Adresse senden.
+            Für Fragen, Support und Verbesserungsvorschläge. Die E-Mail wird mit App-Version, Plattform und Systemversion vorbereitet.
           </Text>
+          <Text style={styles.contactMeta}>App-Version {APP_VERSION}</Text>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -1079,6 +1080,12 @@ const styles = StyleSheet.create({
     color: '#555',
     lineHeight: 21,
     marginTop: 6,
+  },
+  contactMeta: {
+    fontSize: 13,
+    color: '#777',
+    lineHeight: 18,
+    marginTop: 10,
   },
   resetButton: {
     borderRadius: 14,

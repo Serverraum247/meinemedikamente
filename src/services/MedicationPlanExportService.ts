@@ -7,6 +7,7 @@ import {
   type EinnahmeSlot,
 } from '../utils/Einnahmeplan';
 import { formatStaerke } from '../utils/ReichweitenCalc';
+import { formatActiveIngredient, parseActiveIngredients } from '../utils/ActiveIngredients';
 
 export interface MedicationPlanExportInput {
   person: PersonRow;
@@ -33,7 +34,7 @@ export function buildMedicationPlanExport(input: MedicationPlanExportInput): Med
     .sort((a, b) => a.name.localeCompare(b.name, 'de-DE'));
   const doctorById = new Map(input.doctors.map(doctor => [doctor.id, doctor]));
 
-  const title = `Mein MediPlan - Medikamentenplan ${input.person.name}`;
+  const title = 'Mein MediPlan';
   const lines: string[] = [
     `Medikamentenplan für ${input.person.name}`,
     `Erstellt am ${formatDateTime(generatedAt)}`,
@@ -47,7 +48,17 @@ export function buildMedicationPlanExport(input: MedicationPlanExportInput): Med
       lines.push(`${index + 1}. ${medication.name}`);
 
       const zusatz = medication.zusatz.trim();
-      if (zusatz) lines.push(`   Grund/Notiz: ${zusatz}`);
+      if (zusatz) {
+        const activeIngredients = parseActiveIngredients(zusatz);
+        if (activeIngredients.length > 1) {
+          lines.push('   Wirkstoffe:');
+          activeIngredients.forEach(ingredient => {
+            lines.push(`   - ${formatActiveIngredient(ingredient)}`);
+          });
+        } else {
+          lines.push(`   Wirkstoff: ${zusatz}`);
+        }
+      }
 
       const staerke = formatStaerke(medication.staerke_wert, medication.staerke_einheit);
       if (staerke) lines.push(`   Stärke: ${staerke}`);
@@ -70,7 +81,7 @@ export function buildMedicationPlanExport(input: MedicationPlanExportInput): Med
 
   return {
     title,
-    fileName: `${slugify(`mein-mediplan-${input.person.name}`)}.pdf`,
+    fileName: buildMedicationPlanFileName(input.person.name, generatedAt),
     text: lines.join('\n').trim(),
   };
 }
@@ -127,11 +138,24 @@ function formatNumber(value: number): string {
   return Number.isInteger(value) ? String(value) : String(value).replace('.', ',');
 }
 
-function slugify(value: string): string {
+function buildMedicationPlanFileName(personName: string, date: Date): string {
+  return `Medikamentenplan ${sanitizeReadableFileName(personName)} ${formatDateOnly(date)}.pdf`;
+}
+
+function formatDateOnly(date: Date): string {
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = date.getFullYear();
+  return `${day}.${month}.${year}`;
+}
+
+function sanitizeReadableFileName(value: string): string {
   return value
-    .toLowerCase()
+    .replace(/ß/g, 'ss')
+    .replace(/ẞ/g, 'SS')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
+    .replace(/[^A-Za-z0-9 ._-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }

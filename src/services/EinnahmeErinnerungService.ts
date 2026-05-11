@@ -45,7 +45,7 @@ export async function getOffeneEinnahmen(
 ): Promise<OffeneEinnahme[]> {
   const medikamente = await getAllMedikamente();
   const jetzt = new Date();
-  const heuteStr = jetzt.toISOString().slice(0, 10); // "2026-07-07"
+  const heuteStr = jetzt.toISOString().slice(0, 10); // Nur noch Fallback; DB nutzt lokale Tagesgrenzen.
   const aktuelleMinuten = jetzt.getHours() * 60 + jetzt.getMinutes();
   const offene: OffeneEinnahme[] = [];
 
@@ -62,10 +62,14 @@ export async function getOffeneEinnahmen(
     // Bereits eingenommene Slots ermitteln
     const eingenommeneSlots = new Set<TageszeitSlot>();
     for (const einnahme of heuteEinnahmen) {
-      // Slot anhand der Einnahme-Zeit bestimmen
-      const einnahmeStunde = new Date(einnahme.timestamp).getHours();
-      const slot = stundeZuSlot(einnahmeStunde);
-      eingenommeneSlots.add(slot);
+      if (einnahme.slot) {
+        eingenommeneSlots.add(einnahme.slot);
+      } else {
+        // Fallback fuer alte Eintraege vor V13.
+        const einnahmeStunde = new Date(einnahme.timestamp).getHours();
+        const slot = stundeZuSlot(einnahmeStunde);
+        eingenommeneSlots.add(slot);
+      }
     }
 
     // Offene Slots finden
@@ -103,24 +107,41 @@ export async function getOffeneEinnahmen(
   return offene;
 }
 
+export async function getHeutigeEinnahmeMedikamentIds(): Promise<Set<string>> {
+  const db = await getDatabase();
+  const results = await db.executeSql(
+    `SELECT DISTINCT medikament_id FROM einnahmen
+     WHERE timestamp >= datetime('now', 'localtime', 'start of day')
+       AND timestamp < datetime('now', 'localtime', 'start of day', '+1 day')`
+  );
+
+  const ids = new Set<string>();
+  results.forEach(result => {
+    for (let i = 0; i < result.rows.length; i++) {
+      ids.add(result.rows.item(i).medikament_id);
+    }
+  });
+  return ids;
+}
+
 /**
  * Heutige Einnahmen fuer ein Medikament abrufen
  */
 async function getHeutigeEinnahmenFuerMedikament(
   medikamentId: string,
   heuteStr: string
-): Promise<Array<{ timestamp: string }>> {
+): Promise<Array<{ timestamp: string; slot?: TageszeitSlot }>> {
   const db = await getDatabase();
   const results = await db.executeSql(
-    `SELECT timestamp FROM einnahmen
+    `SELECT timestamp, slot FROM einnahmen
      WHERE medikament_id = ?
-       AND timestamp >= date('now', 'start of day')
-       AND timestamp < date('now', 'start of day', '+1 day')
+       AND timestamp >= datetime('now', 'localtime', 'start of day')
+       AND timestamp < datetime('now', 'localtime', 'start of day', '+1 day')
      ORDER BY timestamp ASC`,
     [medikamentId]
   );
 
-  const rows: Array<{ timestamp: string }> = [];
+  const rows: Array<{ timestamp: string; slot?: TageszeitSlot }> = [];
   results.forEach(result => {
     for (let i = 0; i < result.rows.length; i++) {
       rows.push(result.rows.item(i));

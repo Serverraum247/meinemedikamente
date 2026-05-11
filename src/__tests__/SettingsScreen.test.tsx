@@ -114,7 +114,10 @@ describe('SettingsScreen', () => {
     const text = flattenText(tree.toJSON());
     expect(text).toContain('Serverraum247');
     expect(text).toContain('kontakt@serverraum247.dev');
-    expect(text).toContain('App aus dem Saarland');
+    expect(text).toContain('Support');
+    expect(text).toContain('App-Version');
+    expect(text).toContain('Systemversion');
+    expect(text).not.toContain('App aus dem Saarland');
   });
 
   it('does not show a permanent premium upsell in the doctors section', async () => {

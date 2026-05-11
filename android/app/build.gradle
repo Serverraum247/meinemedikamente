@@ -88,8 +88,9 @@ android {
         applicationId "dev.serverraum247.meinmediplan"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 14
-        versionName "0.1.13"
+        versionCode 26
+        versionName "0.1.25"
+        manifestPlaceholders = [usesCleartextTraffic: "false"]
     }
     signingConfigs {
         debug {
@@ -110,11 +111,19 @@ android {
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
+            manifestPlaceholders = [usesCleartextTraffic: "true"]
+        }
+        internal {
+            initWith release
+            signingConfig signingConfigs.debug
+            matchingFallbacks = ["release"]
+            manifestPlaceholders = [usesCleartextTraffic: "false"]
         }
         release {
             if (releaseSigningConfigured) {
                 signingConfig signingConfigs.release
             }
+            manifestPlaceholders = [usesCleartextTraffic: "false"]
             minifyEnabled enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
         }

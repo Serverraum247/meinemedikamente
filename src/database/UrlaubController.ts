@@ -5,15 +5,17 @@
  * Logik: Leer-Datum <= Urlaubs-Ende + 3 Tage → WARNUNG
  */
 
-import { database, getDatabase, ArztUrlaubRow, MedikamentRow } from './Database';
-import { getMedikamenteUnterSchwelle, getAllMedikamente } from './MedikamentController';
-import { parseEinnahmeplan, tagesdosisBerechnen } from '../utils/Einnahmeplan';
+import { database, getDatabase, ArztRow, ArztUrlaubRow, MedikamentRow } from './Database';
+import { getAllMedikamente } from './MedikamentController';
+import { getAllAerzte } from './ArztController';
+import { calculateReichweite } from '../utils/ReichweitenCalc';
 
 export interface UrlaubsWarnung {
   medikament: MedikamentRow;
   leerDatum: Date;
   urlaub: ArztUrlaubRow;
   tageBisLeer: number;
+  hinweis: string;
 }
 
 // Oeffentlicher Typ fuer Screens
@@ -29,9 +31,9 @@ export async function createArztUrlaub(
   const id = urlaub.id || generateUUID();
 
   await db.executeSql(
-    `INSERT INTO arzt_urlaub (id, praxis_name, telefon, urlaub_start, urlaub_ende)
-     VALUES (?, ?, ?, ?, ?)`,
-    [id, urlaub.praxis_name, urlaub.telefon || '', urlaub.urlaub_start, urlaub.urlaub_ende]
+    `INSERT INTO arzt_urlaub (id, arzt_id, praxis_name, telefon, urlaub_start, urlaub_ende)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [id, urlaub.arzt_id || '', urlaub.praxis_name, urlaub.telefon || '', urlaub.urlaub_start, urlaub.urlaub_ende]
   );
 
   return id;
@@ -95,29 +97,36 @@ export function calculateRefillDate(
 export async function calculateUrlaubsWarnungen(): Promise<UrlaubsWarnung[]> {
   const medikamente = await getAllMedikamente();
   const urlaube = await getAllArztUrlaube();
-  const warnungen: UrlaubsWarnung[] = [];
+  const aerzte = await getAllAerzte();
 
-  const heute = new Date();
+  return calculateUrlaubsWarnungenForData(medikamente, urlaube, aerzte);
+}
+
+export function calculateUrlaubsWarnungenForData(
+  medikamente: MedikamentRow[],
+  urlaube: ArztUrlaubRow[],
+  aerzte: ArztRow[] = [],
+  now: Date = new Date(),
+): UrlaubsWarnung[] {
+  const warnungen: UrlaubsWarnung[] = [];
+  const aerzteById = new Map(aerzte.map(arzt => [arzt.id, arzt]));
+
+  const heute = new Date(now);
   heute.setHours(0, 0, 0, 0);
 
   for (const med of medikamente) {
     // Nur Medikamente mit Bestand prüfen
     if (med.aktueller_bestand <= 0) continue;
 
-    const leerDatum = calculateRefillDate(med.aktueller_bestand, med.einzeldosis,
-      (() => {
-        // Einnahmeplan parsen und Tagesdosis berechnen
-        try {
-          const plan = parseEinnahmeplan(med.einnahme_uhrzeiten || '[]');
-          const td = tagesdosisBerechnen(plan, med.einzeldosis);
-          // Einnahmen pro Tag = Tagesdosis / Einzeldosis
-          return td > 0 ? Math.round(td / med.einzeldosis) : 1;
-        } catch { return 1; }
-      })()
-    );
+    const reichweite = calculateReichweite(med);
+    if (!reichweite.leerDatum) continue;
+
+    const leerDatum = new Date(reichweite.leerDatum);
     leerDatum.setHours(0, 0, 0, 0);
 
     for (const urlaub of urlaube) {
+      if (!urlaubPasstZumMedikament(med, urlaub, aerzteById)) continue;
+
       const urlaubEnde = new Date(urlaub.urlaub_ende);
       urlaubEnde.setHours(0, 0, 0, 0);
 
@@ -140,6 +149,9 @@ export async function calculateUrlaubsWarnungen(): Promise<UrlaubsWarnung[]> {
           leerDatum,
           urlaub,
           tageBisLeer,
+          hinweis: leerDatum <= urlaubStart
+            ? 'Bitte vor dem Arzturlaub Tabletten besorgen.'
+            : 'Bitte rechtzeitig Tabletten besorgen, der Arzt ist im Urlaub.',
         });
       }
     }
@@ -148,6 +160,24 @@ export async function calculateUrlaubsWarnungen(): Promise<UrlaubsWarnung[]> {
   // Sortierung: Dringendste zuerst
   warnungen.sort((a, b) => a.tageBisLeer - b.tageBisLeer);
   return warnungen;
+}
+
+function urlaubPasstZumMedikament(
+  medikament: MedikamentRow,
+  urlaub: ArztUrlaubRow,
+  aerzteById: Map<string, ArztRow>,
+): boolean {
+  if (!medikament.arzt_id) return true;
+  if (urlaub.arzt_id) return urlaub.arzt_id === medikament.arzt_id;
+
+  const arzt = aerzteById.get(medikament.arzt_id);
+  if (!arzt) return false;
+
+  return normalizeName(urlaub.praxis_name) === normalizeName(arzt.name);
+}
+
+function normalizeName(value: string): string {
+  return value.trim().toLocaleLowerCase('de-DE').replace(/\s+/g, ' ');
 }
 
 // --- Hilfsfunktionen ---

@@ -68,6 +68,8 @@ export default function PremiumScreen({ navigation }: { navigation: any }) {
           'Premium freigeschaltet',
           'Vielen Dank! Alle Premium-Funktionen stehen Ihnen jetzt zur Verfügung.'
         );
+      } else {
+        setError('Premium-Kauf ist auf diesem Testgerät noch nicht über Google Play verfügbar.');
       }
     } catch (_e: any) {
       setError('Kauf fehlgeschlagen. Bitte versuchen Sie es erneut.');

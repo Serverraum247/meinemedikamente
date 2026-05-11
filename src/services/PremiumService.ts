@@ -14,10 +14,15 @@ import { logger } from '../utils/Logger';
 
 let iapModule: any = null;
 let iapInitialized = false;
+const ANDROID_PLAY_BILLING_ENABLED = false;
 
 async function getIAP() {
   if (Platform.OS !== 'android') {
     logger.log('[PremiumService] IAP nur auf Android verfuegbar');
+    return null;
+  }
+  if (!ANDROID_PLAY_BILLING_ENABLED) {
+    logger.warn('[PremiumService] Google Play Billing ist in diesem Build deaktiviert.');
     return null;
   }
   if (iapModule !== null) return iapModule;

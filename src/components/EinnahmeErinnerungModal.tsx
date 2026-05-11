@@ -29,7 +29,7 @@ import { formatMedicationUnit } from '../constants/MedicationUnits';
 interface Props {
   visible: boolean;
   offeneEinnahmen: OffeneEinnahme[];
-  onBestaetigen: (medikamentId: string, dosis: number) => Promise<void>;
+  onBestaetigen: (medikamentId: string, dosis: number, slot: OffeneEinnahme['slot']) => Promise<void>;
   onSpaeter: () => void;
   onSchliessen: () => void;
 }
@@ -49,7 +49,7 @@ export default function EinnahmeErinnerungModal({
       // Haptisches Feedback – kurze Vibration
       Vibration.vibrate(50);
 
-      await onBestaetigen(einnahme.medikamentId, einnahme.dosis);
+      await onBestaetigen(einnahme.medikamentId, einnahme.dosis, einnahme.slot);
       announceChange(`${einnahme.medikamentName} wurde als eingenommen markiert`);
     } finally {
       setBearbeiteId(null);

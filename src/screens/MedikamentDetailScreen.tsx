@@ -35,7 +35,9 @@ import {
   SLOT_REIHENFOLGE,
   getAktuelleTageszeit,
   getDosisFuerSlot,
+  istSlotAnDatumAktiv,
   type EinnahmeSlot,
+  type TageszeitSlot,
 } from '../utils/Einnahmeplan';
 import { announceChange } from '../utils/AccessibilityHelpers';
 import { erstelleRezeptAbholtermin } from '../services/KalenderService';
@@ -44,8 +46,42 @@ import { getArztById } from '../database/ArztController';
 import { calculateReichweite, formatStaerke } from '../utils/ReichweitenCalc';
 import { logger } from '../utils/Logger';
 import { showPremiumRequiredAlert } from '../utils/PremiumAlerts';
+import { getOffeneEinnahmen } from '../services/EinnahmeErinnerungService';
+import {
+  formatActiveIngredient,
+  formatActiveIngredientStrengthSummary,
+  parseActiveIngredients,
+} from '../utils/ActiveIngredients';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'MedikamentDetail'>;
+
+async function resolveSlotFuerBestaetigung(
+  medikamentId: string,
+  plan: EinnahmeSlot[],
+): Promise<TageszeitSlot> {
+  try {
+    const offene = await getOffeneEinnahmen(0);
+    const offenerEintrag = offene.find(einnahme => einnahme.medikamentId === medikamentId);
+    if (offenerEintrag) {
+      return offenerEintrag.slot;
+    }
+  } catch (error) {
+    logger.error('Offener Einnahme-Slot konnte nicht ermittelt werden:', error);
+  }
+
+  const aktuelle = getAktuelleTageszeit();
+  const heute = new Date();
+  const aktuellerPlanSlot = plan.find(slot => slot.slot === aktuelle && istSlotAnDatumAktiv(slot, heute));
+  if (aktuellerPlanSlot) {
+    return aktuellerPlanSlot.slot;
+  }
+
+  const ersterAktiverSlot = [...plan]
+    .sort((a, b) => SLOT_REIHENFOLGE.indexOf(a.slot) - SLOT_REIHENFOLGE.indexOf(b.slot))
+    .find(slot => istSlotAnDatumAktiv(slot, heute));
+
+  return ersterAktiverSlot?.slot || aktuelle;
+}
 
 export default function MedikamentDetailScreen({ route, navigation }: Props) {
   const { medikamentId } = route.params;
@@ -102,13 +138,14 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
 
   const handleEinnahme = useCallback(async () => {
     if (!medikament) return;
-    const aktuelle = getAktuelleTageszeit();
     const plan = parseEinnahmeplan(medikament.einnahme_uhrzeiten || '[]');
-    const dosis = getDosisFuerSlot(plan, aktuelle, medikament.einzeldosis);
+    const slot = await resolveSlotFuerBestaetigung(medikament.id, plan);
+    const dosis = getDosisFuerSlot(plan, slot, medikament.einzeldosis);
+    const slotLabel = SLOT_META[slot].label;
 
     Alert.alert(
       'Einnahme bestätigen',
-      `${dosis} ${medikament.einheit} ${medikament.name} eingenommen?`,
+      `${slotLabel}: ${dosis} ${medikament.einheit} ${medikament.name} eingenommen?`,
       [
         { text: 'Abbrechen', style: 'cancel' },
         {
@@ -116,7 +153,7 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
           style: 'default',
           onPress: async () => {
             try {
-              const neuerBestand = await bestätigeEinnahme(medikament.id, dosis);
+              const neuerBestand = await bestätigeEinnahme(medikament.id, dosis, slot);
               await loadData(); // Historie refreshen
               announceChange(`${medikament.name} wurde als eingenommen markiert`);
               Alert.alert(
@@ -241,13 +278,26 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
 
   // Reichweite berechnen (zentrale Utility)
   const reichweite = calculateReichweite(medikament);
-  const staerkeText = premium ? formatStaerke(medikament.staerke_wert, medikament.staerke_einheit) : null;
+  const staerkeText =
+    formatStaerke(medikament.staerke_wert, medikament.staerke_einheit) ||
+    formatActiveIngredientStrengthSummary(medikament.zusatz || '');
+  const activeIngredients = parseActiveIngredients(medikament.zusatz || '');
 
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
-        {/* Name + Zusatz */}
-        {medikament.zusatz ? (
+        {/* Name + Wirkstoff */}
+        {activeIngredients.length > 1 ? (
+          <View style={styles.wirkstoffeCard}>
+            <Text style={styles.wirkstoffeTitle}>Wirkstoffe</Text>
+            {activeIngredients.map((ingredient, index) => (
+              <View key={`${ingredient.name}-${index}`} style={styles.wirkstoffRow}>
+                <Text style={styles.wirkstoffNumber}>{index + 1}</Text>
+                <Text style={styles.wirkstoffText}>{formatActiveIngredient(ingredient)}</Text>
+              </View>
+            ))}
+          </View>
+        ) : medikament.zusatz ? (
           <Text style={styles.zusatzUntertitel}>{medikament.zusatz}</Text>
         ) : null}
 
@@ -263,7 +313,15 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
           </Text>
           <Text style={styles.bestandEinheit}>{medikament.einheit}</Text>
           {staerkeText ? (
-            <Text style={styles.staerkeInfo}>💊 Stärke: {staerkeText}</Text>
+            <View
+              style={styles.staerkeBadge}
+              accessibilityLabel={`Stärke: ${staerkeText}`}
+            >
+              <View style={styles.staerkeIcon} accessibilityElementsHidden>
+                <View style={styles.staerkeIconHalf} />
+              </View>
+              <Text style={styles.staerkeInfoText}>{staerkeText}</Text>
+            </View>
           ) : null}
           <Text style={[styles.bestandStatusLabel, isUnterSchwelle ? styles.bestandStatusWarning : styles.bestandStatusOk]}>
             {isUnterSchwelle ? '⚠ Nachbestellen empfohlen' : '✓ Bestand OK'}
@@ -636,6 +694,45 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 8,
   },
+  wirkstoffeCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: '#0B63CE',
+  },
+  wirkstoffeTitle: {
+    fontSize: 18,
+    color: '#1a1a2e',
+    fontWeight: '700',
+    marginBottom: 10,
+  },
+  wirkstoffRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  wirkstoffNumber: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#E8F1FF',
+    color: '#0B63CE',
+    textAlign: 'center',
+    textAlignVertical: 'center',
+    fontSize: 15,
+    fontWeight: '800',
+    marginRight: 10,
+    paddingTop: Platform.OS === 'ios' ? 5 : 0,
+  },
+  wirkstoffText: {
+    flex: 1,
+    fontSize: 17,
+    color: '#1a1a2e',
+    fontWeight: '600',
+    lineHeight: 24,
+  },
   bestandCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
@@ -690,11 +787,36 @@ const styles = StyleSheet.create({
     color: '#FF6D00',
     fontWeight: '600',
   },
-  staerkeInfo: {
-    fontSize: 16,
-    color: '#2196F3',
-    fontWeight: '600',
+  staerkeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E8F3FF',
+    borderWidth: 1,
+    borderColor: '#B7D8F5',
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     marginTop: 4,
+  },
+  staerkeIcon: {
+    width: 26,
+    height: 14,
+    borderRadius: 999,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#2F80C9',
+    overflow: 'hidden',
+    marginRight: 8,
+  },
+  staerkeIconHalf: {
+    width: 13,
+    height: 14,
+    backgroundColor: '#B7D8F5',
+  },
+  staerkeInfoText: {
+    fontSize: 16,
+    color: '#155C96',
+    fontWeight: '700',
   },
   bestandCardCritical: {
     borderLeftWidth: 4,

@@ -7,7 +7,7 @@
  * Verwendet die Arztdaten aus der Einstellungen-Sektion.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -19,6 +19,8 @@ import {
   Linking,
   Modal,
   FlatList,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -38,22 +40,14 @@ import {
 import { isPremium } from '../services/PremiumService';
 import { logger } from '../utils/Logger';
 import { showPremiumRequiredAlert } from '../utils/PremiumAlerts';
+import {
+  dateToGermanInput,
+  formatGermanDate,
+  normalizeGermanDateInput,
+  parseGermanDate,
+} from '../utils/GermanDate';
 
 // ---------- Helper functions ----------
-
-function parseGermanDate(dateStr: string): string | null {
-  const match = dateStr.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
-  if (!match) return null;
-  const [, day, month, year] = match;
-  return `${year}-${month}-${day}`;
-}
-
-function formatGermanDate(isoDate: string): string {
-  if (!isoDate) return isoDate;
-  const parts = isoDate.split('-');
-  if (parts.length !== 3) return isoDate;
-  return `${parts[2]}.${parts[1]}.${parts[0]}`;
-}
 
 function isFutureOrToday(dateStr: string): boolean {
   const today = new Date();
@@ -85,10 +79,54 @@ const ArztUrlaubScreen: React.FC<ArztUrlaubScreenProps> = ({ navigation }) => {
   const [neuArztTelefon, setNeuArztTelefon] = useState('');
   const [neuArztFachgebiet, setNeuArztFachgebiet] = useState('');
   const [selectedArztId, setSelectedArztId] = useState<string | null>(null);
+  const [datePickerTarget, setDatePickerTarget] = useState<'von' | 'bis' | null>(null);
+  const [pickerMonth, setPickerMonth] = useState(() => startOfMonth(new Date()));
+  const skipUnsavedPromptRef = React.useRef(false);
+
+  const isDirty = useMemo(
+    () =>
+      praxisName.trim().length > 0 ||
+      telefon.trim().length > 0 ||
+      urlaubVon.trim().length > 0 ||
+      urlaubBis.trim().length > 0 ||
+      selectedArztId !== null,
+    [praxisName, selectedArztId, telefon, urlaubBis, urlaubVon],
+  );
 
   useEffect(() => {
     loadData();
   }, []);
+
+  useEffect(() => {
+    if (!navigation) return;
+    navigation.setOptions({
+      headerRight: () => null,
+    });
+  });
+
+  useEffect(() => {
+    if (!navigation) return undefined;
+    return navigation.addListener('beforeRemove', (event: any) => {
+      if (skipUnsavedPromptRef.current || !isDirty) return;
+      event.preventDefault();
+      Alert.alert(
+        'Änderungen speichern?',
+        'Willst du den Urlaub eintragen, bevor du gehst?',
+        [
+          { text: 'Abbrechen', style: 'cancel' },
+          {
+            text: 'Verwerfen',
+            style: 'destructive',
+            onPress: () => {
+              skipUnsavedPromptRef.current = true;
+              navigation.dispatch(event.data.action);
+            },
+          },
+          { text: 'Speichern', onPress: () => void handleAddUrlaub(true) },
+        ],
+      );
+    });
+  }, [isDirty, navigation, praxisName, telefon, urlaubBis, urlaubVon, selectedArztId]);
 
   const loadData = async () => {
     try {
@@ -148,7 +186,7 @@ const ArztUrlaubScreen: React.FC<ArztUrlaubScreenProps> = ({ navigation }) => {
     setNeuArztFachgebiet('');
   };
 
-  const handleAddUrlaub = async () => {
+  const handleAddUrlaub = async (goBackAfterSave = false) => {
     const name = praxisName.trim();
     if (!name) {
       Alert.alert('Fehler', 'Bitte wählen oder geben Sie einen Praxis-Namen ein.');
@@ -177,6 +215,9 @@ const ArztUrlaubScreen: React.FC<ArztUrlaubScreenProps> = ({ navigation }) => {
 
     try {
       await createArztUrlaub({
+        id: '',
+        person_id: 'person-default-001',
+        arzt_id: selectedArztId || '',
         praxis_name: name,
         telefon: telefon.trim(),
         urlaub_start: startDate,
@@ -188,11 +229,61 @@ const ArztUrlaubScreen: React.FC<ArztUrlaubScreenProps> = ({ navigation }) => {
       setUrlaubBis('');
       setSelectedArztId(null);
       await loadData();
-      Alert.alert('Erfolg', 'Urlaub wurde eingetragen.');
+      Alert.alert('Erfolg', 'Urlaub wurde eingetragen.', [
+        {
+          text: 'OK',
+          onPress: () => {
+            if (goBackAfterSave && navigation) {
+              skipUnsavedPromptRef.current = true;
+              navigation.goBack();
+            }
+          },
+        },
+      ]);
     } catch (error) {
       logger.error('Fehler beim Eintragen:', error);
       Alert.alert('Fehler', 'Urlaub konnte nicht eingetragen werden.');
     }
+  };
+
+  const requestGoBack = () => {
+    if (!navigation) return;
+    if (!isDirty) {
+      navigation.goBack();
+      return;
+    }
+
+    Alert.alert(
+      'Änderungen speichern?',
+      'Willst du den Urlaub eintragen, bevor du gehst?',
+      [
+        { text: 'Abbrechen', style: 'cancel' },
+        {
+          text: 'Verwerfen',
+          style: 'destructive',
+          onPress: () => {
+            skipUnsavedPromptRef.current = true;
+            navigation.goBack();
+          },
+        },
+        { text: 'Speichern', onPress: () => void handleAddUrlaub(true) },
+      ],
+    );
+  };
+
+  const openDatePicker = (target: 'von' | 'bis') => {
+    const current = target === 'von' ? urlaubVon : urlaubBis;
+    const iso = parseGermanDate(current);
+    const base = iso ? new Date(`${iso}T12:00:00`) : new Date();
+    setPickerMonth(startOfMonth(base));
+    setDatePickerTarget(target);
+  };
+
+  const selectDate = (date: Date) => {
+    const value = dateToGermanInput(date);
+    if (datePickerTarget === 'von') setUrlaubVon(value);
+    if (datePickerTarget === 'bis') setUrlaubBis(value);
+    setDatePickerTarget(null);
   };
 
   const handleDeleteUrlaub = async (id: string, praxisNameDelete: string) => {
@@ -251,19 +342,30 @@ const ArztUrlaubScreen: React.FC<ArztUrlaubScreenProps> = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      <KeyboardAvoidingView
+        style={styles.keyboardAvoidingContainer}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* ---------- Header ---------- */}
         <View style={styles.header}>
           {navigation ? (
             <TouchableOpacity
-              style={styles.backButton}
-              onPress={() => navigation.goBack()}
+              style={[styles.addButton, styles.headerActionButton]}
+              onPress={requestGoBack}
               accessibilityLabel="Zurück"
             >
-              <Text style={styles.backButtonText}>Zurück</Text>
+              <Text style={styles.addButtonText}>Zurück</Text>
             </TouchableOpacity>
           ) : null}
-          <Text style={styles.headerTitle}>Arzt-Urlaub verwalten</Text>
+          <TouchableOpacity
+            style={[styles.addButton, styles.headerActionButton]}
+            onPress={() => handleAddUrlaub()}
+            accessibilityRole="button"
+            accessibilityLabel="Urlaub eintragen"
+          >
+            <Text style={styles.addButtonText}>Speichern</Text>
+          </TouchableOpacity>
         </View>
 
         {/* ---------- Form Section ---------- */}
@@ -310,32 +412,52 @@ const ArztUrlaubScreen: React.FC<ArztUrlaubScreenProps> = ({ navigation }) => {
           />
 
           <Text style={styles.label}>Urlaub von</Text>
-          <TextInput
-            style={styles.input}
-            value={urlaubVon}
-            onChangeText={setUrlaubVon}
-            placeholder="TT.MM.JJJJ"
-            placeholderTextColor="#999"
-            keyboardType="numeric"
-            maxLength={10}
-            accessibilityLabel="Urlaub Startdatum eingeben"
-          />
+          <View style={styles.dateInputRow}>
+            <TextInput
+              style={[styles.input, styles.dateInput]}
+              value={urlaubVon}
+              onChangeText={text => setUrlaubVon(normalizeGermanDateInput(text))}
+              placeholder="TT.MM.JJJJ"
+              placeholderTextColor="#999"
+              keyboardType="numeric"
+              maxLength={10}
+              accessibilityLabel="Urlaub Startdatum eingeben"
+            />
+            <TouchableOpacity
+              style={styles.datePickerButton}
+              onPress={() => openDatePicker('von')}
+              accessibilityRole="button"
+              accessibilityLabel="Startdatum auswählen"
+            >
+              <Text style={styles.datePickerButtonText}>Datum</Text>
+            </TouchableOpacity>
+          </View>
 
           <Text style={styles.label}>Urlaub bis</Text>
-          <TextInput
-            style={styles.input}
-            value={urlaubBis}
-            onChangeText={setUrlaubBis}
-            placeholder="TT.MM.JJJJ"
-            placeholderTextColor="#999"
-            keyboardType="numeric"
-            maxLength={10}
-            accessibilityLabel="Urlaub Enddatum eingeben"
-          />
+          <View style={styles.dateInputRow}>
+            <TextInput
+              style={[styles.input, styles.dateInput]}
+              value={urlaubBis}
+              onChangeText={text => setUrlaubBis(normalizeGermanDateInput(text))}
+              placeholder="TT.MM.JJJJ"
+              placeholderTextColor="#999"
+              keyboardType="numeric"
+              maxLength={10}
+              accessibilityLabel="Urlaub Enddatum eingeben"
+            />
+            <TouchableOpacity
+              style={styles.datePickerButton}
+              onPress={() => openDatePicker('bis')}
+              accessibilityRole="button"
+              accessibilityLabel="Enddatum auswählen"
+            >
+              <Text style={styles.datePickerButtonText}>Datum</Text>
+            </TouchableOpacity>
+          </View>
 
           <TouchableOpacity
             style={styles.addButton}
-            onPress={handleAddUrlaub}
+            onPress={() => handleAddUrlaub()}
             accessibilityLabel="Urlaub eintragen"
           >
             <Text style={styles.addButtonText}>Urlaub eintragen</Text>
@@ -533,10 +655,101 @@ const ArztUrlaubScreen: React.FC<ArztUrlaubScreenProps> = ({ navigation }) => {
             </View>
           </View>
         </Modal>
+
+        <Modal
+          visible={datePickerTarget !== null}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setDatePickerTarget(null)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.datePickerModal}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>
+                  {datePickerTarget === 'von' ? 'Startdatum wählen' : 'Enddatum wählen'}
+                </Text>
+                <TouchableOpacity onPress={() => setDatePickerTarget(null)}>
+                  <Text style={styles.closeIcon}>✕</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.monthHeader}>
+                <TouchableOpacity
+                  style={styles.monthNavButton}
+                  onPress={() => setPickerMonth(addMonths(pickerMonth, -1))}
+                  accessibilityRole="button"
+                  accessibilityLabel="Vorheriger Monat"
+                >
+                  <Text style={styles.monthNavText}>‹</Text>
+                </TouchableOpacity>
+                <Text style={styles.monthTitle}>{formatMonthTitle(pickerMonth)}</Text>
+                <TouchableOpacity
+                  style={styles.monthNavButton}
+                  onPress={() => setPickerMonth(addMonths(pickerMonth, 1))}
+                  accessibilityRole="button"
+                  accessibilityLabel="Nächster Monat"
+                >
+                  <Text style={styles.monthNavText}>›</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.calendarGrid}>
+                {['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'].map(day => (
+                  <Text key={day} style={styles.weekdayLabel}>{day}</Text>
+                ))}
+                {buildCalendarDays(pickerMonth).map((date, index) => (
+                  date ? (
+                    <TouchableOpacity
+                      key={date.toISOString()}
+                      style={styles.calendarDayButton}
+                      onPress={() => selectDate(date)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${dateToGermanInput(date)} auswählen`}
+                    >
+                      <Text style={styles.calendarDayText}>{date.getDate()}</Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <View key={`empty-${index}`} style={styles.calendarDayButton} />
+                  )
+                ))}
+              </View>
+              <TouchableOpacity
+                style={styles.todayButton}
+                onPress={() => selectDate(new Date())}
+                accessibilityRole="button"
+                accessibilityLabel="Heute auswählen"
+              >
+                <Text style={styles.todayButtonText}>Heute</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
       </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 };
+
+function startOfMonth(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+
+function addMonths(date: Date, months: number): Date {
+  return new Date(date.getFullYear(), date.getMonth() + months, 1);
+}
+
+function formatMonthTitle(date: Date): string {
+  return date.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' });
+}
+
+function buildCalendarDays(month: Date): Array<Date | null> {
+  const first = startOfMonth(month);
+  const last = new Date(first.getFullYear(), first.getMonth() + 1, 0);
+  const leading = (first.getDay() + 6) % 7;
+  const days: Array<Date | null> = Array.from({ length: leading }, () => null);
+  for (let day = 1; day <= last.getDate(); day++) {
+    days.push(new Date(first.getFullYear(), first.getMonth(), day));
+  }
+  return days;
+}
 
 // ---------- Styles ----------
 
@@ -545,6 +758,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f5f5f5',
   },
+  keyboardAvoidingContainer: {
+    flex: 1,
+  },
   scrollContent: {
     padding: 16,
     paddingBottom: 40,
@@ -552,25 +768,13 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 24,
+    gap: 12,
+    marginBottom: 20,
     paddingTop: 8,
   },
-  backButton: {
-    paddingVertical: 12,
-    paddingRight: 16,
-    minHeight: 44,
-    justifyContent: 'center',
-  },
-  backButtonText: {
-    fontSize: 20,
-    color: '#007AFF',
-    fontWeight: '600',
-  },
-  headerTitle: {
-    fontSize: 26,
-    fontWeight: 'bold',
-    color: '#1a1a1a',
+  headerActionButton: {
     flex: 1,
+    marginTop: 0,
   },
   section: {
     backgroundColor: '#ffffff',
@@ -607,6 +811,27 @@ const styles = StyleSheet.create({
     color: '#1a1a1a',
     minHeight: 50,
   },
+  dateInputRow: {
+    flexDirection: 'row',
+    gap: 10,
+    alignItems: 'center',
+  },
+  dateInput: {
+    flex: 1,
+  },
+  datePickerButton: {
+    minHeight: 50,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: '#0B63CE',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  datePickerButtonText: {
+    color: '#fff',
+    fontSize: 17,
+    fontWeight: '700',
+  },
   selectButton: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -625,7 +850,7 @@ const styles = StyleSheet.create({
     color: '#27ae60',
   },
   addButton: {
-    backgroundColor: '#28a745',
+    backgroundColor: '#0B63CE',
     borderRadius: 10,
     paddingVertical: 16,
     alignItems: 'center',
@@ -763,6 +988,81 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 20,
     maxHeight: '80%',
+  },
+  datePickerModal: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
+  },
+  monthHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  monthNavButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#E8F1FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  monthNavText: {
+    color: '#0B63CE',
+    fontSize: 30,
+    fontWeight: '700',
+  },
+  monthTitle: {
+    flex: 1,
+    textAlign: 'center',
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1a1a1a',
+  },
+  calendarGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  weekdayLabel: {
+    width: '14.285%',
+    textAlign: 'center',
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#666',
+    marginBottom: 6,
+  },
+  calendarDayButton: {
+    width: '14.285%',
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  calendarDayText: {
+    minWidth: 36,
+    minHeight: 36,
+    borderRadius: 18,
+    textAlign: 'center',
+    textAlignVertical: 'center',
+    paddingTop: Platform.OS === 'ios' ? 8 : 0,
+    backgroundColor: '#F3F6FA',
+    color: '#1a1a1a',
+    fontSize: 17,
+    fontWeight: '600',
+  },
+  todayButton: {
+    marginTop: 12,
+    minHeight: 48,
+    borderRadius: 10,
+    backgroundColor: '#0B63CE',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  todayButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '700',
   },
   modalHeader: {
     flexDirection: 'row',

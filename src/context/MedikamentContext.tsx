@@ -14,8 +14,14 @@ import {
   updateMedikament,
   deleteMedikament,
   getMedikamenteUnterSchwelle,
+  getMedikamentById,
 } from '../database/MedikamentController';
 import { logger } from '../utils/Logger';
+import {
+  cancelErinnerungen,
+  planeAlleErinnerungen,
+  planeErinnerungen,
+} from '../services/ErinnerungsService';
 
 interface MedikamentContextType {
   medikamente: MedikamentRow[];
@@ -23,13 +29,37 @@ interface MedikamentContextType {
   loading: boolean;
   refresh: () => Promise<void>;
   addMedikament: (med: Omit<MedikamentRow, 'created_at' | 'updated_at'>) => Promise<string>;
-  bestätigeEinnahme: (id: string, dosisOverride?: number) => Promise<number>;
+  bestätigeEinnahme: (id: string, dosisOverride?: number, slot?: string) => Promise<number>;
   aktualisiereBestand: (id: string, bestand: number) => Promise<void>;
   bearbeiteMedikament: (id: string, updates: Partial<MedikamentRow>) => Promise<void>;
   entferneMedikament: (id: string) => Promise<void>;
 }
 
 const MedikamentContext = createContext<MedikamentContextType | undefined>(undefined);
+
+async function synchronisiereErinnerung(med: Omit<MedikamentRow, 'created_at' | 'updated_at'> | MedikamentRow): Promise<void> {
+  try {
+    await planeErinnerungen(med);
+  } catch (error) {
+    logger.error('[Erinnerung] Planung fehlgeschlagen:', error);
+  }
+}
+
+async function synchronisiereAlleErinnerungen(medikamente: MedikamentRow[]): Promise<void> {
+  try {
+    await planeAlleErinnerungen(medikamente);
+  } catch (error) {
+    logger.error('[Erinnerung] Neuplanung fehlgeschlagen:', error);
+  }
+}
+
+async function entferneErinnerungen(id: string): Promise<void> {
+  try {
+    await cancelErinnerungen(id);
+  } catch (error) {
+    logger.error('[Erinnerung] Abbrechen fehlgeschlagen:', error);
+  }
+}
 
 export function MedikamentProvider({ children }: { children: React.ReactNode }) {
   const [medikamente, setMedikamente] = useState<MedikamentRow[]>([]);
@@ -53,6 +83,8 @@ export function MedikamentProvider({ children }: { children: React.ReactNode }) 
       try {
         await database.init();
         await refresh();
+        const all = await getAllMedikamente();
+        await synchronisiereAlleErinnerungen(all);
       } catch (error) {
         logger.error('[Context] Init-Fehler:', error);
       } finally {
@@ -63,12 +95,13 @@ export function MedikamentProvider({ children }: { children: React.ReactNode }) 
 
   const addMedikament = async (med: Omit<MedikamentRow, 'created_at' | 'updated_at'>) => {
     const id = await createMedikament(med);
+    await synchronisiereErinnerung({ ...med, id });
     await refresh();
     return id;
   };
 
-  const bestätigeEinnahme = async (id: string, dosisOverride?: number) => {
-    const neuerBestand = await einnahmeVerbuchen(id, dosisOverride);
+  const bestätigeEinnahme = async (id: string, dosisOverride?: number, slot?: string) => {
+    const neuerBestand = await einnahmeVerbuchen(id, dosisOverride, slot);
     await refresh();
     return neuerBestand;
   };
@@ -80,10 +113,15 @@ export function MedikamentProvider({ children }: { children: React.ReactNode }) 
 
   const bearbeiteMedikament = async (id: string, updates: Partial<MedikamentRow>) => {
     await updateMedikament(id, updates);
+    const aktualisiert = await getMedikamentById(id);
+    if (aktualisiert) {
+      await synchronisiereErinnerung(aktualisiert);
+    }
     await refresh();
   };
 
   const entferneMedikament = async (id: string) => {
+    await entferneErinnerungen(id);
     await deleteMedikament(id);
     await refresh();
   };

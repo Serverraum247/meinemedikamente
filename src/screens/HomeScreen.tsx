@@ -5,7 +5,7 @@
  * klare Anzeige der Bestände (inkl. Float-Werte wie 28.5)
  */
 
-import React, { useEffect, useState, useRef, useMemo } from 'react';
+import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -20,17 +20,18 @@ import {
   Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { useMedikamente } from '../context/MedikamentContext';
 import { calculateReichweite, formatStaerke } from '../utils/ReichweitenCalc';
 import { usePersonen } from '../context/PersonenContext';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 import { calculateUrlaubsWarnungen } from '../database/UrlaubController';
-import type { UrlaubsWarnung } from '../database/UrlaubController';
 import { getMaxMedikamente, isPremium } from '../services/PremiumService';
 import { version as APP_VERSION } from '../../package.json';
 import {
   getOffeneEinnahmen,
+  getHeutigeEinnahmeMedikamentIds,
   sollErinnerungZeigen,
   setzteLetzteErinnerung,
   type OffeneEinnahme,
@@ -39,16 +40,29 @@ import { einnahmeVerbuchen } from '../database/MedikamentController';
 import EinnahmeErinnerungModal from '../components/EinnahmeErinnerungModal';
 import { logger } from '../utils/Logger';
 import { showPremiumRequiredAlert } from '../utils/PremiumAlerts';
+import {
+  getUrlaubsReminderTasks,
+  markUrlaubsReminderDone,
+  postponeUrlaubsReminderForToday,
+  type UrlaubsReminderTask,
+} from '../services/UrlaubsReminderService';
+import {
+  formatActiveIngredient,
+  formatActiveIngredientStrengthSummary,
+  parseActiveIngredients,
+} from '../utils/ActiveIngredients';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
 
 export default function HomeScreen({ navigation }: Props) {
   const { medikamente, medikamenteUnterSchwelle, loading, refresh } = useMedikamente();
   const { personen, aktivePerson, setAktivePerson, maxPersonen, premium } = usePersonen();
-  const [urlaubsWarnungen, setUrlaubsWarnungen] = useState<UrlaubsWarnung[]>([]);
+  const [urlaubsReminderTasks, setUrlaubsReminderTasks] = useState<UrlaubsReminderTask[]>([]);
   const [menueOffen, setMenueOffen] = useState(false);
   const [erinnerungOffen, setErinnerungOffen] = useState(false);
   const [offeneEinnahmen, setOffeneEinnahmen] = useState<OffeneEinnahme[]>([]);
+  const [heuteEingenommenIds, setHeuteEingenommenIds] = useState<Set<string>>(new Set());
+  const [offeneEinnahmeMedikamentIds, setOffeneEinnahmeMedikamentIds] = useState<Set<string>>(new Set());
 
   // Medikamente nach aktiver Person filtern
   const gefilterteMedikamente = useMemo(() => {
@@ -56,11 +70,11 @@ export default function HomeScreen({ navigation }: Props) {
     return medikamente.filter(m => m.person_id === aktivePerson.id);
   }, [medikamente, aktivePerson]);
 
-  // Warnungen nach aktiver Person filtern
-  const gefilterteWarnungen = useMemo(() => {
-    if (!aktivePerson) return urlaubsWarnungen;
-    return urlaubsWarnungen.filter(w => w.medikament.person_id === aktivePerson.id);
-  }, [urlaubsWarnungen, aktivePerson]);
+  // Urlaub-Erinnerungen nach aktiver Person filtern
+  const gefilterteUrlaubsReminder = useMemo(() => {
+    if (!aktivePerson) return urlaubsReminderTasks;
+    return urlaubsReminderTasks.filter(task => task.personId === aktivePerson.id);
+  }, [urlaubsReminderTasks, aktivePerson]);
 
   // Unter-Schwelle nach aktiver Person filtern
   const gefilterteUnterSchwelle = useMemo(() => {
@@ -71,6 +85,16 @@ export default function HomeScreen({ navigation }: Props) {
   // Premium-Status einmal laden
   const [premiumStatus, setPremiumStatus] = useState(false);
   useEffect(() => { isPremium().then(setPremiumStatus); }, []);
+
+  const ladeEinnahmeStatus = useCallback(async () => {
+    const [eingenommenIds, offene] = await Promise.all([
+      getHeutigeEinnahmeMedikamentIds(),
+      getOffeneEinnahmen(0),
+    ]);
+    setHeuteEingenommenIds(eingenommenIds);
+    setOffeneEinnahmeMedikamentIds(new Set(offene.map(e => e.medikamentId)));
+    return { eingenommenIds, offene };
+  }, []);
 
   // Hamburger-Menü im Header links
   useEffect(() => {
@@ -90,10 +114,25 @@ export default function HomeScreen({ navigation }: Props) {
     });
   }, [navigation]);
 
-  // Urlaub-Kollisionen laden
+  // Urlaub-Kollisionen als Tagesaufgabe laden
   useEffect(() => {
-    calculateUrlaubsWarnungen().then(setUrlaubsWarnungen).catch(logger.error);
+    ladeUrlaubsReminder().catch(logger.error);
   }, []);
+
+  const ladeUrlaubsReminder = async () => {
+    const warnungen = await calculateUrlaubsWarnungen();
+    const tasks = await getUrlaubsReminderTasks(warnungen);
+    setUrlaubsReminderTasks(tasks);
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      if (loading) return;
+      ladeEinnahmeStatus().catch(error => {
+        logger.error('Einnahme-Status konnte nicht geladen werden:', error);
+      });
+    }, [ladeEinnahmeStatus, loading])
+  );
 
   // Einnahme-Erinnerung prüfen beim Öffnen
   useEffect(() => {
@@ -102,10 +141,11 @@ export default function HomeScreen({ navigation }: Props) {
 
     const pruefeErinnerung = async () => {
       try {
+        const { offene } = await ladeEinnahmeStatus();
+
         const sollZeigen = await sollErinnerungZeigen(60);
         if (!sollZeigen || !aktiv) return;
 
-        const offene = await getOffeneEinnahmen(0);
         if (!aktiv || offene.length === 0) return;
 
         setOffeneEinnahmen(offene);
@@ -118,7 +158,7 @@ export default function HomeScreen({ navigation }: Props) {
     // Leichte Verzoegerung damit die UI erst aufbaut
     const timer = setTimeout(pruefeErinnerung, 1500);
     return () => { aktiv = false; clearTimeout(timer); };
-  }, [loading]);
+  }, [ladeEinnahmeStatus, loading]);
 
   const openAddMedikament = async () => {
     const max = await getMaxMedikamente();
@@ -127,6 +167,26 @@ export default function HomeScreen({ navigation }: Props) {
       return;
     }
     navigation.navigate('AddMedikament');
+  };
+
+  const erledigeUrlaubsReminder = async (task: UrlaubsReminderTask) => {
+    try {
+      await markUrlaubsReminderDone(task.key);
+      setUrlaubsReminderTasks(prev => prev.filter(item => item.key !== task.key));
+    } catch (error) {
+      logger.error('Urlaubs-Erinnerung konnte nicht erledigt werden:', error);
+      Alert.alert('Fehler', 'Die Erinnerung konnte nicht gespeichert werden.');
+    }
+  };
+
+  const verschiebeUrlaubsReminder = async (task: UrlaubsReminderTask) => {
+    try {
+      await postponeUrlaubsReminderForToday(task.key);
+      setUrlaubsReminderTasks(prev => prev.filter(item => item.key !== task.key));
+    } catch (error) {
+      logger.error('Urlaubs-Erinnerung konnte nicht verschoben werden:', error);
+      Alert.alert('Fehler', 'Die Erinnerung konnte nicht verschoben werden.');
+    }
   };
 
   if (loading) {
@@ -144,9 +204,15 @@ export default function HomeScreen({ navigation }: Props) {
   const renderMedikament = ({ item }: { item: typeof medikamente[0] }) => {
     const isUnterSchwelle = item.aktueller_bestand <= item.warnung_ab_bestand;
     const reichweite = calculateReichweite(item);
-    const staerkeText = premiumStatus ? formatStaerke(item.staerke_wert, item.staerke_einheit) : null;
+    const staerkeText =
+      formatStaerke(item.staerke_wert, item.staerke_einheit) ||
+      formatActiveIngredientStrengthSummary(item.zusatz || '');
     const bestandText = formatCompactNumber(item.aktueller_bestand);
     const reichweiteBis = formatReichweiteBis(reichweite.leerDatum);
+    const heuteEingenommen = heuteEingenommenIds.has(item.id);
+    const heuteOffen = offeneEinnahmeMedikamentIds.has(item.id);
+    const activeIngredients = parseActiveIngredients(item.zusatz || '');
+    const showIngredientList = activeIngredients.length > 1 && activeIngredients.some(ingredient => ingredient.strength);
 
     return (
       <TouchableOpacity
@@ -163,11 +229,27 @@ export default function HomeScreen({ navigation }: Props) {
       >
         <View style={styles.cardContent}>
           <Text style={styles.medName}>{item.name}</Text>
-          {item.zusatz ? (
+          {showIngredientList ? (
+            <View style={styles.wirkstoffListe}>
+              {activeIngredients.map((ingredient, index) => (
+                <Text key={`${ingredient.name}-${index}`} style={styles.medZusatz}>
+                  {formatActiveIngredient(ingredient)}
+                </Text>
+              ))}
+            </View>
+          ) : item.zusatz ? (
             <Text style={styles.medZusatz}>{item.zusatz}</Text>
           ) : null}
           {staerkeText ? (
-            <Text style={styles.medStaerke}>💊 {staerkeText}</Text>
+            <View
+              style={styles.medStaerkeBadge}
+              accessibilityLabel={`Stärke: ${staerkeText}`}
+            >
+              <View style={styles.medStaerkeIcon} accessibilityElementsHidden>
+                <View style={styles.medStaerkeIconHalf} />
+              </View>
+              <Text style={styles.medStaerkeText}>{staerkeText}</Text>
+            </View>
           ) : null}
           <View style={styles.reichweiteRow}>
             <View style={[
@@ -192,6 +274,13 @@ export default function HomeScreen({ navigation }: Props) {
               ⚠ Nachbestellen empfohlen!
             </Text>
           )}
+          {heuteEingenommen ? (
+            <Text style={styles.eingenommenText}>✓ Heute eingenommen</Text>
+          ) : heuteOffen ? (
+            <Text style={styles.offenText}>○ Heute noch offen</Text>
+          ) : item.erinnerung_aktiv ? (
+            <Text style={styles.geplantText}>○ Heute geplant</Text>
+          ) : null}
         </View>
         <View style={styles.cardBestand}>
           <Text style={[styles.bestandZahl, isUnterSchwelle && styles.bestandWarning]} maxFontSizeMultiplier={1.3}>
@@ -200,6 +289,43 @@ export default function HomeScreen({ navigation }: Props) {
           <Text style={styles.bestandLabel}>{item.einheit}</Text>
         </View>
       </TouchableOpacity>
+    );
+  };
+
+  const renderUrlaubsReminderTask = () => {
+    const task = gefilterteUrlaubsReminder[0];
+    if (!task) return null;
+    const restliche = gefilterteUrlaubsReminder.length - 1;
+
+    return (
+      <View style={styles.dailyTaskCard} accessibilityLiveRegion="polite">
+        <Text style={styles.dailyTaskEyebrow}>Heute wichtig</Text>
+        <Text style={styles.dailyTaskTitle}>{task.title}</Text>
+        <Text style={styles.dailyTaskBody}>{task.body}</Text>
+        {restliche > 0 ? (
+          <Text style={styles.dailyTaskMore}>
+            + {restliche} weitere Erinnerung(en)
+          </Text>
+        ) : null}
+        <View style={styles.dailyTaskActions}>
+          <TouchableOpacity
+            style={[styles.dailyTaskButton, styles.dailyTaskButtonSecondary]}
+            onPress={() => verschiebeUrlaubsReminder(task)}
+            accessibilityRole="button"
+            accessibilityLabel="Urlaubserinnerung später anzeigen"
+          >
+            <Text style={styles.dailyTaskButtonSecondaryText}>Später</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.dailyTaskButton, styles.dailyTaskButtonPrimary]}
+            onPress={() => erledigeUrlaubsReminder(task)}
+            accessibilityRole="button"
+            accessibilityLabel="Urlaubserinnerung als erledigt markieren"
+          >
+            <Text style={styles.dailyTaskButtonPrimaryText}>Erledigt</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
     );
   };
 
@@ -256,21 +382,6 @@ export default function HomeScreen({ navigation }: Props) {
         </View>
       )}
 
-      {/* Urlaub-Kollisions-Banner */}
-      {gefilterteWarnungen.length > 0 && (
-        <TouchableOpacity
-          style={styles.urlaubBanner}
-          onPress={() => navigation.navigate('ArztUrlaub')}
-          activeOpacity={0.7}
-          accessibilityRole="button"
-          accessibilityLabel={`${gefilterteWarnungen.length} Urlaub-Kollisionen. Medikamente werden während Arzturlaub leer. Tippen für Details.`}
-        >
-          <Text style={styles.urlaubBannerText}>
-            📅 {gefilterteWarnungen.length} Urlaub-Kollision(en) – Medikamente werden während Arzturlaub leer!
-          </Text>
-        </TouchableOpacity>
-      )}
-
       {/* Leerer Zustand */}
       {gefilterteMedikamente.length === 0 ? (
         <View style={styles.center}>
@@ -295,6 +406,7 @@ export default function HomeScreen({ navigation }: Props) {
           data={gefilterteMedikamente}
           keyExtractor={item => item.id}
           renderItem={renderMedikament}
+          ListHeaderComponent={renderUrlaubsReminderTask}
           contentContainerStyle={styles.list}
         />
       )}
@@ -399,15 +511,12 @@ export default function HomeScreen({ navigation }: Props) {
       <EinnahmeErinnerungModal
         visible={erinnerungOffen}
         offeneEinnahmen={offeneEinnahmen}
-        onBestaetigen={async (medikamentId, dosis) => {
-          await einnahmeVerbuchen(medikamentId, dosis);
+        onBestaetigen={async (medikamentId, dosis, slot) => {
+          await einnahmeVerbuchen(medikamentId, dosis, slot);
           await refresh();
-          // Offene Liste aktualisieren
-          const neueOffene = offeneEinnahmen.filter(
-            e => e.medikamentId !== medikamentId
-          );
-          setOffeneEinnahmen(neueOffene);
-          if (neueOffene.length === 0) {
+          const { offene } = await ladeEinnahmeStatus();
+          setOffeneEinnahmen(offene);
+          if (offene.length === 0) {
             setErinnerungOffen(false);
           }
           await setzteLetzteErinnerung();
@@ -543,11 +652,40 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     marginBottom: 4,
   },
-  medStaerke: {
-    fontSize: 14,
-    color: '#2196F3',
-    fontWeight: '600',
+  wirkstoffListe: {
+    marginBottom: 2,
+  },
+  medStaerkeBadge: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E8F3FF',
+    borderWidth: 1,
+    borderColor: '#B7D8F5',
+    borderRadius: 999,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
     marginBottom: 4,
+  },
+  medStaerkeIcon: {
+    width: 22,
+    height: 12,
+    borderRadius: 999,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#2F80C9',
+    overflow: 'hidden',
+    marginRight: 7,
+  },
+  medStaerkeIconHalf: {
+    width: 11,
+    height: 12,
+    backgroundColor: '#B7D8F5',
+  },
+  medStaerkeText: {
+    fontSize: 14,
+    color: '#155C96',
+    fontWeight: '700',
   },
   medDetail: {
     fontSize: 16,
@@ -588,6 +726,24 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: 4,
   },
+  eingenommenText: {
+    marginTop: 8,
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1B7F3A',
+  },
+  offenText: {
+    marginTop: 8,
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#A15C00',
+  },
+  geplantText: {
+    marginTop: 8,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#555',
+  },
   cardBestand: {
     alignItems: 'center',
     paddingLeft: 16,
@@ -615,6 +771,73 @@ const styles = StyleSheet.create({
     color: '#856404',
     fontWeight: '600',
     textAlign: 'center',
+  },
+  dailyTaskCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#0B63CE',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  dailyTaskEyebrow: {
+    fontSize: 14,
+    color: '#0B63CE',
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    marginBottom: 4,
+  },
+  dailyTaskTitle: {
+    fontSize: 20,
+    color: '#1a1a2e',
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  dailyTaskBody: {
+    fontSize: 17,
+    color: '#333',
+    lineHeight: 24,
+  },
+  dailyTaskMore: {
+    fontSize: 15,
+    color: '#666',
+    fontWeight: '600',
+    marginTop: 8,
+  },
+  dailyTaskActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 14,
+  },
+  dailyTaskButton: {
+    flex: 1,
+    minHeight: 48,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dailyTaskButtonPrimary: {
+    backgroundColor: '#0B63CE',
+  },
+  dailyTaskButtonSecondary: {
+    backgroundColor: '#EEF4FC',
+    borderWidth: 1,
+    borderColor: '#B8D1F0',
+  },
+  dailyTaskButtonPrimaryText: {
+    color: '#fff',
+    fontSize: 17,
+    fontWeight: '700',
+  },
+  dailyTaskButtonSecondaryText: {
+    color: '#0B63CE',
+    fontSize: 17,
+    fontWeight: '700',
   },
   emptyTitle: {
     fontSize: 24,
@@ -727,17 +950,5 @@ const styles = StyleSheet.create({
   menueVersion: {
     fontSize: 14,
     color: '#999',
-  },
-  urlaubBanner: {
-    backgroundColor: '#fff3cd',
-    borderLeftWidth: 4,
-    borderLeftColor: '#e74c3c',
-    padding: 12,
-  },
-  urlaubBannerText: {
-    fontSize: 16,
-    color: '#856404',
-    fontWeight: '600',
-    textAlign: 'center',
   },
 });

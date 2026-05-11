@@ -24,7 +24,7 @@ describe('getMedicationNameSuggestions', () => {
   it('returns known active ingredients for offline medication names', () => {
     expect(getMedicationNameSuggestionMetadata('Biso Lich')?.activeIngredient).toBe('Bisoprolol');
     expect(getMedicationNameSuggestionMetadata('Candecor comp.')?.activeIngredient).toBe(
-      'Candesartan/Hydrochlorothiazid',
+      'Candesartan 16 mg + Hydrochlorothiazid 12,5 mg',
     );
     expect(getMedicationNameSuggestionMetadata('Lercanidipin-Omniapharm')?.activeIngredient).toBe(
       'Lercanidipin',

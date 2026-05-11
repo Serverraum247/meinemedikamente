@@ -118,7 +118,12 @@ class MedicationPlanShareModule(
   }
 
   private fun safeFileName(value: String): String {
-    val sanitized = value.replace(Regex("[^A-Za-z0-9._-]"), "-")
+    val sanitized = value
+      .replace("ß", "ss")
+      .replace("ẞ", "SS")
+      .replace(Regex("[^A-Za-z0-9 ._-]"), " ")
+      .replace(Regex("\\s+"), " ")
+      .trim()
     return if (sanitized.endsWith(".pdf")) sanitized else "$sanitized.pdf"
   }
 }

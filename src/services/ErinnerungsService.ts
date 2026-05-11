@@ -11,7 +11,11 @@
  */
 
 import notifee, {
+  AlarmType,
   AndroidImportance,
+  AndroidNotificationSetting,
+  AuthorizationStatus,
+  EventType,
   TriggerType,
   RepeatFrequency,
 } from '@notifee/react-native';
@@ -20,8 +24,20 @@ import { logger } from '../utils/Logger';
 import {
   getIsoWochentag,
   parseEinnahmeplan,
+  SLOT_META,
   type Wochentag,
 } from '../utils/Einnahmeplan';
+
+type ErinnerungsMedikament = Pick<
+  MedikamentRow,
+  | 'id'
+  | 'name'
+  | 'einzeldosis'
+  | 'einheit'
+  | 'erinnerung_aktiv'
+  | 'einnahme_uhrzeiten'
+  | 'auto_abzug_aktiv'
+>;
 
 // Eindeutiger Channel für Android
 const CHANNEL_ID = 'medikament-erinnerung';
@@ -32,7 +48,15 @@ const CHANNEL_NAME = 'Medikamenten-Erinnerung';
  */
 export async function requestNotificationBerechtigung(): Promise<boolean> {
   const settings = await notifee.requestPermission();
-  return settings.authorizationStatus >= 1; // 1 = authorized
+  const erlaubt =
+    settings.authorizationStatus === AuthorizationStatus.AUTHORIZED ||
+    settings.authorizationStatus === AuthorizationStatus.PROVISIONAL;
+
+  if (!erlaubt) {
+    logger.warn('[Erinnerung] Benachrichtigungen sind nicht erlaubt.');
+  }
+
+  return erlaubt;
 }
 
 /**
@@ -70,8 +94,7 @@ export async function cancelErinnerungen(medikamentId: string): Promise<void> {
  * @param onEinnahme Optionaler Callback für Auto-Abzug (wird im Foreground aufgerufen)
  */
 export async function planeErinnerungen(
-  medikament: MedikamentRow,
-  onEinnahme?: (medikamentId: string) => void
+  medikament: ErinnerungsMedikament,
 ): Promise<void> {
   // Erst alte Erinnerungen canceln
   await cancelErinnerungen(medikament.id);
@@ -81,8 +104,21 @@ export async function planeErinnerungen(
   const plan = parseEinnahmeplan(medikament.einnahme_uhrzeiten || '[]');
   if (plan.length === 0) return;
 
+  const darfBenachrichtigen = await requestNotificationBerechtigung();
+  if (!darfBenachrichtigen) return;
+
   const channelId = await createChannel();
   const now = new Date();
+  const notificationSettings = await notifee.getNotificationSettings();
+  const kannExakteAndroidAlarme =
+    notificationSettings.android.alarm === AndroidNotificationSetting.ENABLED ||
+    notificationSettings.android.alarm === AndroidNotificationSetting.NOT_SUPPORTED;
+
+  if (!kannExakteAndroidAlarme) {
+    logger.warn(
+      '[Erinnerung] Exakte Android-Alarme sind nicht erlaubt. Erinnerung wird geplant, kann aber verspaetet erscheinen.'
+    );
+  }
 
   for (const slot of plan) {
     const [stunden, minuten] = slot.uhrzeit.split(':').map(Number);
@@ -98,13 +134,13 @@ export async function planeErinnerungen(
 
     for (const triggerDate of triggerDates) {
       const weekdaySuffix = wochentage ? `-${getIsoWochentag(triggerDate)}` : '';
-      const notifId = `med-${medikament.id}-${slot.uhrzeit.replace(':', '')}${weekdaySuffix}`;
+      const notifId = `med-${medikament.id}-${slot.slot}-${slot.uhrzeit.replace(':', '')}${weekdaySuffix}`;
 
       await notifee.createTriggerNotification(
         {
           id: notifId,
           title: `💊 ${medikament.name}`,
-          body: `Zeit für Ihre Einnahme: ${dosis} ${medikament.einheit}`,
+          body: `${SLOT_META[slot.slot].label}: Zeit für Ihre Einnahme: ${dosis} ${medikament.einheit}`,
           android: {
             channelId,
             importance: AndroidImportance.HIGH,
@@ -115,6 +151,7 @@ export async function planeErinnerungen(
           },
           data: {
             medikamentId: medikament.id,
+            slot: slot.slot,
             autoAbzug: String(medikament.auto_abzug_aktiv),
             dosis: String(dosis),
           },
@@ -123,9 +160,9 @@ export async function planeErinnerungen(
           type: TriggerType.TIMESTAMP,
           timestamp: triggerDate.getTime(),
           repeatFrequency: wochentage ? RepeatFrequency.WEEKLY : RepeatFrequency.DAILY,
-          alarmManager: {
-            allowWhileIdle: true,
-          },
+          ...(kannExakteAndroidAlarme
+            ? { alarmManager: { type: AlarmType.SET_EXACT_AND_ALLOW_WHILE_IDLE } }
+            : {}),
         }
       );
     }
@@ -171,7 +208,7 @@ function naechsterTerminFuerWochentag(
  * (z.B. nach App-Start oder Änderung der Uhrzeiten)
  */
 export async function planeAlleErinnerungen(
-  medikamente: MedikamentRow[]
+  medikamente: ErinnerungsMedikament[]
 ): Promise<void> {
   for (const med of medikamente) {
     if (med.erinnerung_aktiv) {
@@ -188,7 +225,7 @@ export function registerForegroundHandler(
   onAutoAbzug: (medikamentId: string, dosis?: number) => void
 ): () => void {
   return notifee.onForegroundEvent(async ({ type, detail }) => {
-    if (type === 1) { // DELIVERED
+    if (type === EventType.DELIVERED) {
       const data = detail.notification?.data;
       if (data?.medikamentId && data?.autoAbzug === '1') {
         const dosis = data.dosis !== undefined ? Number(data.dosis) : undefined;

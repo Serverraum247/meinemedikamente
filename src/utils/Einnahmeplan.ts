@@ -262,6 +262,8 @@ export function setSlotDosis(plan: EinnahmeSlot[], slot: TageszeitSlot, dosis: n
 /**
  * Wochentag fuer einen Slot toggeln.
  * Keine gespeicherten Wochentage bedeutet taegliche Einnahme.
+ * Alle sieben gespeicherten Wochentage bleiben explizit erhalten, damit die UI
+ * nicht unerwartet auf "taeglich" zurueckspringt.
  */
 export function toggleSlotWochentag(
   plan: EinnahmeSlot[],
@@ -275,12 +277,20 @@ export function toggleSlotWochentag(
       ? current.filter(tag => tag !== wochentag)
       : [...current, wochentag].sort((a, b) => a - b);
 
-    if (next.length === 0 || next.length === WOCHENTAGE_META.length) {
+    if (next.length === 0) {
       const { wochentage, ...rest } = s;
       return rest;
     }
 
     return { ...s, wochentage: next };
+  });
+}
+
+export function setSlotTaeglich(plan: EinnahmeSlot[], slot: TageszeitSlot): EinnahmeSlot[] {
+  return plan.map(s => {
+    if (s.slot !== slot) return s;
+    const { wochentage, ...rest } = s;
+    return rest;
   });
 }
 

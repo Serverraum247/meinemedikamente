@@ -102,7 +102,11 @@ export async function updateBestand(
  * Bestand nach Einnahme reduzieren
  * Bestand_Neu = Bestand_Alt - Dosis (Float-Subtraktion)
  */
-export async function einnahmeVerbuchen(medikamentId: string, dosisOverride?: number): Promise<number> {
+export async function einnahmeVerbuchen(
+  medikamentId: string,
+  dosisOverride?: number,
+  slot?: string,
+): Promise<number> {
   const med = await getMedikamentById(medikamentId);
   if (!med) throw new Error(`Medikament ${medikamentId} nicht gefunden`);
 
@@ -114,7 +118,7 @@ export async function einnahmeVerbuchen(medikamentId: string, dosisOverride?: nu
   await updateBestand(medikamentId, finalBestand);
 
   // Einnahme-Log speichern
-  await logEinnahme(medikamentId, dosis);
+  await logEinnahme(medikamentId, dosis, undefined, slot);
 
   return finalBestand;
 }
@@ -125,13 +129,14 @@ export async function einnahmeVerbuchen(medikamentId: string, dosisOverride?: nu
 export async function logEinnahme(
   medikamentId: string,
   menge: number, // Float
-  personId?: string
+  personId?: string,
+  slot?: string,
 ): Promise<void> {
   const db = await getDatabase();
   await db.executeSql(
-    `INSERT INTO einnahmen (id, medikament_id, person_id, menge, timestamp)
-     VALUES (?, ?, ?, ?, datetime('now'))`,
-    [generateUUID(), medikamentId, personId || 'person-default-001', menge]
+    `INSERT INTO einnahmen (id, medikament_id, person_id, menge, timestamp, slot)
+     VALUES (?, ?, ?, ?, datetime('now', 'localtime'), ?)`,
+    [generateUUID(), medikamentId, personId || 'person-default-001', menge, slot || '']
   );
 }
 

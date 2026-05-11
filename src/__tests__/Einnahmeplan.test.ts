@@ -2,6 +2,7 @@ import {
   getDosisFuerSlot,
   parseEinnahmeplan,
   serializeEinnahmeplan,
+  setSlotTaeglich,
   tagesdosisBerechnenFuerDatum,
   toggleSlotWochentag,
   type EinnahmeSlot,
@@ -27,12 +28,22 @@ describe('Einnahmeplan', () => {
     expect(tagesdosisBerechnenFuerDatum(plan, 1, new Date('2026-05-12T12:00:00'))).toBe(0);
   });
 
-  it('toggles all selected weekdays back to daily intake', () => {
+  it('keeps seven explicitly selected weekdays selected', () => {
     const plan: EinnahmeSlot[] = [
       { slot: 'morgens', uhrzeit: '08:00', wochentage: [1, 2, 3, 4, 5, 6] },
     ];
 
     const result = toggleSlotWochentag(plan, 'morgens', 7);
+
+    expect(result).toEqual([{ slot: 'morgens', uhrzeit: '08:00', wochentage: [1, 2, 3, 4, 5, 6, 7] }]);
+  });
+
+  it('switches a slot back to daily intake explicitly', () => {
+    const plan: EinnahmeSlot[] = [
+      { slot: 'morgens', uhrzeit: '08:00', wochentage: [1, 3, 5] },
+    ];
+
+    const result = setSlotTaeglich(plan, 'morgens');
 
     expect(result).toEqual([{ slot: 'morgens', uhrzeit: '08:00' }]);
   });

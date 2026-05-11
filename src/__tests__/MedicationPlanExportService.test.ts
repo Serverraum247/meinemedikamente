@@ -3,7 +3,7 @@ import { buildMedicationPlanExport } from '../services/MedicationPlanExportServi
 
 const person: PersonRow = {
   id: 'person-1',
-  name: 'Daniel',
+  name: 'Daniel Brußig',
   avatar_emoji: '👤',
   avatar_uri: '',
   ist_standard: 1,
@@ -65,12 +65,12 @@ describe('MedicationPlanExportService', () => {
       generatedAt: new Date('2026-05-10T09:30:00.000'),
     });
 
-    expect(exportPlan.title).toBe('Mein MediPlan - Medikamentenplan Daniel');
-    expect(exportPlan.fileName).toBe('mein-mediplan-daniel.pdf');
-    expect(exportPlan.text).toContain('Medikamentenplan für Daniel');
+    expect(exportPlan.title).toBe('Mein MediPlan');
+    expect(exportPlan.fileName).toBe('Medikamentenplan Daniel Brussig 10.05.2026.pdf');
+    expect(exportPlan.text).toContain('Medikamentenplan für Daniel Brußig');
     expect(exportPlan.text).toContain('Erstellt am 10.05.2026, 09:30 Uhr');
     expect(exportPlan.text).toContain('Ramipril');
-    expect(exportPlan.text).toContain('Grund/Notiz: Blutdruck');
+    expect(exportPlan.text).toContain('Wirkstoff: Blutdruck');
     expect(exportPlan.text).toContain('Stärke: 5 mg');
     expect(exportPlan.text).toContain('Dosis: 0,5 Tabletten');
     expect(exportPlan.text).toContain('Morgens 08:00 Uhr: 0,5 Tabletten (Mo, Mi, Fr)');
@@ -95,5 +95,26 @@ describe('MedicationPlanExportService', () => {
     expect(exportPlan.text).not.toContain('200');
     expect(exportPlan.text).not.toContain('med-1');
     expect(exportPlan.text).not.toContain('person-1');
+  });
+
+  it('keeps combination medication active ingredients readable in the PDF text', () => {
+    const exportPlan = buildMedicationPlanExport({
+      person,
+      medications: [
+        medication({
+          name: 'Candecor comp.',
+          zusatz: 'Candesartan 16 mg + Hydrochlorothiazid 12,5 mg',
+          staerke_wert: 0,
+          staerke_einheit: '',
+        }),
+      ],
+      doctors: [doctor],
+      generatedAt: new Date('2026-05-10T09:30:00.000'),
+    });
+
+    expect(exportPlan.text).toContain('Candecor comp.');
+    expect(exportPlan.text).toContain('Wirkstoffe:');
+    expect(exportPlan.text).toContain('- Candesartan 16 mg');
+    expect(exportPlan.text).toContain('- Hydrochlorothiazid 12,5 mg');
   });
 });

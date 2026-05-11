@@ -35,6 +35,7 @@ import {
   setSlotDosis,
   setSlotUhrzeit,
   toggleSlotWochentag,
+  setSlotTaeglich,
   serializeEinnahmeplan,
   parseEinnahmeplan,
   getAllDefaultUhrzeiten,
@@ -52,6 +53,8 @@ import {
 } from '../constants/MedicationNameSuggestions';
 import { showPremiumRequiredAlert } from '../utils/PremiumAlerts';
 import { findPotentialDuplicateMedication } from '../utils/MedicationDuplicate';
+import { shouldAutoEnableStockDeduction, STRENGTH_UNITS } from '../utils/MedicationFormRules';
+import { formatActiveIngredient, parseActiveIngredients } from '../utils/ActiveIngredients';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'EditMedikament'>;
 
@@ -81,8 +84,10 @@ export default function EditMedikamentScreen({ route, navigation }: Props) {
   const [gewaehlterArzt, setGewaehlterArzt] = useState('');
   const [staerkeWert, setStaerkeWert] = useState('');
   const [staerkeEinheit, setStaerkeEinheit] = useState('');
+  const [staerkeEinheitDropdownOffen, setStaerkeEinheitDropdownOffen] = useState(false);
   const skipUnsavedPromptRef = React.useRef(false);
   const nameSuggestions = useMemo(() => getMedicationNameSuggestions(name), [name]);
+  const activeIngredients = useMemo(() => parseActiveIngredients(zusatz), [zusatz]);
 
   const isDirty = useMemo(() => {
     if (!medikament) {
@@ -152,10 +157,8 @@ export default function EditMedikamentScreen({ route, navigation }: Props) {
       setDefaultUhrzeiten(stored);
       const isPrem = await isPremium();
       setPremiumStatus(isPrem);
-      if (isPrem) {
-        const arztListe = await getAllAerzte();
-        setAerzte(arztListe);
-      }
+      const arztListe = await getAllAerzte();
+      setAerzte(arztListe);
     })();
   }, []);
   useEffect(() => {
@@ -183,6 +186,12 @@ export default function EditMedikamentScreen({ route, navigation }: Props) {
     }
   }, [medikamente, medikamentId, navigation]);
 
+  useEffect(() => {
+    if (shouldAutoEnableStockDeduction(erinnerungAktiv, bestand)) {
+      setAutoAbzugAktiv(true);
+    }
+  }, [bestand, erinnerungAktiv]);
+
   const handleSave = React.useCallback(async (duplicateConfirmed = false) => {
     if (!medikament) return;
 
@@ -209,6 +218,10 @@ export default function EditMedikamentScreen({ route, navigation }: Props) {
       Alert.alert('Ungültig', 'Einzeldosis muss größer als 0 sein.');
       return;
     }
+    if (erinnerungAktiv && einnahmePlan.length === 0) {
+      Alert.alert('Erinnerung unvollständig', 'Bitte wähle mindestens eine Tageszeit für die Erinnerung aus.');
+      return;
+    }
 
     const duplicate = findPotentialDuplicateMedication(medikamente, {
       id: medikament.id,
@@ -231,6 +244,8 @@ export default function EditMedikamentScreen({ route, navigation }: Props) {
     }
 
     try {
+      const isCombination = activeIngredients.length > 1;
+
       await bearbeiteMedikament(medikament.id, {
         name: name.trim(),
         zusatz: zusatz.trim(),
@@ -245,8 +260,8 @@ export default function EditMedikamentScreen({ route, navigation }: Props) {
         einnahme_uhrzeiten: serializeEinnahmeplan(einnahmePlan),
         auto_abzug_aktiv: autoAbzugAktiv ? 1 : 0,
         arzt_id: gewaehlterArzt,
-        staerke_wert: premium ? (parseDeFloat(staerkeWert) || 0) : 0,
-        staerke_einheit: premium ? staerkeEinheit : '',
+        staerke_wert: isCombination ? 0 : parseDeFloat(staerkeWert) || 0,
+        staerke_einheit: isCombination ? '' : staerkeEinheit,
       });
 
       announceChange('Änderungen wurden gespeichert');
@@ -376,17 +391,35 @@ export default function EditMedikamentScreen({ route, navigation }: Props) {
           )}
         </View>
 
-        {/* Zusatz / Wirkstoff-Alias */}
+        {/* Wirkstoff-Alias */}
         <View style={styles.fieldGroup}>
-          <Text style={styles.label}>Zusatz / Wirkstoff</Text>
+          <Text style={styles.label}>Wirkstoff(e)</Text>
           <TextInput
-            style={styles.input}
-            accessibilityLabel="Zusatz / Wirkstoff"
+            style={[styles.input, styles.wirkstoffInput]}
+            accessibilityLabel="Wirkstoffe"
             value={zusatz}
             onChangeText={setZusatz}
-            placeholder="z.B. Blutdrucksenker"
+            placeholder="z.B. Bisoprolol oder Candesartan 16 mg + Hydrochlorothiazid 12,5 mg"
             placeholderTextColor="#999"
+            multiline
+            numberOfLines={2}
+            textAlignVertical="top"
           />
+          {activeIngredients.length > 1 ? (
+            <View style={styles.wirkstoffPreview}>
+              <Text style={styles.wirkstoffPreviewTitle}>Kombi-Wirkstoffe erkannt</Text>
+              {activeIngredients.map((ingredient, index) => (
+                <Text key={`${ingredient.name}-${index}`} style={styles.wirkstoffPreviewText}>
+                  {index + 1}. {formatActiveIngredient(ingredient)}
+                </Text>
+              ))}
+              <Text style={styles.wirkstoffPreviewHint}>
+                Zum Nachjustieren die Zeile oben ändern. Jeder Wirkstoff wird im Plan getrennt angezeigt.
+              </Text>
+            </View>
+          ) : (
+            <Text style={styles.hint}>Bei Kombipräparaten mit + trennen, z.B. Candesartan 16 mg + Hydrochlorothiazid 12,5 mg.</Text>
+          )}
         </View>
 
         {/* Bestand */}
@@ -598,8 +631,33 @@ export default function EditMedikamentScreen({ route, navigation }: Props) {
 
                     {isActive && (
                       <View style={styles.wochentageBox}>
-                        <Text style={styles.wochentageLabel}>Tage:</Text>
+                        <Text style={styles.wochentageLabel}>Einnahmetage:</Text>
                         <View style={styles.wochentageRow}>
+                          {(() => {
+                            const istTaeglich = !eintrag?.wochentage || eintrag.wochentage.length === 0;
+                            return (
+                              <TouchableOpacity
+                                style={[
+                                  styles.wochentagButton,
+                                  styles.taeglichButton,
+                                  istTaeglich && styles.wochentagButtonActive,
+                                ]}
+                                accessibilityRole="switch"
+                                accessibilityLabel={`${meta.label} jeden Tag ${istTaeglich ? 'aktiv' : 'inaktiv'}`}
+                                accessibilityState={{ checked: istTaeglich }}
+                                onPress={() => {
+                                  setEinnahmePlan(prev => setSlotTaeglich(prev, slot));
+                                }}
+                              >
+                                <Text style={[
+                                  styles.wochentagButtonText,
+                                  istTaeglich && styles.wochentagButtonTextActive,
+                                ]}>
+                                  Jeden Tag
+                                </Text>
+                              </TouchableOpacity>
+                            );
+                          })()}
                           {WOCHENTAGE_META.map(day => {
                             const isSelected = Boolean(eintrag?.wochentage?.includes(day.value));
                             return (
@@ -628,7 +686,7 @@ export default function EditMedikamentScreen({ route, navigation }: Props) {
                             );
                           })}
                         </View>
-                        <Text style={styles.wochentageHint}>Keine Auswahl bedeutet täglich.</Text>
+                        <Text style={styles.wochentageHint}>Für tägliche Einnahme „Jeden Tag“ wählen. Sonst einzelne Tage kombinieren.</Text>
                       </View>
                     )}
                   </View>
@@ -668,11 +726,12 @@ export default function EditMedikamentScreen({ route, navigation }: Props) {
           </>
         )}
 
-        {/* Arzt-Zuordnung (nur Premium) */}
-        {premium && aerzte.length > 0 && (
-          <View style={styles.fieldGroup}>
-            <Text style={styles.label}>👨‍⚕️ Verschreibender Arzt</Text>
-            <Text style={styles.hint}>Welcher Arzt hat dieses Medikament verschrieben?</Text>
+        {/* Arzt-Zuordnung */}
+        <View style={styles.fieldGroup}>
+          <Text style={styles.label}>👨‍⚕️ Verschreibender Arzt</Text>
+          <Text style={styles.hint}>Welcher Arzt hat dieses Medikament verschrieben?</Text>
+          {aerzte.length > 0 ? (
+            <>
             {aerzte.map(arzt => (
               <TouchableOpacity
                 key={arzt.id}
@@ -702,37 +761,72 @@ export default function EditMedikamentScreen({ route, navigation }: Props) {
                 <Text style={styles.arztEntfernen}>Zuordnung entfernen</Text>
               </TouchableOpacity>
             )}
-          </View>
-        )}
+            </>
+          ) : (
+            <Text style={styles.hint}>Noch kein Arzt hinterlegt. Lege deinen Hausarzt zuerst unter „Arzt-Urlaub“ an.</Text>
+          )}
+        </View>
 
-        {/* === ABSCHNITT: Stärke / Wirkstoffmenge (Premium) === */}
-        <PremiumGate
-          featureName="Stärke & Dosierung"
-          description="Erfassen Sie mg/ml-Dosierungen für Ihre Medikamente. z.B. 500mg pro Tablette."
-          navigation={navigation}
-        >
-          <View style={styles.fieldGroup}>
-            <Text style={styles.label}>💊 Stärke pro Einheit</Text>
-            <Text style={styles.hint}>Wie viel Wirkstoff enthält eine Tablette / 1ml?</Text>
-            <View style={{ flexDirection: 'row', gap: 8 }}>
-              <TextInput
-                style={[styles.input, { flex: 1 }]}
-                value={staerkeWert}
-                onChangeText={setStaerkeWert}
-                placeholder="z.B. 500"
-                keyboardType="decimal-pad"
-                accessibilityLabel="Stärke Wert"
-              />
-              <TextInput
-                style={[styles.input, { flex: 1 }]}
-                value={staerkeEinheit}
-                onChangeText={setStaerkeEinheit}
-                placeholder="mg, ml, µg, IE"
-                accessibilityLabel="Stärke Einheit"
-              />
+        {/* === ABSCHNITT: Stärke / Wirkstoffmenge === */}
+        <View style={styles.fieldGroup}>
+          <Text style={styles.label}>💊 Stärke pro Einheit</Text>
+          {activeIngredients.length > 1 ? (
+            <View style={styles.comboNotice}>
+              <Text style={styles.comboNoticeTitle}>Kombi-Präparat</Text>
+              <Text style={styles.comboNoticeText}>
+                Die Stärken werden je Wirkstoff oben gepflegt. Ein einzelner Wert wäre hier missverständlich.
+              </Text>
             </View>
-          </View>
-        </PremiumGate>
+          ) : (
+            <>
+              <Text style={styles.hint}>Wie viel Wirkstoff enthält eine Tablette / 1ml?</Text>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <TextInput
+                  style={[styles.input, { flex: 1 }]}
+                  value={staerkeWert}
+                  onChangeText={setStaerkeWert}
+                  placeholder="z.B. 500"
+                  keyboardType="decimal-pad"
+                  accessibilityLabel="Stärke Wert"
+                />
+                <View style={{ flex: 1 }}>
+                  <TouchableOpacity
+                    style={styles.dropdownButton}
+                    onPress={() => setStaerkeEinheitDropdownOffen(prev => !prev)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Stärke Einheit auswählen"
+                  >
+                    <Text style={[
+                      styles.dropdownButtonText,
+                      !staerkeEinheit && styles.dropdownPlaceholder,
+                    ]}>
+                      {staerkeEinheit || 'Einheit'}
+                    </Text>
+                    <Text style={styles.dropdownArrow}>{staerkeEinheitDropdownOffen ? '▲' : '▼'}</Text>
+                  </TouchableOpacity>
+                  {staerkeEinheitDropdownOffen && (
+                    <View style={styles.dropdownMenu}>
+                      {STRENGTH_UNITS.map(unit => (
+                        <TouchableOpacity
+                          key={unit}
+                          style={styles.dropdownOption}
+                          onPress={() => {
+                            setStaerkeEinheit(unit);
+                            setStaerkeEinheitDropdownOffen(false);
+                          }}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Stärke Einheit ${unit} auswählen`}
+                        >
+                          <Text style={styles.dropdownOptionText}>{unit}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  )}
+                </View>
+              </View>
+            </>
+          )}
+        </View>
 
         </ScrollView>
 
@@ -828,6 +922,55 @@ const styles = StyleSheet.create({
     fontSize: 19,
     fontWeight: '600',
   },
+  wirkstoffPreview: {
+    marginTop: 10,
+    backgroundColor: '#E8F1FF',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#B8D1F0',
+  },
+  wirkstoffPreviewTitle: {
+    fontSize: 16,
+    color: '#0B63CE',
+    fontWeight: '800',
+    marginBottom: 6,
+  },
+  wirkstoffPreviewText: {
+    fontSize: 17,
+    color: '#1a1a2e',
+    fontWeight: '600',
+    lineHeight: 24,
+  },
+  wirkstoffPreviewHint: {
+    marginTop: 8,
+    fontSize: 14,
+    color: '#35516C',
+    lineHeight: 20,
+  },
+  wirkstoffInput: {
+    minHeight: 76,
+    paddingTop: 12,
+  },
+  comboNotice: {
+    backgroundColor: '#FFF7E6',
+    borderColor: '#F2C66D',
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 8,
+  },
+  comboNoticeTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#7A4B00',
+    marginBottom: 4,
+  },
+  comboNoticeText: {
+    fontSize: 15,
+    color: '#5F4300',
+    lineHeight: 21,
+  },
   einheitRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -879,6 +1022,51 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+  dropdownButton: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    minHeight: 52,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  dropdownButtonText: {
+    fontSize: 18,
+    color: '#1a1a2e',
+    fontWeight: '600',
+  },
+  dropdownPlaceholder: {
+    color: '#777',
+    fontWeight: '400',
+  },
+  dropdownArrow: {
+    color: '#1a1a2e',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  dropdownMenu: {
+    marginTop: 6,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#ccd3d7',
+    overflow: 'hidden',
+  },
+  dropdownOption: {
+    minHeight: 48,
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#ECEFF1',
+  },
+  dropdownOptionText: {
+    fontSize: 18,
+    color: '#1a1a2e',
+    fontWeight: '600',
   },
 
   // Abschnitts-Ueberschrift
@@ -987,6 +1175,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 8,
+  },
+  taeglichButton: {
+    minWidth: 112,
+    paddingHorizontal: 12,
   },
   wochentagButtonActive: {
     backgroundColor: '#1a1a2e',
