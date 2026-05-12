@@ -1,6 +1,9 @@
 import notifee, {
   AlarmType,
+  AndroidCategory,
+  AndroidDefaults,
   AndroidNotificationSetting,
+  AndroidVisibility,
   RepeatFrequency,
 } from '@notifee/react-native';
 import { planeErinnerungen } from '../services/ErinnerungsService';
@@ -28,10 +31,20 @@ jest.mock('@notifee/react-native', () => {
     AndroidImportance: {
       HIGH: 4,
     },
+    AndroidCategory: {
+      REMINDER: 'reminder',
+    },
+    AndroidDefaults: {
+      SOUND: 1,
+      VIBRATE: 2,
+    },
     AndroidNotificationSetting: {
       NOT_SUPPORTED: -1,
       DISABLED: 0,
       ENABLED: 1,
+    },
+    AndroidVisibility: {
+      PUBLIC: 1,
     },
     AuthorizationStatus: {
       DENIED: 0,
@@ -90,6 +103,13 @@ describe('planeErinnerungen', () => {
         id: 'med-med-1-morgens-0800',
         title: '💊 Biso Lich',
         body: 'Morgens: Zeit für Ihre Einnahme: 1 Tabletten',
+        android: expect.objectContaining({
+          category: AndroidCategory.REMINDER,
+          defaults: [AndroidDefaults.SOUND, AndroidDefaults.VIBRATE],
+          lightUpScreen: true,
+          showTimestamp: true,
+          visibility: AndroidVisibility.PUBLIC,
+        }),
       }),
       expect.objectContaining({
         repeatFrequency: RepeatFrequency.DAILY,

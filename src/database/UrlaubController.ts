@@ -118,7 +118,7 @@ export function calculateUrlaubsWarnungenForData(
     // Nur Medikamente mit Bestand prüfen
     if (med.aktueller_bestand <= 0) continue;
 
-    const reichweite = calculateReichweite(med);
+    const reichweite = calculateReichweite(med, heute);
     if (!reichweite.leerDatum) continue;
 
     const leerDatum = new Date(reichweite.leerDatum);

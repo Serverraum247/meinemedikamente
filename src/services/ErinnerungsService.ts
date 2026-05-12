@@ -12,8 +12,11 @@
 
 import notifee, {
   AlarmType,
+  AndroidCategory,
+  AndroidDefaults,
   AndroidImportance,
   AndroidNotificationSetting,
+  AndroidVisibility,
   AuthorizationStatus,
   EventType,
   TriggerType,
@@ -143,11 +146,16 @@ export async function planeErinnerungen(
           body: `${SLOT_META[slot.slot].label}: Zeit für Ihre Einnahme: ${dosis} ${medikament.einheit}`,
           android: {
             channelId,
+            category: AndroidCategory.REMINDER,
+            defaults: [AndroidDefaults.SOUND, AndroidDefaults.VIBRATE],
             importance: AndroidImportance.HIGH,
+            lightUpScreen: true,
             pressAction: {
               id: 'default',
             },
+            showTimestamp: true,
             autoCancel: true,
+            visibility: AndroidVisibility.PUBLIC,
           },
           data: {
             medikamentId: medikament.id,
