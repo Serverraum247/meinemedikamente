@@ -17,6 +17,8 @@ import ArztUrlaubScreen from '../screens/ArztUrlaubScreen';
 import PremiumScreen from '../screens/PremiumScreen';
 import BackupScreen from '../screens/BackupScreen';
 import MedicationPlanExportScreen from '../screens/MedicationPlanExportScreen';
+import ErsteSchritteScreen from '../screens/ErsteSchritteScreen';
+import DatenschutzRechtScreen from '../screens/DatenschutzRechtScreen';
 
 export type RootStackParamList = {
   Home: undefined;
@@ -30,6 +32,8 @@ export type RootStackParamList = {
   Premium: undefined;
   Backup: undefined;
   MedicationPlanExport: undefined;
+  ErsteSchritte: undefined;
+  DatenschutzRecht: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -89,6 +93,8 @@ export default function AppNavigator() {
         <Stack.Screen name="Premium" component={PremiumScreen} options={{ title: 'Premium' }} />
         <Stack.Screen name="Backup" component={BackupScreen} options={{ title: 'Cloud-Backup' }} />
         <Stack.Screen name="MedicationPlanExport" component={MedicationPlanExportScreen} options={{ title: 'Plan teilen' }} />
+        <Stack.Screen name="ErsteSchritte" component={ErsteSchritteScreen} options={{ title: 'Erste Schritte' }} />
+        <Stack.Screen name="DatenschutzRecht" component={DatenschutzRechtScreen} options={{ title: 'Datenschutz & Rechtliches' }} />
       </Stack.Navigator>
     </NavigationContainer>
   );

@@ -508,6 +508,26 @@ export default function HomeScreen({ navigation }: Props) {
 
             <TouchableOpacity
               style={styles.menueItem}
+              onPress={() => { setMenueOffen(false); navigation.navigate('ErsteSchritte'); }}
+              accessibilityRole="button"
+              accessibilityLabel="Erste Schritte"
+            >
+              <Text style={styles.menueItemIcon}>?</Text>
+              <Text style={styles.menueItemText}>Erste Schritte</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.menueItem}
+              onPress={() => { setMenueOffen(false); navigation.navigate('DatenschutzRecht'); }}
+              accessibilityRole="button"
+              accessibilityLabel="Datenschutz und Rechtliches"
+            >
+              <Text style={styles.menueItemIcon}>§</Text>
+              <Text style={styles.menueItemText}>Datenschutz & Rechtliches</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.menueItem}
               onPress={() => { setMenueOffen(false); navigation.navigate('Premium'); }}
               accessibilityRole="button"
               accessibilityLabel="Premium"

@@ -88,8 +88,8 @@ android {
         applicationId "dev.serverraum247.meinmediplan"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 33
-        versionName "0.1.32"
+        versionCode 34
+        versionName "0.1.33"
         manifestPlaceholders = [usesCleartextTraffic: "false"]
     }
     signingConfigs {
