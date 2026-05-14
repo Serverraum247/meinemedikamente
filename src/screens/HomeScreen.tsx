@@ -32,6 +32,7 @@ import { version as APP_VERSION } from '../../package.json';
 import {
   getOffeneEinnahmen,
   getHeutigeEinnahmeMedikamentIds,
+  getUeberfaelligeEinnahmeMedikamentIds,
   sollErinnerungZeigen,
   setzteLetzteErinnerung,
   type OffeneEinnahme,
@@ -67,6 +68,7 @@ export default function HomeScreen({ navigation }: Props) {
   const [offeneEinnahmen, setOffeneEinnahmen] = useState<OffeneEinnahme[]>([]);
   const [heuteEingenommenIds, setHeuteEingenommenIds] = useState<Set<string>>(new Set());
   const [offeneEinnahmeMedikamentIds, setOffeneEinnahmeMedikamentIds] = useState<Set<string>>(new Set());
+  const [ueberfaelligeEinnahmeMedikamentIds, setUeberfaelligeEinnahmeMedikamentIds] = useState<Set<string>>(new Set());
   const [rezeptTermine, setRezeptTermine] = useState<Record<string, RezeptTerminInfo>>({});
 
   // Medikamente nach aktiver Person filtern
@@ -92,12 +94,14 @@ export default function HomeScreen({ navigation }: Props) {
   useEffect(() => { isPremium().then(setPremiumStatus); }, []);
 
   const ladeEinnahmeStatus = useCallback(async () => {
-    const [eingenommenIds, offene] = await Promise.all([
+    const [eingenommenIds, offene, ueberfaelligeIds] = await Promise.all([
       getHeutigeEinnahmeMedikamentIds(),
       getOffeneEinnahmen(0),
+      getUeberfaelligeEinnahmeMedikamentIds(),
     ]);
     setHeuteEingenommenIds(eingenommenIds);
     setOffeneEinnahmeMedikamentIds(new Set(offene.map(e => e.medikamentId)));
+    setUeberfaelligeEinnahmeMedikamentIds(ueberfaelligeIds);
     return { eingenommenIds, offene };
   }, []);
 
@@ -221,6 +225,12 @@ export default function HomeScreen({ navigation }: Props) {
     const reichweiteBis = formatReichweiteBis(reichweite.leerDatum);
     const heuteEingenommen = heuteEingenommenIds.has(item.id);
     const heuteOffen = offeneEinnahmeMedikamentIds.has(item.id);
+    const ueberfaellig = ueberfaelligeEinnahmeMedikamentIds.has(item.id);
+    const bestandStatusStyles = getBestandStatusStyles({
+      heuteEingenommen,
+      heuteOffen: heuteOffen || Boolean(item.erinnerung_aktiv),
+      ueberfaellig,
+    });
     const rezeptTermin = rezeptTermine[item.id];
     const activeIngredients = parseActiveIngredients(item.zusatz || '');
     const showIngredientList = activeIngredients.length > 1 && activeIngredients.some(ingredient => ingredient.strength);
@@ -235,7 +245,7 @@ export default function HomeScreen({ navigation }: Props) {
         onPress={() => navigation.navigate('MedikamentDetail', { medikamentId: item.id })}
         activeOpacity={0.7}
         accessibilityRole="button"
-        accessibilityLabel={`${item.name}${staerkeText ? `, ${staerkeText}` : ''}, Bestand: ${bestandText} ${item.einheit}, ${reichweiteBis ? `Vorrat reicht bis ${reichweiteBis}` : reichweite.textLang}${isUnterSchwelle ? ', Nachbestellen empfohlen' : ''}`}
+        accessibilityLabel={`${item.name}${staerkeText ? `, ${staerkeText}` : ''}, Bestand: ${bestandText} ${item.einheit}, ${getBestandStatusLabel({ heuteEingenommen, heuteOffen: heuteOffen || Boolean(item.erinnerung_aktiv), ueberfaellig })}, ${reichweiteBis ? `Vorrat reicht bis ${reichweiteBis}` : reichweite.textLang}${isUnterSchwelle ? ', Nachbestellen empfohlen' : ''}`}
         accessibilityHint="Doppelt tippen für Details"
       >
         <View style={styles.cardContent}>
@@ -281,6 +291,8 @@ export default function HomeScreen({ navigation }: Props) {
           ) : null}
           {heuteEingenommen ? (
             <Text style={styles.eingenommenText}>✓ Heute eingenommen</Text>
+          ) : ueberfaellig ? (
+            <Text style={styles.ueberfaelligText}>! Einnahme überfällig</Text>
           ) : heuteOffen ? (
             <Text style={styles.offenText}>○ Heute noch offen</Text>
           ) : item.erinnerung_aktiv ? (
@@ -288,10 +300,10 @@ export default function HomeScreen({ navigation }: Props) {
           ) : null}
         </View>
         <View style={styles.cardBestand}>
-          <Text style={[styles.bestandZahl, isUnterSchwelle && styles.bestandWarning]} maxFontSizeMultiplier={1.3}>
-            {isUnterSchwelle ? '⚠' : '✓'} {bestandText}
+          <Text style={[styles.bestandZahl, bestandStatusStyles]} maxFontSizeMultiplier={1.3}>
+            {bestandText}
           </Text>
-          <Text style={styles.bestandLabel}>{item.einheit}</Text>
+          <Text style={[styles.bestandLabel, bestandStatusStyles]}>{item.einheit}</Text>
         </View>
       </TouchableOpacity>
     );
@@ -476,16 +488,6 @@ export default function HomeScreen({ navigation }: Props) {
 
             <TouchableOpacity
               style={styles.menueItem}
-              onPress={() => { setMenueOffen(false); navigation.navigate('Premium'); }}
-              accessibilityRole="button"
-              accessibilityLabel="Premium"
-            >
-              <Text style={styles.menueItemIcon}>⭐</Text>
-              <Text style={styles.menueItemText}>Premium</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.menueItem}
               onPress={() => { setMenueOffen(false); navigation.navigate('MedicationPlanExport'); }}
               accessibilityRole="button"
               accessibilityLabel="Plan teilen"
@@ -502,6 +504,16 @@ export default function HomeScreen({ navigation }: Props) {
             >
               <Text style={styles.menueItemIcon}>☁️</Text>
               <Text style={styles.menueItemText}>Cloud-Backup</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.menueItem}
+              onPress={() => { setMenueOffen(false); navigation.navigate('Premium'); }}
+              accessibilityRole="button"
+              accessibilityLabel="Premium"
+            >
+              <Text style={styles.menueItemIcon}>⭐</Text>
+              <Text style={styles.menueItemText}>Premium</Text>
             </TouchableOpacity>
 
             {/* Version */}
@@ -560,6 +572,26 @@ function formatIsoDate(isoDate: string): string {
   const [year, month, day] = isoDate.split('-');
   if (!year || !month || !day) return isoDate;
   return `${day}.${month}.${year}`;
+}
+
+type BestandStatusInput = {
+  heuteEingenommen: boolean;
+  heuteOffen: boolean;
+  ueberfaellig: boolean;
+};
+
+function getBestandStatusStyles(status: BestandStatusInput) {
+  if (status.heuteEingenommen) return styles.bestandTaken;
+  if (status.ueberfaellig) return styles.bestandOverdue;
+  if (status.heuteOffen) return styles.bestandOpen;
+  return styles.bestandNeutral;
+}
+
+function getBestandStatusLabel(status: BestandStatusInput): string {
+  if (status.heuteEingenommen) return 'heute eingenommen';
+  if (status.ueberfaellig) return 'Einnahme überfällig';
+  if (status.heuteOffen) return 'heute noch nicht eingenommen';
+  return 'kein Einnahmestatus';
 }
 
 // --- Styles (Senioren-freundlich, WCAG AA Kontrast) ---
@@ -756,6 +788,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#A15C00',
   },
+  ueberfaelligText: {
+    marginTop: 8,
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#C62828',
+  },
   geplantText: {
     marginTop: 8,
     fontSize: 16,
@@ -771,18 +809,25 @@ const styles = StyleSheet.create({
   bestandZahl: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#27ae60',
     textAlign: 'right',
     width: '100%',
-  },
-  bestandWarning: {
-    color: '#e74c3c',
   },
   bestandLabel: {
     fontSize: 14,
-    color: '#777',
     textAlign: 'right',
     width: '100%',
+  },
+  bestandTaken: {
+    color: '#1B7F3A',
+  },
+  bestandOpen: {
+    color: '#A15C00',
+  },
+  bestandOverdue: {
+    color: '#C62828',
+  },
+  bestandNeutral: {
+    color: '#4A5568',
   },
   warnBanner: {
     backgroundColor: '#fff3cd',

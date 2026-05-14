@@ -421,7 +421,7 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
         >
           <Text style={styles.bestandLabel} accessibilityRole="header">Aktueller Bestand</Text>
           <Text style={[styles.bestandWert, isUnterSchwelle && styles.bestandWertWarning]} maxFontSizeMultiplier={1.3}>
-            {isUnterSchwelle ? '⚠' : '✓'} {medikament.aktueller_bestand}
+            {medikament.aktueller_bestand}
           </Text>
           <Text style={styles.bestandEinheit}>{medikament.einheit}</Text>
           {staerkeText ? (

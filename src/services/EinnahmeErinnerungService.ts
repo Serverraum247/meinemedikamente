@@ -124,6 +124,38 @@ export async function getHeutigeEinnahmeMedikamentIds(): Promise<Set<string>> {
   return ids;
 }
 
+export async function getUeberfaelligeEinnahmeMedikamentIds(
+  rueckblickTage: number = 7
+): Promise<Set<string>> {
+  const medikamente = await getAllMedikamente();
+  const ueberfaellig = new Set<string>();
+  const heute = startOfLocalDay(new Date());
+
+  for (const med of medikamente) {
+    if (!med.einnahme_uhrzeiten || med.einnahme_uhrzeiten === '[]') continue;
+
+    const plan = parseEinnahmeplan(med.einnahme_uhrzeiten);
+    if (plan.length === 0) continue;
+
+    for (let tageZurueck = 1; tageZurueck <= rueckblickTage; tageZurueck += 1) {
+      const datum = new Date(heute);
+      datum.setDate(heute.getDate() - tageZurueck);
+
+      const aktiveSlots = plan.filter(slot => istSlotAnDatumAktiv(slot, datum));
+      if (aktiveSlots.length === 0) continue;
+
+      const eingenommeneSlots = await getEinnahmeSlotsFuerMedikamentAnDatum(med.id, datum);
+      const hatFehlendeEinnahme = aktiveSlots.some(slot => !eingenommeneSlots.has(slot.slot));
+      if (hatFehlendeEinnahme) {
+        ueberfaellig.add(med.id);
+      }
+      break;
+    }
+  }
+
+  return ueberfaellig;
+}
+
 /**
  * Heutige Einnahmen fuer ein Medikament abrufen
  */
@@ -150,6 +182,36 @@ async function getHeutigeEinnahmenFuerMedikament(
   return rows;
 }
 
+async function getEinnahmeSlotsFuerMedikamentAnDatum(
+  medikamentId: string,
+  datum: Date
+): Promise<Set<TageszeitSlot>> {
+  const db = await getDatabase();
+  const datumIso = toLocalIsoDate(datum);
+  const results = await db.executeSql(
+    `SELECT timestamp, slot FROM einnahmen
+     WHERE medikament_id = ?
+       AND timestamp >= ?
+       AND timestamp < ?
+     ORDER BY timestamp ASC`,
+    [medikamentId, `${datumIso} 00:00:00`, `${datumIso} 23:59:59`]
+  );
+
+  const slots = new Set<TageszeitSlot>();
+  results.forEach(result => {
+    for (let i = 0; i < result.rows.length; i++) {
+      const row = result.rows.item(i) as { timestamp: string; slot?: TageszeitSlot };
+      if (row.slot) {
+        slots.add(row.slot);
+      } else {
+        const einnahmeStunde = new Date(row.timestamp).getHours();
+        slots.add(stundeZuSlot(einnahmeStunde));
+      }
+    }
+  });
+  return slots;
+}
+
 /**
  * Stunde → Tageszeit-Slot mapping
  */
@@ -158,6 +220,17 @@ function stundeZuSlot(stunde: number): TageszeitSlot {
   if (stunde >= 11 && stunde < 15) return 'mittags';
   if (stunde >= 15 && stunde < 21) return 'abends';
   return 'nachts';
+}
+
+function startOfLocalDay(datum: Date): Date {
+  return new Date(datum.getFullYear(), datum.getMonth(), datum.getDate());
+}
+
+function toLocalIsoDate(datum: Date): string {
+  const year = datum.getFullYear();
+  const month = String(datum.getMonth() + 1).padStart(2, '0');
+  const day = String(datum.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 /**
