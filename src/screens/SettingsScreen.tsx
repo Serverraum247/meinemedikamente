@@ -39,6 +39,7 @@ import {
   type ArztRow,
 } from '../database/ArztController';
 import { isPremium, setDevPremiumOverride, getDevPremiumOverride } from '../services/PremiumService';
+import { canUsePremiumTestOverride } from '../services/AppRuntimeConfigService';
 import { usePersonen } from '../context/PersonenContext';
 import { AVATAR_EMOJIS } from '../database/PersonenController';
 import { showPremiumRequiredAlert } from '../utils/PremiumAlerts';
@@ -59,8 +60,9 @@ export default function SettingsScreen({ navigation }: Props) {
   const [editPersonEmoji, setEditPersonEmoji] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState<string | null>(null); // person id oder 'new'
 
-  // Dev-Premium-Override (nur in __DEV__)
+  // Premium-Override fuer Debug- und interne Test-Builds
   const [devOverride, setDevOverrideState] = useState<string>('');
+  const premiumTestOverrideAvailable = canUsePremiumTestOverride();
 
   // Uhrzeiten-State
   const [uhrzeiten, setUhrzeiten] = useState<Record<TageszeitSlot, string>>({
@@ -85,11 +87,11 @@ export default function SettingsScreen({ navigation }: Props) {
       await loadAerzte();
     })();
 
-    // Dev-Override laden
-    if (__DEV__) {
+    // Test-Override laden
+    if (premiumTestOverrideAvailable) {
       getDevPremiumOverride().then(setDevOverrideState);
     }
-  }, []);
+  }, [premiumTestOverrideAvailable]);
 
   const loadAerzte = async () => {
     const [list, isPrem, max] = await Promise.all([
@@ -659,13 +661,13 @@ export default function SettingsScreen({ navigation }: Props) {
           <Text style={styles.resetButtonText}>Auf Standard zurücksetzen</Text>
         </TouchableOpacity>
 
-        {/* === DEV-MODE: Premium-Override (nur in Debug-Builds) === */}
-        {__DEV__ && (
+        {/* === TEST-MODE: Premium-Override (nur in Debug-/Intern-Builds) === */}
+        {premiumTestOverrideAvailable && (
           <View style={styles.devSection}>
-            <Text style={styles.devSectionTitle}>🛠 Entwicklungsmodus</Text>
+            <Text style={styles.devSectionTitle}>Interne Testversion</Text>
             <Text style={styles.devSectionInfo}>
               Premium-Status simulieren zum Testen.{'\n'}
-              Nur sichtbar in Debug-Builds.
+              Nur sichtbar in Debug- und internen Test-Builds.
             </Text>
             <View style={styles.devButtonRow}>
               <TouchableOpacity

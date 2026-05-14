@@ -9,6 +9,7 @@
 import { Platform } from 'react-native';
 import { getSetting, setSetting } from './SettingsService';
 import { logger } from '../utils/Logger';
+import { canUsePremiumTestOverride } from './AppRuntimeConfigService';
 
 // ─── Lazy IAP Loading (Android only) ───────────────────────────────
 
@@ -71,16 +72,16 @@ const KEY_DEV_PREMIUM_OVERRIDE = 'dev_premium_override';
 // Werte: 'premium' | 'free' | '' (nicht gesetzt = echtes Premium)
 
 /**
- * Nur in __DEV__ verfuegbar.
+ * Nur in Debug- oder internen Test-Builds verfuegbar.
  * Setzt einen kuenstlichen Premium-Status zum Testen.
  * - 'premium': Premium simulieren
  * - 'free': Free simulieren
  * - '': Override entfernen (echtes IAP/Setting nutzen)
  */
 export async function setDevPremiumOverride(mode: 'premium' | 'free' | ''): Promise<void> {
-  if (!__DEV__) return;
+  if (!canUsePremiumTestOverride()) return;
   await setSetting(KEY_DEV_PREMIUM_OVERRIDE, mode);
-  logger.log(`[PremiumService] DEV Override gesetzt: ${mode || 'aus (echtes Premium)'}`);
+  logger.log(`[PremiumService] Test-Override gesetzt: ${mode || 'aus (echtes Premium)'}`);
 }
 
 /**
@@ -88,15 +89,15 @@ export async function setDevPremiumOverride(mode: 'premium' | 'free' | ''): Prom
  * Returns: 'premium' | 'free' | '' (kein Override)
  */
 export async function getDevPremiumOverride(): Promise<string> {
-  if (!__DEV__) return '';
+  if (!canUsePremiumTestOverride()) return '';
   return (await getSetting(KEY_DEV_PREMIUM_OVERRIDE)) || '';
 }
 
 // ─── Premium Status ───────────────────────────────────────────────
 
 export async function isPremium(): Promise<boolean> {
-  // Dev-Override hat hoechste Prioritaet
-  if (__DEV__) {
+  // Test-Override hat in Debug- und internen Test-Builds hoechste Prioritaet.
+  if (canUsePremiumTestOverride()) {
     const override = await getSetting(KEY_DEV_PREMIUM_OVERRIDE);
     if (override === 'premium') return true;
     if (override === 'free') return false;

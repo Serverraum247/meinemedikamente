@@ -6,6 +6,7 @@ import {
   setPremium,
 } from '../services/PremiumService';
 import { getSetting, setSetting } from '../services/SettingsService';
+import { canUsePremiumTestOverride } from '../services/AppRuntimeConfigService';
 
 jest.mock('../services/SettingsService', () => ({
   getSetting: jest.fn(),
@@ -18,6 +19,10 @@ jest.mock('../utils/Logger', () => ({
     warn: jest.fn(),
     error: jest.fn(),
   },
+}));
+
+jest.mock('../services/AppRuntimeConfigService', () => ({
+  canUsePremiumTestOverride: jest.fn(() => false),
 }));
 
 describe('PremiumService', () => {
@@ -33,12 +38,19 @@ describe('PremiumService', () => {
   });
 
   it('uses the local premium setting for feature gates', async () => {
-    (getSetting as jest.Mock)
-      .mockResolvedValueOnce('')
-      .mockResolvedValueOnce('true');
+    (getSetting as jest.Mock).mockResolvedValueOnce('true');
     await expect(isPremium()).resolves.toBe(true);
 
     await setPremium(false);
     expect(setSetting).toHaveBeenCalledWith('premium_aktiv', 'false');
+  });
+
+  it('uses the test override only in internal test builds', async () => {
+    (canUsePremiumTestOverride as jest.Mock).mockReturnValue(true);
+    (getSetting as jest.Mock).mockResolvedValueOnce('premium');
+    await expect(isPremium()).resolves.toBe(true);
+
+    (getSetting as jest.Mock).mockResolvedValueOnce('free');
+    await expect(isPremium()).resolves.toBe(false);
   });
 });

@@ -43,6 +43,7 @@ import {
   getAllDefaultUhrzeiten,
 } from '../utils/Einnahmeplan';
 import { getMaxReminderSlots, isPremium, setDevPremiumOverride } from '../services/PremiumService';
+import { canUsePremiumTestOverride } from '../services/AppRuntimeConfigService';
 import { getAllAerzte } from '../database/ArztController';
 import type { ArztRow } from '../database/Database';
 import PremiumGate from '../components/PremiumGate';
@@ -85,6 +86,7 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
   const [autoAbzugAktiv, setAutoAbzugAktiv] = useState(false);
   const [maxSlots, setMaxSlots] = useState(1);
   const [premium, setPremiumStatus] = useState(false);
+  const premiumTestOverrideAvailable = canUsePremiumTestOverride();
   const [aerzte, setAerzte] = useState<ArztRow[]>([]);
   const [gewaehlterArzt, setGewaehlterArzt] = useState('');
   const [staerkeWert, setStaerkeWert] = useState('');
@@ -398,9 +400,9 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'none'}
         >
-        {__DEV__ && (
+        {premiumTestOverrideAvailable && (
           <View style={styles.testPresetBox}>
-            <Text style={styles.testPresetTitle}>Entwicklungsmodus</Text>
+            <Text style={styles.testPresetTitle}>Interne Testversion</Text>
             <Text style={styles.testPresetHint}>Testwerte für E2E-Flows setzen.</Text>
             <View style={styles.testPresetRow}>
               <TouchableOpacity

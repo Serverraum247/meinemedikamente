@@ -416,7 +416,7 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
         {/* Bestand-Anzeige */}
         <View
           style={[styles.bestandCard, isUnterSchwelle && styles.bestandCardWarning, reichweite.istKritisch && styles.bestandCardCritical]}
-          accessibilityLabel={`Bestand: ${medikament.aktueller_bestand} ${medikament.einheit}${staerkeText ? `, Stärke: ${staerkeText}` : ''}, Reichweite: ${reichweite.textKurz}`}
+        accessibilityLabel={`Bestand: ${medikament.aktueller_bestand} ${medikament.einheit}${staerkeText ? `, Stärke: ${staerkeText}` : ''}, ${reichweite.textLang}`}
           accessibilityLiveRegion="polite"
         >
           <Text style={styles.bestandLabel} accessibilityRole="header">Aktueller Bestand</Text>
@@ -439,7 +439,7 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
             {isUnterSchwelle ? '⚠ Nachbestellen empfohlen' : '✓ Bestand OK'}
           </Text>
           <Text style={[styles.tageInfo, reichweite.istKritisch && styles.tageInfoCritical]}>
-            📅 Reichweite: {reichweite.textKurz} – {reichweite.textLang}
+            📅 {reichweite.textLang}
           </Text>
           {premium && (
             <TouchableOpacity

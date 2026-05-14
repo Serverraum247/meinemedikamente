@@ -8,7 +8,10 @@ import com.facebook.react.uimanager.ViewManager
 class MedicationPlanSharePackage : ReactPackage {
   @Suppress("OVERRIDE_DEPRECATION")
   override fun createNativeModules(reactContext: ReactApplicationContext): List<NativeModule> {
-    return listOf(MedicationPlanShareModule(reactContext))
+    return listOf(
+      MedicationPlanShareModule(reactContext),
+      AppRuntimeConfigModule(reactContext),
+    )
   }
 
   @Suppress("OVERRIDE_DEPRECATION")

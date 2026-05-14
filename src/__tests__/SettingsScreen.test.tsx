@@ -38,6 +38,10 @@ jest.mock('../services/PremiumService', () => ({
   getDevPremiumOverride: jest.fn().mockResolvedValue(''),
 }));
 
+jest.mock('../services/AppRuntimeConfigService', () => ({
+  canUsePremiumTestOverride: jest.fn(() => false),
+}));
+
 jest.mock('../utils/AccessibilityHelpers', () => ({
   announceChange: jest.fn(),
 }));

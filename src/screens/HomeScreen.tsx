@@ -235,7 +235,7 @@ export default function HomeScreen({ navigation }: Props) {
         onPress={() => navigation.navigate('MedikamentDetail', { medikamentId: item.id })}
         activeOpacity={0.7}
         accessibilityRole="button"
-        accessibilityLabel={`${item.name}${staerkeText ? `, ${staerkeText}` : ''}, Bestand: ${bestandText} ${item.einheit}, Reichweite: ${reichweite.textKurz}${reichweiteBis ? `, bis ${reichweiteBis}` : ''}${isUnterSchwelle ? ', Nachbestellen empfohlen' : ''}`}
+        accessibilityLabel={`${item.name}${staerkeText ? `, ${staerkeText}` : ''}, Bestand: ${bestandText} ${item.einheit}, ${reichweiteBis ? `Vorrat reicht bis ${reichweiteBis}` : reichweite.textLang}${isUnterSchwelle ? ', Nachbestellen empfohlen' : ''}`}
         accessibilityHint="Doppelt tippen für Details"
       >
         <View style={styles.cardContent}>
@@ -263,19 +263,8 @@ export default function HomeScreen({ navigation }: Props) {
             </View>
           ) : null}
           <View style={styles.reichweiteRow}>
-            <View style={[
-              styles.reichweiteBadge,
-              reichweite.istKritisch && styles.reichweiteBadgeCritical,
-            ]}>
-              <Text style={[
-                styles.reichweiteBadgeText,
-                reichweite.istKritisch && styles.reichweiteBadgeTextCritical,
-              ]}>
-                {reichweite.textKurz}
-              </Text>
-            </View>
             {reichweiteBis ? (
-              <Text style={styles.reichweiteBis}>bis {reichweiteBis}</Text>
+              <Text style={styles.reichweiteBis}>Vorrat reicht bis {reichweiteBis}</Text>
             ) : (
               <Text style={styles.reichweiteBis}>{reichweite.textLang}</Text>
             )}
@@ -661,6 +650,7 @@ const styles = StyleSheet.create({
   },
   cardContent: {
     flex: 1,
+    paddingRight: 12,
   },
   medName: {
     fontSize: 20,
@@ -773,13 +763,17 @@ const styles = StyleSheet.create({
     color: '#555',
   },
   cardBestand: {
-    alignItems: 'center',
-    paddingLeft: 16,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    width: 104,
+    flexShrink: 0,
   },
   bestandZahl: {
     fontSize: 28,
     fontWeight: '700',
     color: '#27ae60',
+    textAlign: 'right',
+    width: '100%',
   },
   bestandWarning: {
     color: '#e74c3c',
@@ -787,6 +781,8 @@ const styles = StyleSheet.create({
   bestandLabel: {
     fontSize: 14,
     color: '#777',
+    textAlign: 'right',
+    width: '100%',
   },
   warnBanner: {
     backgroundColor: '#fff3cd',

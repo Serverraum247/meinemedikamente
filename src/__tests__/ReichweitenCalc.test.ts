@@ -41,7 +41,7 @@ describe('calculateReichweite', () => {
 
     expect(result.tage).toBe(10);
     expect(result.textKurz).toBe('10 Tage');
-    expect(result.textLang).toBe('Reicht noch bis 19.05.2026');
+    expect(result.textLang).toBe('Vorrat reicht bis 19.05.2026');
   });
 
   it('calculates multiple daily slots', () => {
@@ -83,6 +83,6 @@ describe('calculateReichweite', () => {
 
     expect(result.tage).toBe(13);
     expect(result.textKurz).toBe('13 Tage');
-    expect(result.textLang).toBe('Reicht noch bis 22.05.2026');
+    expect(result.textLang).toBe('Vorrat reicht bis 22.05.2026');
   });
 });

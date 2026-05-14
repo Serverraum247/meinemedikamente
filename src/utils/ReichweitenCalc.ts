@@ -20,7 +20,7 @@ export interface ReichweiteInfo {
   istKritisch: boolean;   // Reichweite < 7 Tage
   istLeer: boolean;       // Bestand == 0 oder Reichweite == 0
   textKurz: string;       // z.B. "28 Tage", "unbegrenzt", "leer"
-  textLang: string;       // z.B. "Reicht noch bis 23.06.2026"
+  textLang: string;       // z.B. "Vorrat reicht bis 23.06.2026"
 }
 
 /**
@@ -87,7 +87,7 @@ export function calculateReichweite(med: MedikamentRow, startDatum: Date = new D
     textLang = 'Reicht nur noch für heute';
   } else {
     textKurz = `${tage} Tage`;
-    textLang = `Reicht noch bis ${formatDate(leerDatum)}`;
+    textLang = `Vorrat reicht bis ${formatDate(leerDatum)}`;
   }
 
   return {
