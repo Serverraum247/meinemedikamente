@@ -68,6 +68,11 @@ yarn-error.log
 .maestro/artifacts/
 maestro-report.*
 
+# Local credentials / service account keys
+*service-account*.json
+*play-api*.json
+google-play*.json
+
 # testing
 /coverage
 

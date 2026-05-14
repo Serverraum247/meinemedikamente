@@ -15,6 +15,7 @@
     "e2e:ios:xctest": "bash scripts/run-ios-xctest.sh",
     "ios": "react-native run-ios",
     "lint": "npm run typecheck && npm run static:quality",
+    "play:check": "node scripts/check-google-play-api.js",
     "postinstall": "bash scripts/postinstall.sh",
     "start": "react-native start",
     "static:quality": "bash scripts/check-static-quality.sh",
