@@ -19,5 +19,14 @@ module.exports = {
         ios: null,
       },
     },
+    'react-native-camera-kit': {
+      platforms: {
+        android: {
+          libraryName: null,
+          componentDescriptors: [],
+          cmakeListsPath: null,
+        },
+      },
+    },
   },
 };

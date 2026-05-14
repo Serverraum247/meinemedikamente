@@ -59,7 +59,7 @@ import {
 } from '../constants/MedicationNameSuggestions';
 import { showPremiumRequiredAlert } from '../utils/PremiumAlerts';
 import { findPotentialDuplicateMedication } from '../utils/MedicationDuplicate';
-import { shouldAutoEnableStockDeduction, STRENGTH_UNITS } from '../utils/MedicationFormRules';
+import { hasValidReminderTime, shouldAutoEnableStockDeduction, STRENGTH_UNITS } from '../utils/MedicationFormRules';
 import { formatActiveIngredient, parseActiveIngredients } from '../utils/ActiveIngredients';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AddMedikament'>;
@@ -195,8 +195,8 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
       Alert.alert('Ungültig', 'Einzeldosis muss größer als 0 sein.');
       return;
     }
-    if (erinnerungAktiv && einnahmePlan.length === 0) {
-      Alert.alert('Erinnerung unvollständig', 'Bitte wähle mindestens eine Tageszeit für die Erinnerung aus.');
+    if (!hasValidReminderTime(erinnerungAktiv, einnahmePlan)) {
+      Alert.alert('Erinnerung unvollständig', 'Bitte wähle mindestens eine Tageszeit mit Uhrzeit für die Erinnerung aus.');
       return;
     }
 
