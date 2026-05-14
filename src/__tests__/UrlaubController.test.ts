@@ -1,5 +1,8 @@
 import type { ArztRow, ArztUrlaubRow, MedikamentRow } from '../database/Database';
-import { calculateUrlaubsWarnungenForData } from '../database/UrlaubController';
+import {
+  calculateUrlaubsWarnungenForData,
+  findRezeptTerminUrlaubsKonflikt,
+} from '../database/UrlaubController';
 
 function med(overrides: Partial<MedikamentRow>): MedikamentRow {
   return {
@@ -30,6 +33,7 @@ const doctor: ArztRow = {
   id: 'arzt-1',
   name: 'Hausarzt Müller',
   telefon: '',
+  email: '',
   adresse: '',
   fachgebiet: 'Hausarzt',
   created_at: '',
@@ -70,5 +74,27 @@ describe('calculateUrlaubsWarnungenForData', () => {
     );
 
     expect(warnings).toEqual([]);
+  });
+
+  it('blocks a prescription pickup date during the assigned doctor vacation', () => {
+    const conflict = findRezeptTerminUrlaubsKonflikt(
+      [med({ arzt_id: 'arzt-1' })][0],
+      [urlaub({ arzt_id: 'arzt-1', urlaub_start: '2026-08-10', urlaub_ende: '2026-08-20' })],
+      [doctor],
+      '2026-08-12',
+    );
+
+    expect(conflict?.id).toBe('urlaub-1');
+  });
+
+  it('allows a prescription pickup date outside the doctor vacation', () => {
+    const conflict = findRezeptTerminUrlaubsKonflikt(
+      [med({ arzt_id: 'arzt-1' })][0],
+      [urlaub({ arzt_id: 'arzt-1', urlaub_start: '2026-08-10', urlaub_ende: '2026-08-20' })],
+      [doctor],
+      '2026-08-09',
+    );
+
+    expect(conflict).toBeNull();
   });
 });

@@ -162,6 +162,37 @@ export function calculateUrlaubsWarnungenForData(
   return warnungen;
 }
 
+export async function getRezeptTerminUrlaubsKonflikt(
+  medikament: MedikamentRow,
+  terminDatumIso: string,
+): Promise<ArztUrlaubRow | null> {
+  const [urlaube, aerzte] = await Promise.all([
+    getAllArztUrlaube(),
+    getAllAerzte(),
+  ]);
+
+  return findRezeptTerminUrlaubsKonflikt(medikament, urlaube, aerzte, terminDatumIso);
+}
+
+export function findRezeptTerminUrlaubsKonflikt(
+  medikament: MedikamentRow,
+  urlaube: ArztUrlaubRow[],
+  aerzte: ArztRow[],
+  terminDatumIso: string,
+): ArztUrlaubRow | null {
+  const aerzteById = new Map(aerzte.map(arzt => [arzt.id, arzt]));
+  const terminDatum = normalizeIsoDay(terminDatumIso);
+  if (!terminDatum) return null;
+
+  return urlaube.find(urlaub => {
+    if (!urlaubPasstZumMedikament(medikament, urlaub, aerzteById)) return false;
+    const start = normalizeIsoDay(urlaub.urlaub_start);
+    const ende = normalizeIsoDay(urlaub.urlaub_ende);
+    if (!start || !ende) return false;
+    return terminDatum >= start && terminDatum <= ende;
+  }) ?? null;
+}
+
 function urlaubPasstZumMedikament(
   medikament: MedikamentRow,
   urlaub: ArztUrlaubRow,
@@ -178,6 +209,11 @@ function urlaubPasstZumMedikament(
 
 function normalizeName(value: string): string {
   return value.trim().toLocaleLowerCase('de-DE').replace(/\s+/g, ' ');
+}
+
+function normalizeIsoDay(value: string): string | null {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return match ? `${match[1]}-${match[2]}-${match[3]}` : null;
 }
 
 // --- Hilfsfunktionen ---

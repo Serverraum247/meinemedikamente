@@ -4,7 +4,7 @@ import { Alert } from 'react-native';
 import SettingsScreen from '../screens/SettingsScreen';
 import { getAllAerzte, getMaxAerzte } from '../database/ArztController';
 
-let mockAerzte: Array<{ id: string; name: string; telefon: string; adresse: string; fachgebiet: string; created_at: string }> = [];
+let mockAerzte: Array<{ id: string; name: string; telefon: string; email: string; adresse: string; fachgebiet: string; created_at: string }> = [];
 
 jest.mock('../context/PersonenContext', () => ({
   usePersonen: () => ({
@@ -134,6 +134,7 @@ describe('SettingsScreen', () => {
       id: 'arzt-1',
       name: 'Dr. Müller',
       telefon: '',
+      email: '',
       adresse: '',
       fachgebiet: 'Hausarzt',
       created_at: '',

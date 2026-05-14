@@ -13,7 +13,7 @@ SQLite.DEBUG(true);
 SQLite.enablePromise(true);
 
 const DATABASE_NAME = 'meine_medikamente.db';
-const DATABASE_VERSION = 13; // V13: Einnahme-Slot fuer verlaesslichen Tagesstatus
+const DATABASE_VERSION = 14; // V14: E-Mail-Adresse fuer Aerzte
 
 export interface MedikamentRow {
   id: string;
@@ -63,6 +63,7 @@ export interface ArztRow {
   id: string;
   name: string;          // Name der Praxis / des Arztes
   telefon: string;       // Telefonnummer
+  email: string;          // E-Mail-Adresse der Praxis
   adresse: string;       // Adresse (optional)
   fachgebiet: string;    // Fachgebiet (optional)
   created_at: string;
@@ -180,6 +181,7 @@ class Database {
         id          TEXT PRIMARY KEY NOT NULL,
         name        TEXT NOT NULL,
         telefon     TEXT NOT NULL DEFAULT '',
+        email       TEXT NOT NULL DEFAULT '',
         adresse     TEXT NOT NULL DEFAULT '',
         fachgebiet  TEXT NOT NULL DEFAULT '',
         created_at  TEXT NOT NULL DEFAULT (datetime('now'))
@@ -238,6 +240,7 @@ class Database {
     await this.migrateV10toV11();
     await this.migrateV11toV12();
     await this.migrateV12toV13();
+    await this.migrateV13toV14();
   }
 
   /**
@@ -406,6 +409,7 @@ class Database {
           id          TEXT PRIMARY KEY NOT NULL,
           name        TEXT NOT NULL,
           telefon     TEXT NOT NULL DEFAULT '',
+          email       TEXT NOT NULL DEFAULT '',
           adresse     TEXT NOT NULL DEFAULT '',
           fachgebiet  TEXT NOT NULL DEFAULT '',
           created_at  TEXT NOT NULL DEFAULT (datetime('now'))
@@ -574,6 +578,19 @@ class Database {
         `ALTER TABLE einnahmen ADD COLUMN slot TEXT NOT NULL DEFAULT '';`
       );
       logger.log('[DB] Migration V12->V13: slot Spalte in einnahmen hinzugefuegt');
+    }
+  }
+
+  /**
+   * Migration V13 -> V14: E-Mail-Adresse fuer Arztkontakte.
+   */
+  private async migrateV13toV14(): Promise<void> {
+    const arztCols = await this.getColumnNames('aerzte');
+    if (!arztCols.includes('email')) {
+      await this.db!.executeSql(
+        `ALTER TABLE aerzte ADD COLUMN email TEXT NOT NULL DEFAULT '';`
+      );
+      logger.log('[DB] Migration V13->V14: email Spalte in aerzte hinzugefuegt');
     }
   }
 }

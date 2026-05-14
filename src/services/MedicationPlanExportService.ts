@@ -122,6 +122,7 @@ function formatDoctor(doctor: ArztRow): string {
     doctor.name.trim(),
     doctor.fachgebiet.trim(),
     doctor.telefon.trim() ? `Tel. ${doctor.telefon.trim()}` : '',
+    doctor.email.trim() ? `E-Mail ${doctor.email.trim()}` : '',
   ].filter(Boolean).join(', ');
 }
 

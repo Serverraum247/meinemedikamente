@@ -51,6 +51,10 @@ import {
   formatActiveIngredientStrengthSummary,
   parseActiveIngredients,
 } from '../utils/ActiveIngredients';
+import {
+  getAllRezeptTermine,
+  type RezeptTerminInfo,
+} from '../services/RezeptTerminService';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
 
@@ -63,6 +67,7 @@ export default function HomeScreen({ navigation }: Props) {
   const [offeneEinnahmen, setOffeneEinnahmen] = useState<OffeneEinnahme[]>([]);
   const [heuteEingenommenIds, setHeuteEingenommenIds] = useState<Set<string>>(new Set());
   const [offeneEinnahmeMedikamentIds, setOffeneEinnahmeMedikamentIds] = useState<Set<string>>(new Set());
+  const [rezeptTermine, setRezeptTermine] = useState<Record<string, RezeptTerminInfo>>({});
 
   // Medikamente nach aktiver Person filtern
   const gefilterteMedikamente = useMemo(() => {
@@ -131,6 +136,11 @@ export default function HomeScreen({ navigation }: Props) {
       ladeEinnahmeStatus().catch(error => {
         logger.error('Einnahme-Status konnte nicht geladen werden:', error);
       });
+      getAllRezeptTermine()
+        .then(setRezeptTermine)
+        .catch(error => {
+          logger.error('Rezepttermine konnten nicht geladen werden:', error);
+        });
     }, [ladeEinnahmeStatus, loading])
   );
 
@@ -211,6 +221,7 @@ export default function HomeScreen({ navigation }: Props) {
     const reichweiteBis = formatReichweiteBis(reichweite.leerDatum);
     const heuteEingenommen = heuteEingenommenIds.has(item.id);
     const heuteOffen = offeneEinnahmeMedikamentIds.has(item.id);
+    const rezeptTermin = rezeptTermine[item.id];
     const activeIngredients = parseActiveIngredients(item.zusatz || '');
     const showIngredientList = activeIngredients.length > 1 && activeIngredients.some(ingredient => ingredient.strength);
 
@@ -274,6 +285,11 @@ export default function HomeScreen({ navigation }: Props) {
               ⚠ Nachbestellen empfohlen!
             </Text>
           )}
+          {rezeptTermin ? (
+            <Text style={styles.rezeptTerminText}>
+              📅 Rezept-Erinnerung: {formatIsoDate(rezeptTermin.terminDatumIso)}
+            </Text>
+          ) : null}
           {heuteEingenommen ? (
             <Text style={styles.eingenommenText}>✓ Heute eingenommen</Text>
           ) : heuteOffen ? (
@@ -551,6 +567,12 @@ function formatReichweiteBis(date: Date | null): string | null {
   });
 }
 
+function formatIsoDate(isoDate: string): string {
+  const [year, month, day] = isoDate.split('-');
+  if (!year || !month || !day) return isoDate;
+  return `${day}.${month}.${year}`;
+}
+
 // --- Styles (Senioren-freundlich, WCAG AA Kontrast) ---
 
 const styles = StyleSheet.create({
@@ -725,6 +747,12 @@ const styles = StyleSheet.create({
     color: '#e74c3c',
     fontWeight: '600',
     marginTop: 4,
+  },
+  rezeptTerminText: {
+    marginTop: 6,
+    fontSize: 16,
+    color: '#0B63CE',
+    fontWeight: '700',
   },
   eingenommenText: {
     marginTop: 8,

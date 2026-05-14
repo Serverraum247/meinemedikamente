@@ -164,7 +164,7 @@ export default function SettingsScreen({ navigation }: Props) {
       return;
     }
     setNeuerArzt(true);
-    setEditArzt({ id: '', name: '', telefon: '', adresse: '', fachgebiet: '', created_at: '' });
+    setEditArzt({ id: '', name: '', telefon: '', email: '', adresse: '', fachgebiet: '', created_at: '' });
   };
 
   const handleSaveArzt = async () => {
@@ -178,6 +178,7 @@ export default function SettingsScreen({ navigation }: Props) {
         const result = await createArzt({
           name: editArzt.name.trim(),
           telefon: editArzt.telefon.trim(),
+          email: editArzt.email.trim(),
           adresse: editArzt.adresse.trim(),
           fachgebiet: editArzt.fachgebiet.trim(),
         });
@@ -189,6 +190,7 @@ export default function SettingsScreen({ navigation }: Props) {
         await updateArzt(editArzt.id, {
           name: editArzt.name.trim(),
           telefon: editArzt.telefon.trim(),
+          email: editArzt.email.trim(),
           adresse: editArzt.adresse.trim(),
           fachgebiet: editArzt.fachgebiet.trim(),
         });
@@ -483,6 +485,9 @@ export default function SettingsScreen({ navigation }: Props) {
                 {arzt.telefon ? (
                   <Text style={styles.arztDetail}>📞 {arzt.telefon}</Text>
                 ) : null}
+                {arzt.email ? (
+                  <Text style={styles.arztDetail}>✉️ {arzt.email}</Text>
+                ) : null}
                 {arzt.adresse ? (
                   <Text style={styles.arztDetail}>📍 {arzt.adresse}</Text>
                 ) : null}
@@ -539,6 +544,18 @@ export default function SettingsScreen({ navigation }: Props) {
                 placeholder="0681 123456"
                 placeholderTextColor="#999"
                 keyboardType="phone-pad"
+              />
+
+              <Text style={styles.fieldLabel}>E-Mail</Text>
+              <TextInput
+                style={styles.fieldInput}
+                value={editArzt.email}
+                onChangeText={t => setEditArzt({ ...editArzt, email: t })}
+                placeholder="praxis@example.de"
+                placeholderTextColor="#999"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
               />
 
               <Text style={styles.fieldLabel}>Adresse</Text>

@@ -77,6 +77,7 @@ const ArztUrlaubScreen: React.FC<ArztUrlaubScreenProps> = ({ navigation }) => {
   const [neuenArztAnlegen, setNeuenArztAnlegen] = useState(false);
   const [neuArztName, setNeuArztName] = useState('');
   const [neuArztTelefon, setNeuArztTelefon] = useState('');
+  const [neuArztEmail, setNeuArztEmail] = useState('');
   const [neuArztFachgebiet, setNeuArztFachgebiet] = useState('');
   const [selectedArztId, setSelectedArztId] = useState<string | null>(null);
   const [datePickerTarget, setDatePickerTarget] = useState<'von' | 'bis' | null>(null);
@@ -167,6 +168,7 @@ const ArztUrlaubScreen: React.FC<ArztUrlaubScreenProps> = ({ navigation }) => {
     const result = await createArzt({
       name: neuArztName.trim(),
       telefon: neuArztTelefon.trim(),
+      email: neuArztEmail.trim(),
       adresse: '',
       fachgebiet: neuArztFachgebiet.trim(),
     });
@@ -183,6 +185,7 @@ const ArztUrlaubScreen: React.FC<ArztUrlaubScreenProps> = ({ navigation }) => {
     setNeuenArztAnlegen(false);
     setNeuArztName('');
     setNeuArztTelefon('');
+    setNeuArztEmail('');
     setNeuArztFachgebiet('');
   };
 
@@ -368,6 +371,62 @@ const ArztUrlaubScreen: React.FC<ArztUrlaubScreenProps> = ({ navigation }) => {
           </TouchableOpacity>
         </View>
 
+        {/* ---------- Active Vacations List ---------- */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={[styles.sectionTitle, styles.sectionTitleInRow]}>Aktive Urlaube</Text>
+            {urlaube.length > 0 ? (
+              <Text style={styles.sectionCount}>{urlaube.length}</Text>
+            ) : null}
+          </View>
+          <Text style={styles.sectionHint}>
+            Bitte zuerst prüfen, ob der Urlaub schon eingetragen ist.
+          </Text>
+          {urlaube.length === 0 ? (
+            <Text style={styles.emptyText}>Keine aktiven Urlaube eingetragen.</Text>
+          ) : (
+            urlaube.map((urlaub) => (
+              <View key={urlaub.id} style={styles.urlaubCard}>
+                <View style={styles.urlaubInfo}>
+                  <Text style={styles.urlaubPraxis}>{urlaub.praxis_name}</Text>
+                  <Text style={styles.urlaubDateRange}>
+                    {formatGermanDate(urlaub.urlaub_start)} – {formatGermanDate(urlaub.urlaub_ende)}
+                  </Text>
+                  {urlaub.telefon ? (
+                    <TouchableOpacity
+                      style={styles.telefonRow}
+                      onPress={() => handleAnrufen(urlaub.praxis_name, urlaub.telefon || '')}
+                      accessibilityLabel={`${urlaub.praxis_name} anrufen: ${urlaub.telefon}`}
+                      accessibilityHint="Tippen um Arzt anzurufen"
+                    >
+                      <Text style={styles.telefonIcon}>📞</Text>
+                      <Text style={styles.telefonText}>{urlaub.telefon}</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+                <View style={styles.urlaubActions}>
+                  {urlaub.telefon ? (
+                    <TouchableOpacity
+                      style={styles.callButton}
+                      onPress={() => handleAnrufen(urlaub.praxis_name, urlaub.telefon || '')}
+                      accessibilityLabel={`${urlaub.praxis_name} anrufen`}
+                    >
+                      <Text style={styles.callButtonText}>📞</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                  <TouchableOpacity
+                    style={styles.deleteButton}
+                    onPress={() => handleDeleteUrlaub(urlaub.id, urlaub.praxis_name)}
+                    accessibilityLabel={`Urlaub löschen: ${urlaub.praxis_name}`}
+                  >
+                    <Text style={styles.deleteButtonText}>Löschen</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ))
+          )}
+        </View>
+
         {/* ---------- Form Section ---------- */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Neuen Urlaub eintragen</Text>
@@ -412,48 +471,30 @@ const ArztUrlaubScreen: React.FC<ArztUrlaubScreenProps> = ({ navigation }) => {
           />
 
           <Text style={styles.label}>Urlaub von</Text>
-          <View style={styles.dateInputRow}>
-            <TextInput
-              style={[styles.input, styles.dateInput]}
-              value={urlaubVon}
-              onChangeText={text => setUrlaubVon(normalizeGermanDateInput(text))}
-              placeholder="TT.MM.JJJJ"
-              placeholderTextColor="#999"
-              keyboardType="numeric"
-              maxLength={10}
-              accessibilityLabel="Urlaub Startdatum eingeben"
-            />
-            <TouchableOpacity
-              style={styles.datePickerButton}
-              onPress={() => openDatePicker('von')}
-              accessibilityRole="button"
-              accessibilityLabel="Startdatum auswählen"
-            >
-              <Text style={styles.datePickerButtonText}>Datum</Text>
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity
+            style={styles.dateSelectButton}
+            onPress={() => openDatePicker('von')}
+            accessibilityRole="button"
+            accessibilityLabel="Startdatum auswählen"
+          >
+            <Text style={[styles.dateSelectValue, !urlaubVon && styles.dateSelectPlaceholder]}>
+              {urlaubVon || 'Startdatum wählen'}
+            </Text>
+            <Text style={styles.dateSelectIcon}>📅</Text>
+          </TouchableOpacity>
 
           <Text style={styles.label}>Urlaub bis</Text>
-          <View style={styles.dateInputRow}>
-            <TextInput
-              style={[styles.input, styles.dateInput]}
-              value={urlaubBis}
-              onChangeText={text => setUrlaubBis(normalizeGermanDateInput(text))}
-              placeholder="TT.MM.JJJJ"
-              placeholderTextColor="#999"
-              keyboardType="numeric"
-              maxLength={10}
-              accessibilityLabel="Urlaub Enddatum eingeben"
-            />
-            <TouchableOpacity
-              style={styles.datePickerButton}
-              onPress={() => openDatePicker('bis')}
-              accessibilityRole="button"
-              accessibilityLabel="Enddatum auswählen"
-            >
-              <Text style={styles.datePickerButtonText}>Datum</Text>
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity
+            style={styles.dateSelectButton}
+            onPress={() => openDatePicker('bis')}
+            accessibilityRole="button"
+            accessibilityLabel="Enddatum auswählen"
+          >
+            <Text style={[styles.dateSelectValue, !urlaubBis && styles.dateSelectPlaceholder]}>
+              {urlaubBis || 'Enddatum wählen'}
+            </Text>
+            <Text style={styles.dateSelectIcon}>📅</Text>
+          </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.addButton}
@@ -462,54 +503,6 @@ const ArztUrlaubScreen: React.FC<ArztUrlaubScreenProps> = ({ navigation }) => {
           >
             <Text style={styles.addButtonText}>Urlaub eintragen</Text>
           </TouchableOpacity>
-        </View>
-
-        {/* ---------- Active Vacations List ---------- */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Aktive Urlaube</Text>
-          {urlaube.length === 0 ? (
-            <Text style={styles.emptyText}>Keine aktiven Urlaube eingetragen.</Text>
-          ) : (
-            urlaube.map((urlaub) => (
-              <View key={urlaub.id} style={styles.urlaubCard}>
-                <View style={styles.urlaubInfo}>
-                  <Text style={styles.urlaubPraxis}>{urlaub.praxis_name}</Text>
-                  <Text style={styles.urlaubDateRange}>
-                    {formatGermanDate(urlaub.urlaub_start)} – {formatGermanDate(urlaub.urlaub_ende)}
-                  </Text>
-                  {urlaub.telefon ? (
-                    <TouchableOpacity
-                      style={styles.telefonRow}
-                      onPress={() => handleAnrufen(urlaub.praxis_name, urlaub.telefon || '')}
-                      accessibilityLabel={`${urlaub.praxis_name} anrufen: ${urlaub.telefon}`}
-                      accessibilityHint="Tippen um Arzt anzurufen"
-                    >
-                      <Text style={styles.telefonIcon}>📞</Text>
-                      <Text style={styles.telefonText}>{urlaub.telefon}</Text>
-                    </TouchableOpacity>
-                  ) : null}
-                </View>
-                <View style={styles.urlaubActions}>
-                  {urlaub.telefon ? (
-                    <TouchableOpacity
-                      style={styles.callButton}
-                      onPress={() => handleAnrufen(urlaub.praxis_name, urlaub.telefon || '')}
-                      accessibilityLabel={`${urlaub.praxis_name} anrufen`}
-                    >
-                      <Text style={styles.callButtonText}>📞</Text>
-                    </TouchableOpacity>
-                  ) : null}
-                  <TouchableOpacity
-                    style={styles.deleteButton}
-                    onPress={() => handleDeleteUrlaub(urlaub.id, urlaub.praxis_name)}
-                    accessibilityLabel={`Urlaub löschen: ${urlaub.praxis_name}`}
-                  >
-                    <Text style={styles.deleteButtonText}>Löschen</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ))
-          )}
         </View>
 
         {/* ---------- Warnings Section ---------- */}
@@ -569,6 +562,9 @@ const ArztUrlaubScreen: React.FC<ArztUrlaubScreenProps> = ({ navigation }) => {
                         ) : null}
                         {item.telefon ? (
                           <Text style={styles.arztItemDetail}>{item.telefon}</Text>
+                        ) : null}
+                        {item.email ? (
+                          <Text style={styles.arztItemDetail}>{item.email}</Text>
                         ) : null}
                       </View>
                       <Text style={styles.checkIcon}>✓</Text>
@@ -636,6 +632,19 @@ const ArztUrlaubScreen: React.FC<ArztUrlaubScreenProps> = ({ navigation }) => {
                 placeholderTextColor="#999"
                 keyboardType="phone-pad"
                 accessibilityLabel="Telefonnummer eingeben"
+              />
+
+              <Text style={styles.label}>E-Mail</Text>
+              <TextInput
+                style={styles.input}
+                value={neuArztEmail}
+                onChangeText={setNeuArztEmail}
+                placeholder="praxis@example.de"
+                placeholderTextColor="#999"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                accessibilityLabel="E-Mail-Adresse eingeben"
               />
 
               <View style={styles.modalButtons}>
@@ -710,6 +719,23 @@ const ArztUrlaubScreen: React.FC<ArztUrlaubScreenProps> = ({ navigation }) => {
                     <View key={`empty-${index}`} style={styles.calendarDayButton} />
                   )
                 ))}
+              </View>
+              <View style={styles.manualDateFallback}>
+                <Text style={styles.manualDateFallbackLabel}>Oder Datum eintippen</Text>
+                <TextInput
+                  style={styles.manualDateInput}
+                  value={datePickerTarget === 'von' ? urlaubVon : urlaubBis}
+                  onChangeText={text => {
+                    const value = normalizeGermanDateInput(text);
+                    if (datePickerTarget === 'von') setUrlaubVon(value);
+                    if (datePickerTarget === 'bis') setUrlaubBis(value);
+                  }}
+                  placeholder="TT.MM.JJJJ"
+                  placeholderTextColor="#999"
+                  keyboardType="number-pad"
+                  maxLength={10}
+                  accessibilityLabel="Datum manuell eintippen"
+                />
               </View>
               <TouchableOpacity
                 style={styles.todayButton}
@@ -793,6 +819,33 @@ const styles = StyleSheet.create({
     color: '#333333',
     marginBottom: 16,
   },
+  sectionTitleInRow: {
+    marginBottom: 0,
+    flex: 1,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  sectionCount: {
+    minWidth: 34,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: '#E8F1FF',
+    color: '#0B63CE',
+    fontSize: 16,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  sectionHint: {
+    fontSize: 16,
+    color: '#555555',
+    lineHeight: 22,
+    marginBottom: 10,
+  },
   label: {
     fontSize: 18,
     color: '#444444',
@@ -818,6 +871,28 @@ const styles = StyleSheet.create({
   },
   dateInput: {
     flex: 1,
+  },
+  dateSelectButton: {
+    minHeight: 56,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#0B63CE',
+    backgroundColor: '#EEF4FC',
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  dateSelectValue: {
+    fontSize: 18,
+    color: '#1a1a1a',
+    fontWeight: '700',
+  },
+  dateSelectPlaceholder: {
+    color: '#0B63CE',
+  },
+  dateSelectIcon: {
+    fontSize: 22,
   },
   datePickerButton: {
     minHeight: 50,
@@ -1050,6 +1125,25 @@ const styles = StyleSheet.create({
     color: '#1a1a1a',
     fontSize: 17,
     fontWeight: '600',
+  },
+  manualDateFallback: {
+    marginTop: 10,
+  },
+  manualDateFallbackLabel: {
+    fontSize: 15,
+    color: '#555',
+    fontWeight: '600',
+    marginBottom: 6,
+  },
+  manualDateInput: {
+    minHeight: 48,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#cccccc',
+    paddingHorizontal: 12,
+    fontSize: 18,
+    color: '#1a1a1a',
+    backgroundColor: '#fafafa',
   },
   todayButton: {
     marginTop: 12,

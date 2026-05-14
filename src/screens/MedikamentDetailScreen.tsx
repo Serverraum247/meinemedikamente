@@ -20,6 +20,7 @@ import {
   Platform,
   Modal,
   TextInput,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -28,6 +29,7 @@ import { useMedikamente } from '../context/MedikamentContext';
 import { MedikamentRow, PackungRow } from '../database/Database';
 import { getEinnahmenByMedikament, EinnahmeWithDate, storniereEinnahme } from '../database/EinnahmeController';
 import { getLetztePackung, getOffenePackungenCount, getPackungenByMedikament } from '../database/PackungController';
+import { getRezeptTerminUrlaubsKonflikt } from '../database/UrlaubController';
 import {
   parseEinnahmeplan,
   tagesdosisBerechnen,
@@ -52,6 +54,16 @@ import {
   formatActiveIngredientStrengthSummary,
   parseActiveIngredients,
 } from '../utils/ActiveIngredients';
+import {
+  calculateRezeptTerminFromLeerDatum,
+  REZEPT_TERMIN_TAGE_VOR_LEER,
+} from '../utils/RezeptTermin';
+import { formatGermanDate } from '../utils/GermanDate';
+import {
+  getRezeptTermin,
+  saveRezeptTermin,
+  type RezeptTerminInfo,
+} from '../services/RezeptTerminService';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'MedikamentDetail'>;
 
@@ -95,8 +107,10 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
   const [zeigeHistorie, setZeigeHistorie] = useState(false);
   const [premium, setPremiumStatus] = useState(false);
   const [arztName, setArztName] = useState('');
+  const [arztEmail, setArztEmail] = useState('');
   const [korrekturModal, setKorrekturModal] = useState(false);
   const [korrekturWert, setKorrekturWert] = useState('');
+  const [rezeptTermin, setRezeptTermin] = useState<RezeptTerminInfo | null>(null);
 
   // Medikament + Historie laden
   const loadData = useCallback(async () => {
@@ -108,11 +122,14 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
       if (found.arzt_id) {
         const arzt = await getArztById(found.arzt_id);
         setArztName(arzt?.name || '');
+        setArztEmail(arzt?.email || '');
       } else {
         setArztName('');
+        setArztEmail('');
       }
     }
     try {
+      setRezeptTermin(await getRezeptTermin(medikamentId));
       const einnahmen = await getEinnahmenByMedikament(medikamentId, 30);
       setHistorie(einnahmen);
       // Packungsdaten laden
@@ -224,6 +241,98 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
     );
   }, [medikament, loadData]);
 
+  const handleRezeptTerminErstellen = useCallback(async () => {
+    if (!medikament) return;
+
+    if (rezeptTermin) {
+      Alert.alert(
+        'Rezept-Erinnerung besteht schon',
+        `Für dieses Medikament ist bereits eine Rezept-Erinnerung am ${formatGermanDate(rezeptTermin.terminDatumIso)} geplant.`,
+      );
+      return;
+    }
+
+    const aktuelleReichweite = calculateReichweite(medikament);
+    if (!aktuelleReichweite.leerDatum) {
+      Alert.alert('Nicht möglich', 'Für dieses Medikament kann aktuell kein Leer-Datum berechnet werden.');
+      return;
+    }
+
+    const termin = calculateRezeptTerminFromLeerDatum(
+      aktuelleReichweite.leerDatum,
+      REZEPT_TERMIN_TAGE_VOR_LEER,
+    );
+    const konflikt = await getRezeptTerminUrlaubsKonflikt(medikament, termin.terminDatumIso);
+    if (konflikt) {
+      Alert.alert(
+        'Arzt im Urlaub',
+        `Die Rezept-Erinnerung wäre am ${formatGermanDate(termin.terminDatumIso)}.\n\n${konflikt.praxis_name} ist vom ${formatGermanDate(konflikt.urlaub_start)} bis ${formatGermanDate(konflikt.urlaub_ende)} im Urlaub.\n\nBitte das Rezept vor dem Urlaub besorgen oder einen anderen Weg wählen.`,
+      );
+      return;
+    }
+
+    try {
+      const { allowed } = await canCreateCalendarEvent();
+      if (!allowed) {
+        showPremiumRequiredAlert(
+          'Kalendertermine, zum Beispiel als Rezept-Erinnerung, sind nur mit Premium möglich.',
+          navigation,
+        );
+        return;
+      }
+
+      const eventId = await erstelleRezeptAbholtermin(
+        medikament.name,
+        medikament.aktueller_bestand,
+        medikament.einzeldosis,
+        1,
+        REZEPT_TERMIN_TAGE_VOR_LEER,
+        termin.leerDatumIso,
+      );
+      if (!eventId) {
+        Alert.alert('Fehler', 'Kalendereintrag konnte nicht erstellt werden.');
+        return;
+      }
+
+      await recordCalendarEvent();
+      const info: RezeptTerminInfo = {
+        terminDatumIso: termin.terminDatumIso,
+        leerDatumIso: termin.leerDatumIso,
+        eventId,
+        createdAt: new Date().toISOString(),
+      };
+      await saveRezeptTermin(medikament.id, info);
+      setRezeptTermin(info);
+      Alert.alert(
+        'Rezept-Erinnerung erstellt',
+        `Die Erinnerung wurde für den ${formatGermanDate(termin.terminDatumIso)} im Kalender eingetragen.`,
+      );
+    } catch (error) {
+      logger.error('Rezepttermin konnte nicht erstellt werden:', error);
+      Alert.alert('Fehler', 'Kalendereintrag konnte nicht erstellt werden.');
+    }
+  }, [medikament, navigation, rezeptTermin]);
+
+  const handleRezeptEmail = useCallback(() => {
+    if (!medikament || !arztEmail) return;
+    const subject = `Rezeptanfrage ${medikament.name}`;
+    const body = [
+      `Guten Tag,`,
+      ``,
+      `bitte stellen Sie mir ein Rezept für folgendes Medikament aus:`,
+      ``,
+      `Medikament: ${medikament.name}`,
+      medikament.zusatz ? `Wirkstoff: ${medikament.zusatz}` : '',
+      ``,
+      `Vielen Dank.`,
+    ].filter(Boolean).join('\n');
+
+    const url = `mailto:${arztEmail.trim()}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    Linking.openURL(url).catch(() => {
+      Alert.alert('Fehler', 'E-Mail-App konnte nicht geöffnet werden.');
+    });
+  }, [arztEmail, medikament]);
+
   // Bestandskorrektur (Premium) – Platform-abhaengig
   const handleBestandskorrektur = useCallback(() => {
     if (!medikament) return;
@@ -282,6 +391,9 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
     formatStaerke(medikament.staerke_wert, medikament.staerke_einheit) ||
     formatActiveIngredientStrengthSummary(medikament.zusatz || '');
   const activeIngredients = parseActiveIngredients(medikament.zusatz || '');
+  const rezeptTerminVorschlag = reichweite.leerDatum
+    ? calculateRezeptTerminFromLeerDatum(reichweite.leerDatum, REZEPT_TERMIN_TAGE_VOR_LEER)
+    : null;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -558,44 +670,51 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
           <Text style={styles.deleteButtonText}>Medikament löschen</Text>
         </TouchableOpacity>
 
-        {/* Rezept-Termin im Kalender */}
+        {/* Rezept-Erinnerung im Kalender */}
         {medikament.aktueller_bestand > 0 && (
-          <TouchableOpacity
-            style={styles.kalenderButton}
-            onPress={async () => {
-              try {
-                // Premium-Gate: Kalender-Limit prüfen
-                const { allowed } = await canCreateCalendarEvent();
-                if (!allowed) {
-                  showPremiumRequiredAlert(
-                    'Kalendertermine, zum Beispiel für Rezeptabholung, sind nur mit Premium möglich.',
-                    navigation,
-                  );
-                  return;
-                }
-                await recordCalendarEvent();
-
-                await erstelleRezeptAbholtermin(
-                  medikament.name,
-                  medikament.aktueller_bestand,
-                  medikament.einzeldosis,
-                  1,
-                  7,
-                );
-                Alert.alert('Termin erstellt', 'Der Rezept-Abholtermin wurde im Kalender eingetragen.');
-              } catch (error) {
-                Alert.alert('Fehler', 'Kalendereintrag konnte nicht erstellt werden.');
-              }
-            }}
-            activeOpacity={0.7}
-            accessibilityRole="button"
-            accessibilityLabel="Kalendereintrag für Rezept-Abholung erstellen"
-            accessibilityHint="Erstellt einen Termin im Kalender, 7 Tage bevor das Medikament leer wird"
-          >
-            <Text style={styles.kalenderButtonText}>
-              📅 Rezept-Termin erstellen
-            </Text>
-          </TouchableOpacity>
+          <View style={styles.rezeptTerminCard}>
+            <Text style={styles.rezeptTerminTitle}>Rezept besorgen</Text>
+            {rezeptTermin ? (
+              <Text style={styles.rezeptTerminText}>
+                Erinnerung am {formatGermanDate(rezeptTermin.terminDatumIso)}
+              </Text>
+            ) : rezeptTerminVorschlag ? (
+              <Text style={styles.rezeptTerminText}>
+                Vorschlag: {formatGermanDate(rezeptTerminVorschlag.terminDatumIso)}
+              </Text>
+            ) : (
+              <Text style={styles.rezeptTerminText}>Noch kein Termin geplant.</Text>
+            )}
+            {rezeptTermin ? (
+              <Text style={styles.rezeptTerminSubtext}>
+                Erstellt am {formatGermanDate(rezeptTermin.createdAt.split('T')[0])}
+              </Text>
+            ) : null}
+            {arztEmail ? (
+              <TouchableOpacity
+                style={styles.rezeptEmailButton}
+                onPress={handleRezeptEmail}
+                accessibilityRole="button"
+                accessibilityLabel="Arzt per E-Mail wegen Rezept anschreiben"
+              >
+                <Text style={styles.rezeptEmailButtonText}>
+                  ✉️ Arzt per E-Mail anschreiben
+                </Text>
+              </TouchableOpacity>
+            ) : null}
+            <TouchableOpacity
+              style={styles.kalenderButton}
+              onPress={handleRezeptTerminErstellen}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Kalendereintrag als Rezept-Erinnerung erstellen"
+              accessibilityHint="Prüft zuerst Arzturlaub und erstellt dann einen Kalendertermin"
+            >
+              <Text style={styles.kalenderButtonText}>
+                📅 Rezept-Erinnerung erstellen
+              </Text>
+            </TouchableOpacity>
+          </View>
         )}
       </ScrollView>
 
@@ -1118,6 +1237,46 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#e74c3c',
     fontWeight: '600',
+  },
+  rezeptTerminCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#D6E8F8',
+  },
+  rezeptTerminTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1a1a2e',
+    marginBottom: 6,
+  },
+  rezeptTerminText: {
+    fontSize: 18,
+    color: '#1a1a2e',
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  rezeptTerminSubtext: {
+    fontSize: 15,
+    color: '#666',
+    marginBottom: 12,
+  },
+  rezeptEmailButton: {
+    backgroundColor: '#EEF4FC',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#B8D1F0',
+    marginBottom: 10,
+  },
+  rezeptEmailButtonText: {
+    fontSize: 17,
+    color: '#0B63CE',
+    fontWeight: '700',
   },
   kalenderButton: {
     backgroundColor: '#3498db',

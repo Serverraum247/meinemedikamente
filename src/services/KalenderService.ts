@@ -2,7 +2,7 @@
  * KalenderService.ts – Native Kalender-Integration
  *
  * Erstellt automatisch Kalendereinträge für:
- * - Rezept-Abholtermine (Premium Feature)
+ * - Rezept-Erinnerungen (Premium Feature)
  * - Arzt-Urlaub-Warnungen
  *
  * Verwendet react-native-calendar-events für native Integration.
@@ -10,8 +10,8 @@
  */
 
 import CalendarEvents from 'react-native-calendar-events';
-import { calculateLeerDatum } from '../utils/FloatUtils';
 import { logger } from '../utils/Logger';
+import { calculateRezeptTerminFromLeerDatum, calculateRezeptTerminFromStock } from '../utils/RezeptTermin';
 
 export interface KalenderEvent {
   title: string;
@@ -48,7 +48,7 @@ export async function hasKalenderBerechtigung(): Promise<boolean> {
 }
 
 /**
- * Rezept-Abholtermin im Kalender eintragen
+ * Rezept-Erinnerung im Kalender eintragen
  *
  * @param medikamentName Name des Medikaments
  * @param bestand Aktueller Bestand
@@ -62,7 +62,8 @@ export async function erstelleRezeptAbholtermin(
   bestand: number,
   einzeldosis: number,
   einnahmenProTag: number = 1,
-  tageVorLeer: number = 7
+  tageVorLeer: number = 7,
+  leerDatumOverride?: string,
 ): Promise<string | null> {
   const berechtigt = await requestKalenderBerechtigung();
   if (!berechtigt) {
@@ -70,9 +71,10 @@ export async function erstelleRezeptAbholtermin(
     return null;
   }
 
-  const leerDatum = calculateLeerDatum(bestand, einzeldosis, einnahmenProTag);
-  const terminDatum = new Date(leerDatum);
-  terminDatum.setDate(terminDatum.getDate() - tageVorLeer);
+  const { leerDatumIso, terminDatumIso } = leerDatumOverride
+    ? calculateRezeptTerminFromLeerDatum(leerDatumOverride, tageVorLeer)
+    : calculateRezeptTerminFromStock(bestand, einzeldosis, einnahmenProTag, tageVorLeer);
+  const terminDatum = new Date(`${terminDatumIso}T12:00:00`);
 
   // Termin-Zeit: 10:00 Uhr Vormittags
   const startDatum = new Date(terminDatum);
@@ -83,14 +85,15 @@ export async function erstelleRezeptAbholtermin(
   endDatum.setMinutes(endDatum.getMinutes() + 30);
 
   const event: KalenderEvent = {
-    title: `Rezept abholen: ${medikamentName}`,
+    title: `Rezept besorgen: ${medikamentName}`,
     startDate: startDatum.toISOString(),
     endDate: endDatum.toISOString(),
     notes:
       `Medikament: ${medikamentName}\n` +
       `Aktueller Bestand: ${bestand}\n` +
       `Einzeldosis: ${einzeldosis}\n` +
-      `Vorraeussichtlich leer am: ${leerDatum}\n\n` +
+      `Vorraeussichtlich leer am: ${leerDatumIso}\n\n` +
+      `Diese Erinnerung bedeutet: rechtzeitig Rezept organisieren. Ob per Telefon, E-Mail oder vor Ort entscheidet der Nutzer.\n\n` +
       `Erstellt durch "Mein MediPlan" App`,
     alarm: 60, // 1 Stunde vorher erinnern
   };

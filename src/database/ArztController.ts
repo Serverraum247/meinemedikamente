@@ -89,9 +89,9 @@ export async function createArzt(
   const id = generateUUID();
 
   await db.executeSql(
-    `INSERT INTO aerzte (id, name, telefon, adresse, fachgebiet)
-     VALUES (?, ?, ?, ?, ?)`,
-    [id, data.name, data.telefon || '', data.adresse || '', data.fachgebiet || '']
+    `INSERT INTO aerzte (id, name, telefon, email, adresse, fachgebiet)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [id, data.name, data.telefon || '', data.email || '', data.adresse || '', data.fachgebiet || '']
   );
 
   return { success: true, id };
@@ -110,6 +110,7 @@ export async function updateArzt(
 
   if (data.name !== undefined) { fields.push('name = ?'); values.push(data.name); }
   if (data.telefon !== undefined) { fields.push('telefon = ?'); values.push(data.telefon); }
+  if (data.email !== undefined) { fields.push('email = ?'); values.push(data.email); }
   if (data.adresse !== undefined) { fields.push('adresse = ?'); values.push(data.adresse); }
   if (data.fachgebiet !== undefined) { fields.push('fachgebiet = ?'); values.push(data.fachgebiet); }
 
