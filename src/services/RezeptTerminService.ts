@@ -14,6 +14,13 @@ export interface RezeptTerminInfo {
   createdAt: string;
 }
 
+export interface FaelligeRezeptErinnerung {
+  medikamentId: string;
+  medikamentName: string;
+  terminDatumIso: string;
+  istUeberfaellig: boolean;
+}
+
 export interface RezeptTerminSyncResult {
   status: 'none' | 'unchanged' | 'updated' | 'removed_conflict' | 'removed_unavailable' | 'failed';
   info?: RezeptTerminInfo;
@@ -41,6 +48,30 @@ export async function getAllRezeptTermine(): Promise<Record<string, RezeptTermin
   });
 
   return termine;
+}
+
+export function findeFaelligeRezeptErinnerungen(
+  medikamente: MedikamentRow[],
+  termine: Record<string, RezeptTerminInfo>,
+  heute: Date = new Date(),
+): FaelligeRezeptErinnerung[] {
+  const heuteIso = toIsoDate(heute);
+
+  return medikamente
+    .map(medikament => {
+      const termin = termine[medikament.id];
+      if (!termin) return null;
+      if (termin.terminDatumIso > heuteIso) return null;
+
+      return {
+        medikamentId: medikament.id,
+        medikamentName: medikament.name,
+        terminDatumIso: termin.terminDatumIso,
+        istUeberfaellig: termin.terminDatumIso < heuteIso,
+      } satisfies FaelligeRezeptErinnerung;
+    })
+    .filter((value): value is FaelligeRezeptErinnerung => value !== null)
+    .sort((a, b) => a.terminDatumIso.localeCompare(b.terminDatumIso));
 }
 
 export async function saveRezeptTermin(
@@ -162,4 +193,11 @@ async function loescheRezeptTerminUndEvent(
     await entferneKalenderEvent(eventId);
   }
   await deleteRezeptTermin(medikamentId);
+}
+
+function toIsoDate(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
