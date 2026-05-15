@@ -62,7 +62,10 @@ import { formatGermanDate } from '../utils/GermanDate';
 import {
   getRezeptTermin,
   saveRezeptTermin,
+  synchronisiereRezeptTermin,
+  istRezeptTerminAktuell,
   type RezeptTerminInfo,
+  type RezeptTerminSyncResult,
 } from '../services/RezeptTerminService';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'MedikamentDetail'>;
@@ -250,14 +253,6 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
   const handleRezeptTerminErstellen = useCallback(async () => {
     if (!medikament) return;
 
-    if (rezeptTermin) {
-      Alert.alert(
-        'Rezept-Erinnerung besteht schon',
-        `Für dieses Medikament ist bereits eine Rezept-Erinnerung am ${formatGermanDate(rezeptTermin.terminDatumIso)} geplant.`,
-      );
-      return;
-    }
-
     const aktuelleReichweite = calculateReichweite(medikament);
     if (!aktuelleReichweite.leerDatum) {
       Alert.alert('Nicht möglich', 'Für dieses Medikament kann aktuell kein Leer-Datum berechnet werden.');
@@ -278,6 +273,15 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
     }
 
     try {
+      const bestehenderTerminIstAktuell = istRezeptTerminAktuell(medikament, rezeptTermin);
+      if (rezeptTermin && bestehenderTerminIstAktuell) {
+        Alert.alert(
+          'Rezept-Erinnerung besteht schon',
+          `Für dieses Medikament ist bereits eine Rezept-Erinnerung am ${formatGermanDate(rezeptTermin.terminDatumIso)} geplant.`,
+        );
+        return;
+      }
+
       const { allowed } = await canCreateCalendarEvent();
       if (!allowed) {
         showPremiumRequiredAlert(
@@ -294,6 +298,7 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
         1,
         REZEPT_TERMIN_TAGE_VOR_LEER,
         termin.leerDatumIso,
+        rezeptTermin?.eventId,
       );
       if (!eventId) {
         Alert.alert('Fehler', 'Kalendereintrag konnte nicht erstellt werden.');
@@ -310,8 +315,10 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
       await saveRezeptTermin(medikament.id, info);
       setRezeptTermin(info);
       Alert.alert(
-        'Rezept-Erinnerung erstellt',
-        `Die Erinnerung wurde für den ${formatGermanDate(termin.terminDatumIso)} im Kalender eingetragen.`,
+        rezeptTermin ? 'Rezept-Erinnerung aktualisiert' : 'Rezept-Erinnerung erstellt',
+        rezeptTermin
+          ? `Die bestehende Erinnerung wurde auf den ${formatGermanDate(termin.terminDatumIso)} verschoben.`
+          : `Die Erinnerung wurde für den ${formatGermanDate(termin.terminDatumIso)} im Kalender eingetragen.`,
       );
     } catch (error) {
       logger.error('Rezepttermin konnte nicht erstellt werden:', error);
@@ -339,6 +346,25 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
     });
   }, [arztEmail, medikament]);
 
+  const bestaetigeBestandskorrektur = useCallback(async (neuerBestand: number) => {
+    if (!medikament) return;
+
+    try {
+      const bestaetigungsMedikament = { ...medikament, aktueller_bestand: neuerBestand };
+      await aktualisiereBestand(medikament.id, neuerBestand);
+      const syncResult = await synchronisiereRezeptTermin(bestaetigungsMedikament);
+      await loadData();
+      zeigeBestandskorrekturErgebnis(
+        medikament.aktueller_bestand,
+        neuerBestand,
+        medikament.einheit,
+        syncResult,
+      );
+    } catch {
+      Alert.alert('Fehler', 'Bestand konnte nicht korrigiert werden.');
+    }
+  }, [aktualisiereBestand, loadData, medikament]);
+
   // Bestandskorrektur (Premium) – Platform-abhaengig
   const handleBestandskorrektur = useCallback(() => {
     if (!medikament) return;
@@ -358,16 +384,7 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
                 Alert.alert('Ungültig', 'Bitte eine gültige Zahl eingeben (z.B. 28.5).');
                 return;
               }
-              try {
-                await aktualisiereBestand(medikament.id, neuerBestand);
-                Alert.alert(
-                  'Bestand korrigiert',
-                  `${medikament.aktueller_bestand} → ${neuerBestand} ${medikament.einheit}`
-                );
-                await loadData();
-              } catch {
-                Alert.alert('Fehler', 'Bestand konnte nicht korrigiert werden.');
-              }
+              await bestaetigeBestandskorrektur(neuerBestand);
             },
           },
         ],
@@ -379,7 +396,7 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
       setKorrekturWert(String(medikament.aktueller_bestand));
       setKorrekturModal(true);
     }
-  }, [medikament, aktualisiereBestand, loadData]);
+  }, [bestaetigeBestandskorrektur, medikament]);
 
   if (!medikament) {
     return (
@@ -756,14 +773,9 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
                     Alert.alert('Ungültig', 'Bitte eine gültige Zahl eingeben (z.B. 28.5).');
                     return;
                   }
-                  try {
-                    if (medikament) {
-                      await aktualisiereBestand(medikament.id, neuerBestand);
-                      setKorrekturModal(false);
-                      await loadData();
-                    }
-                  } catch {
-                    Alert.alert('Fehler', 'Bestand konnte nicht korrigiert werden.');
+                  if (medikament) {
+                    await bestaetigeBestandskorrektur(neuerBestand);
+                    setKorrekturModal(false);
                   }
                 }}
                 accessibilityRole="button"
@@ -777,6 +789,44 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
       </Modal>
     </SafeAreaView>
   );
+}
+
+function zeigeBestandskorrekturErgebnis(
+  alterBestand: number,
+  neuerBestand: number,
+  einheit: string,
+  syncResult: RezeptTerminSyncResult,
+) {
+  const basisText = `${alterBestand} → ${neuerBestand} ${einheit}`;
+
+  switch (syncResult.status) {
+    case 'updated':
+      Alert.alert(
+        'Bestand korrigiert',
+        `${basisText}\n\nDie vorhandene Rezept-Erinnerung wurde auf den ${formatGermanDate(syncResult.info!.terminDatumIso)} angepasst.`,
+      );
+      return;
+    case 'removed_conflict':
+      Alert.alert(
+        'Bestand korrigiert',
+        `${basisText}\n\nDie bisherige Rezept-Erinnerung wurde entfernt, weil der neue Termin in einen Arzturlaub fällt. Bitte neu planen.`,
+      );
+      return;
+    case 'removed_unavailable':
+      Alert.alert(
+        'Bestand korrigiert',
+        `${basisText}\n\nDie bisherige Rezept-Erinnerung wurde entfernt, weil aktuell kein passender Termin mehr berechnet werden kann.`,
+      );
+      return;
+    case 'failed':
+      Alert.alert(
+        'Bestand korrigiert',
+        `${basisText}\n\nDie bestehende Rezept-Erinnerung konnte nicht automatisch aktualisiert werden. Bitte prüfen.`,
+      );
+      return;
+    default:
+      Alert.alert('Bestand korrigiert', basisText);
+  }
 }
 
 function DetailRow({ label, value }: { label: string; value: string }) {

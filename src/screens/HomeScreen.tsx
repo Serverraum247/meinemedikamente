@@ -245,11 +245,21 @@ export default function HomeScreen({ navigation }: Props) {
         onPress={() => navigation.navigate('MedikamentDetail', { medikamentId: item.id })}
         activeOpacity={0.7}
         accessibilityRole="button"
-        accessibilityLabel={`${item.name}${staerkeText ? `, ${staerkeText}` : ''}, Bestand: ${bestandText} ${item.einheit}, ${getBestandStatusLabel({ heuteEingenommen, heuteOffen: heuteOffen || Boolean(item.erinnerung_aktiv), ueberfaellig })}, ${reichweiteBis ? `Vorrat reicht bis ${reichweiteBis}` : reichweite.textLang}${isUnterSchwelle ? ', Nachbestellen empfohlen' : ''}`}
+        accessibilityLabel={`${item.name}${staerkeText ? `, ${staerkeText}` : ''}${rezeptTermin ? ', Rezept-Erinnerung vorhanden' : ''}, Bestand: ${bestandText} ${item.einheit}, ${getBestandStatusLabel({ heuteEingenommen, heuteOffen: heuteOffen || Boolean(item.erinnerung_aktiv), ueberfaellig })}, ${reichweiteBis ? `Vorrat reicht bis ${reichweiteBis}` : reichweite.textLang}${isUnterSchwelle ? ', Nachbestellen empfohlen' : ''}`}
         accessibilityHint="Doppelt tippen für Details"
       >
         <View style={styles.cardContent}>
-          <Text style={styles.medName}>{item.name}</Text>
+          <View style={styles.medHeaderRow}>
+            <Text style={styles.medName}>{item.name}</Text>
+            {rezeptTermin ? (
+              <Text
+                style={styles.rezeptTerminIcon}
+                accessibilityLabel="Rezept-Erinnerung vorhanden"
+              >
+                📅
+              </Text>
+            ) : null}
+          </View>
           {showIngredientList ? (
             <View style={styles.wirkstoffListe}>
               {activeIngredients.map((ingredient, index) => (
@@ -284,11 +294,6 @@ export default function HomeScreen({ navigation }: Props) {
               ⚠ Nachbestellen empfohlen!
             </Text>
           )}
-          {rezeptTermin ? (
-            <Text style={styles.rezeptTerminText}>
-              📅 Rezept-Erinnerung: {formatIsoDate(rezeptTermin.terminDatumIso)}
-            </Text>
-          ) : null}
           {heuteEingenommen ? (
             <Text style={styles.eingenommenText}>✓ Heute eingenommen</Text>
           ) : ueberfaellig ? (
@@ -588,12 +593,6 @@ function formatReichweiteBis(date: Date | null): string | null {
   });
 }
 
-function formatIsoDate(isoDate: string): string {
-  const [year, month, day] = isoDate.split('-');
-  if (!year || !month || !day) return isoDate;
-  return `${day}.${month}.${year}`;
-}
-
 type BestandStatusInput = {
   heuteEingenommen: boolean;
   heuteOffen: boolean;
@@ -704,10 +703,21 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingRight: 12,
   },
+  medHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   medName: {
     fontSize: 20,
     fontWeight: '600',
     color: '#1a1a2e',
+    marginBottom: 2,
+    flexShrink: 1,
+  },
+  rezeptTerminIcon: {
+    fontSize: 17,
+    color: '#0B63CE',
     marginBottom: 2,
   },
   medZusatz: {
@@ -789,12 +799,6 @@ const styles = StyleSheet.create({
     color: '#e74c3c',
     fontWeight: '600',
     marginTop: 4,
-  },
-  rezeptTerminText: {
-    marginTop: 6,
-    fontSize: 16,
-    color: '#0B63CE',
-    fontWeight: '700',
   },
   eingenommenText: {
     marginTop: 8,

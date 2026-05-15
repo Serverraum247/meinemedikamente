@@ -64,6 +64,7 @@ export async function erstelleRezeptAbholtermin(
   einnahmenProTag: number = 1,
   tageVorLeer: number = 7,
   leerDatumOverride?: string,
+  bestehendeEventId?: string,
 ): Promise<string | null> {
   const berechtigt = await requestKalenderBerechtigung();
   if (!berechtigt) {
@@ -100,6 +101,7 @@ export async function erstelleRezeptAbholtermin(
 
   try {
     const eventId = await CalendarEvents.saveEvent(event.title, {
+      id: bestehendeEventId,
       startDate: event.startDate,
       endDate: event.endDate,
       notes: event.notes,
@@ -110,6 +112,15 @@ export async function erstelleRezeptAbholtermin(
   } catch (error) {
     logger.error('[KalenderService] Event erstellen fehlgeschlagen:', error);
     return null;
+  }
+}
+
+export async function entferneKalenderEvent(eventId: string): Promise<boolean> {
+  try {
+    return await CalendarEvents.removeEvent(eventId);
+  } catch (error) {
+    logger.error('[KalenderService] Event loeschen fehlgeschlagen:', error);
+    return false;
   }
 }
 
