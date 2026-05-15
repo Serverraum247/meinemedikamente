@@ -55,6 +55,12 @@ Premium darf Komfort und Umfang freischalten:
    - Premium-Hinweise erscheinen erst am Limit oder beim Nutzen einer Premium-Funktion.
    - Kritische Basisfunktionen müssen ohne Kauf sauber funktionieren.
 
+6. Wechselwirkungen bewusst später
+   - Wechselwirkungen sind fachlich sensibel und werden nicht halbgar gebaut.
+   - Ein späterer Ausbau braucht eine belastbare Datenquelle für Deutschland und dieselbe fachliche Basis für iOS und Android.
+   - Apple Health kann perspektivisch beim Medikationsimport helfen, ersetzt aber keine eigene Wechselwirkungsprüfung.
+   - Details und vorbereitender Backlog: `docs/MEDICATION_INTERACTIONS_BACKLOG.md`
+
 ## App-Store-Kommunikation
 
 Die App sollte aus Nutzersicht beworben werden:
