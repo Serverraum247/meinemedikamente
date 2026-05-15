@@ -124,6 +124,16 @@ export async function entferneKalenderEvent(eventId: string): Promise<boolean> {
   }
 }
 
+export async function kalenderEventExistiert(eventId: string): Promise<boolean> {
+  try {
+    const event = await CalendarEvents.findEventById(eventId);
+    return Boolean(event);
+  } catch (error) {
+    logger.error('[KalenderService] Event-Pruefung fehlgeschlagen:', error);
+    return false;
+  }
+}
+
 /**
  * Arzt-Urlaub-Warnung als Kalendereintrag
  */

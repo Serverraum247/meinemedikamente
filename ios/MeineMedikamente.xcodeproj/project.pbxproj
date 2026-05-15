@@ -453,7 +453,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = MeineMedikamente/MeineMedikamente.entitlements;
-				CURRENT_PROJECT_VERSION = 39;
+				CURRENT_PROJECT_VERSION = 40;
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = MeineMedikamente/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Mein MediPlan";
@@ -463,7 +463,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.1.38;
+				MARKETING_VERSION = 0.1.39;
 				MM_INTERNAL_PREMIUM_TEST_MODE = YES;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
@@ -487,7 +487,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = MeineMedikamente/MeineMedikamente.entitlements;
-				CURRENT_PROJECT_VERSION = 39;
+				CURRENT_PROJECT_VERSION = 40;
 				INFOPLIST_FILE = MeineMedikamente/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Mein MediPlan";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.medical";
@@ -496,7 +496,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.1.38;
+				MARKETING_VERSION = 0.1.39;
 				MM_INTERNAL_PREMIUM_TEST_MODE = NO;
 				OTHER_LDFLAGS = (
 					"$(inherited)",

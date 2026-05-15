@@ -61,7 +61,7 @@ import {
 import { formatGermanDate } from '../utils/GermanDate';
 import {
   entferneRezeptTermin,
-  getRezeptTermin,
+  getVerifiedRezeptTermin,
   saveRezeptTermin,
   synchronisiereRezeptTermin,
   istRezeptTerminAktuell,
@@ -134,7 +134,7 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
       }
     }
     try {
-      setRezeptTermin(await getRezeptTermin(medikamentId));
+      setRezeptTermin(await getVerifiedRezeptTermin(medikamentId));
       const [einnahmen, offene] = await Promise.all([
         getEinnahmenByMedikament(medikamentId, 30),
         getOffeneEinnahmen(0),

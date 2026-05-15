@@ -2,7 +2,7 @@ import type { ArztUrlaubRow, MedikamentRow } from '../database/Database';
 import { getRezeptTerminUrlaubsKonflikt } from '../database/UrlaubController';
 import { calculateReichweite } from '../utils/ReichweitenCalc';
 import { calculateRezeptTerminFromLeerDatum, REZEPT_TERMIN_TAGE_VOR_LEER } from '../utils/RezeptTermin';
-import { erstelleRezeptAbholtermin, entferneKalenderEvent } from './KalenderService';
+import { erstelleRezeptAbholtermin, entferneKalenderEvent, kalenderEventExistiert } from './KalenderService';
 import { deleteSetting, getSetting, getSettingsByPrefix, setSetting } from './SettingsService';
 
 const REZEPT_TERMIN_PREFIX = 'rezept_termin:';
@@ -48,6 +48,36 @@ export async function getAllRezeptTermine(): Promise<Record<string, RezeptTermin
   });
 
   return termine;
+}
+
+export async function getVerifiedRezeptTermin(medikamentId: string): Promise<RezeptTerminInfo | null> {
+  const info = await getRezeptTermin(medikamentId);
+  if (!info) return null;
+
+  const eventExistiert = await kalenderEventExistiert(info.eventId);
+  if (eventExistiert) return info;
+
+  await deleteRezeptTermin(medikamentId);
+  return null;
+}
+
+export async function getVerifiedAllRezeptTermine(): Promise<Record<string, RezeptTerminInfo>> {
+  const termine = await getAllRezeptTermine();
+  const verifiedEntries = await Promise.all(
+    Object.entries(termine).map(async ([medikamentId, info]) => {
+      const eventExistiert = await kalenderEventExistiert(info.eventId);
+      if (eventExistiert) {
+        return [medikamentId, info] as const;
+      }
+
+      await deleteRezeptTermin(medikamentId);
+      return null;
+    }),
+  );
+
+  return Object.fromEntries(
+    verifiedEntries.filter((entry): entry is readonly [string, RezeptTerminInfo] => entry !== null),
+  );
 }
 
 export function findeFaelligeRezeptErinnerungen(

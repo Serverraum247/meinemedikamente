@@ -1,16 +1,23 @@
 import type { MedikamentRow } from '../database/Database';
-import { entferneRezeptTermin, synchronisiereRezeptTermin } from '../services/RezeptTerminService';
+import {
+  entferneRezeptTermin,
+  getVerifiedAllRezeptTermine,
+  getVerifiedRezeptTermin,
+  synchronisiereRezeptTermin,
+} from '../services/RezeptTerminService';
 
 const mockGetSetting = jest.fn();
+const mockGetSettingsByPrefix = jest.fn();
 const mockSetSetting = jest.fn();
 const mockDeleteSetting = jest.fn();
 const mockErstelleRezeptAbholtermin = jest.fn();
 const mockEntferneKalenderEvent = jest.fn();
+const mockKalenderEventExistiert = jest.fn();
 const mockUrlaubsKonflikt = jest.fn();
 
 jest.mock('../services/SettingsService', () => ({
   getSetting: (...args: unknown[]) => mockGetSetting(...args),
-  getSettingsByPrefix: jest.fn(),
+  getSettingsByPrefix: (...args: unknown[]) => mockGetSettingsByPrefix(...args),
   setSetting: (...args: unknown[]) => mockSetSetting(...args),
   deleteSetting: (...args: unknown[]) => mockDeleteSetting(...args),
 }));
@@ -18,6 +25,7 @@ jest.mock('../services/SettingsService', () => ({
 jest.mock('../services/KalenderService', () => ({
   erstelleRezeptAbholtermin: (...args: unknown[]) => mockErstelleRezeptAbholtermin(...args),
   entferneKalenderEvent: (...args: unknown[]) => mockEntferneKalenderEvent(...args),
+  kalenderEventExistiert: (...args: unknown[]) => mockKalenderEventExistiert(...args),
 }));
 
 jest.mock('../database/UrlaubController', () => ({
@@ -55,6 +63,7 @@ describe('RezeptTerminService', () => {
     jest.setSystemTime(new Date('2026-05-15T12:00:00.000Z'));
     jest.clearAllMocks();
     mockEntferneKalenderEvent.mockResolvedValue(true);
+    mockKalenderEventExistiert.mockResolvedValue(true);
     mockUrlaubsKonflikt.mockResolvedValue(null);
   });
 
@@ -138,6 +147,55 @@ describe('RezeptTerminService', () => {
     await entferneRezeptTermin('med-1', 'event-1');
 
     expect(mockEntferneKalenderEvent).toHaveBeenCalledWith('event-1');
+    expect(mockDeleteSetting).toHaveBeenCalledWith('rezept_termin:med-1');
+  });
+
+  it('entfernt einen gespeicherten Rezept-Termin, wenn der Kalendereintrag manuell geloescht wurde', async () => {
+    mockGetSetting.mockResolvedValue(
+      JSON.stringify({
+        terminDatumIso: '2026-06-07',
+        leerDatumIso: '2026-06-14',
+        eventId: 'event-1',
+        createdAt: '2026-05-01T10:00:00.000Z',
+      }),
+    );
+    mockKalenderEventExistiert.mockResolvedValue(false);
+
+    const result = await getVerifiedRezeptTermin('med-1');
+
+    expect(result).toBeNull();
+    expect(mockDeleteSetting).toHaveBeenCalledWith('rezept_termin:med-1');
+  });
+
+  it('filtert manuell geloeschte Kalendereintraege aus der Uebersicht heraus', async () => {
+    const med1 = JSON.stringify({
+      terminDatumIso: '2026-06-07',
+      leerDatumIso: '2026-06-14',
+      eventId: 'event-1',
+      createdAt: '2026-05-01T10:00:00.000Z',
+    });
+    const med2 = JSON.stringify({
+      terminDatumIso: '2026-06-08',
+      leerDatumIso: '2026-06-15',
+      eventId: 'event-2',
+      createdAt: '2026-05-01T10:00:00.000Z',
+    });
+    mockGetSettingsByPrefix.mockResolvedValue({
+      'rezept_termin:med-1': med1,
+      'rezept_termin:med-2': med2,
+    });
+    mockKalenderEventExistiert.mockImplementation(async (eventId: string) => eventId === 'event-2');
+
+    const result = await getVerifiedAllRezeptTermine();
+
+    expect(result).toEqual({
+      'med-2': {
+        terminDatumIso: '2026-06-08',
+        leerDatumIso: '2026-06-15',
+        eventId: 'event-2',
+        createdAt: '2026-05-01T10:00:00.000Z',
+      },
+    });
     expect(mockDeleteSetting).toHaveBeenCalledWith('rezept_termin:med-1');
   });
 });

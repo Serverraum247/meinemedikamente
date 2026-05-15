@@ -53,7 +53,7 @@ import {
   parseActiveIngredients,
 } from '../utils/ActiveIngredients';
 import {
-  getAllRezeptTermine,
+  getVerifiedAllRezeptTermine,
   type RezeptTerminInfo,
 } from '../services/RezeptTerminService';
 
@@ -140,7 +140,7 @@ export default function HomeScreen({ navigation }: Props) {
       ladeEinnahmeStatus().catch(error => {
         logger.error('Einnahme-Status konnte nicht geladen werden:', error);
       });
-      getAllRezeptTermine()
+      getVerifiedAllRezeptTermine()
         .then(setRezeptTermine)
         .catch(error => {
           logger.error('Rezepttermine konnten nicht geladen werden:', error);
