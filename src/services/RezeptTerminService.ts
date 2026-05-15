@@ -54,6 +54,13 @@ export async function deleteRezeptTermin(medikamentId: string): Promise<void> {
   await deleteSetting(rezeptTerminKey(medikamentId));
 }
 
+export async function entferneRezeptTermin(
+  medikamentId: string,
+  eventId?: string,
+): Promise<void> {
+  await loescheRezeptTerminUndEvent(medikamentId, eventId);
+}
+
 export function istRezeptTerminAktuell(
   medikament: MedikamentRow,
   info: RezeptTerminInfo | null,

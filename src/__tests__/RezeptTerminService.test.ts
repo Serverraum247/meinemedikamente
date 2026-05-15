@@ -1,5 +1,5 @@
 import type { MedikamentRow } from '../database/Database';
-import { synchronisiereRezeptTermin } from '../services/RezeptTerminService';
+import { entferneRezeptTermin, synchronisiereRezeptTermin } from '../services/RezeptTerminService';
 
 const mockGetSetting = jest.fn();
 const mockSetSetting = jest.fn();
@@ -132,5 +132,12 @@ describe('RezeptTerminService', () => {
     expect(mockErstelleRezeptAbholtermin).not.toHaveBeenCalled();
     expect(mockSetSetting).not.toHaveBeenCalled();
     expect(mockDeleteSetting).not.toHaveBeenCalled();
+  });
+
+  it('entfernt einen bestehenden Rezept-Termin inklusive Kalendereintrag', async () => {
+    await entferneRezeptTermin('med-1', 'event-1');
+
+    expect(mockEntferneKalenderEvent).toHaveBeenCalledWith('event-1');
+    expect(mockDeleteSetting).toHaveBeenCalledWith('rezept_termin:med-1');
   });
 });

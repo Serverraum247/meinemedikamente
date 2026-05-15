@@ -60,6 +60,7 @@ import {
 } from '../utils/RezeptTermin';
 import { formatGermanDate } from '../utils/GermanDate';
 import {
+  entferneRezeptTermin,
   getRezeptTermin,
   saveRezeptTermin,
   synchronisiereRezeptTermin,
@@ -345,6 +346,32 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
       Alert.alert('Fehler', 'E-Mail-App konnte nicht geöffnet werden.');
     });
   }, [arztEmail, medikament]);
+
+  const handleRezeptTerminEntfernen = useCallback(() => {
+    if (!medikament || !rezeptTermin) return;
+
+    Alert.alert(
+      'Rezept-Erinnerung entfernen',
+      `Soll die Rezept-Erinnerung am ${formatGermanDate(rezeptTermin.terminDatumIso)} wieder entfernt werden?`,
+      [
+        { text: 'Abbrechen', style: 'cancel' },
+        {
+          text: 'Entfernen',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await entferneRezeptTermin(medikament.id, rezeptTermin.eventId);
+              setRezeptTermin(null);
+              Alert.alert('Entfernt', 'Die Rezept-Erinnerung wurde aus der App und dem Kalender entfernt.');
+            } catch (error) {
+              logger.error('Rezept-Erinnerung konnte nicht entfernt werden:', error);
+              Alert.alert('Fehler', 'Die Rezept-Erinnerung konnte nicht entfernt werden.');
+            }
+          },
+        },
+      ],
+    );
+  }, [medikament, rezeptTermin]);
 
   const bestaetigeBestandskorrektur = useCallback(async (neuerBestand: number) => {
     if (!medikament) return;
@@ -729,6 +756,20 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
                 📅 Rezept-Erinnerung erstellen
               </Text>
             </TouchableOpacity>
+            {rezeptTermin ? (
+              <TouchableOpacity
+                style={styles.rezeptTerminDeleteButton}
+                onPress={handleRezeptTerminEntfernen}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel="Rezept-Erinnerung entfernen"
+                accessibilityHint="Entfernt den Kalendereintrag direkt aus der App"
+              >
+                <Text style={styles.rezeptTerminDeleteButtonText}>
+                  🗑 Rezept-Erinnerung entfernen
+                </Text>
+              </TouchableOpacity>
+            ) : null}
           </View>
         )}
       </ScrollView>
@@ -1344,6 +1385,22 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '600',
     color: '#FFFFFF',
+  },
+  rezeptTerminDeleteButton: {
+    backgroundColor: '#FFF4F2',
+    borderRadius: 16,
+    padding: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 56,
+    borderWidth: 1,
+    borderColor: '#F0C5BE',
+    marginTop: 10,
+  },
+  rezeptTerminDeleteButtonText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#B53A2D',
   },
   // Android Bestandskorrektur Modal
   modalOverlay: {
