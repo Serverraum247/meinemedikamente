@@ -111,6 +111,7 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
   const [korrekturModal, setKorrekturModal] = useState(false);
   const [korrekturWert, setKorrekturWert] = useState('');
   const [rezeptTermin, setRezeptTermin] = useState<RezeptTerminInfo | null>(null);
+  const [offenerSlotHeute, setOffenerSlotHeute] = useState<TageszeitSlot | null>(null);
 
   // Medikament + Historie laden
   const loadData = useCallback(async () => {
@@ -130,8 +131,13 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
     }
     try {
       setRezeptTermin(await getRezeptTermin(medikamentId));
-      const einnahmen = await getEinnahmenByMedikament(medikamentId, 30);
+      const [einnahmen, offene] = await Promise.all([
+        getEinnahmenByMedikament(medikamentId, 30),
+        getOffeneEinnahmen(0),
+      ]);
       setHistorie(einnahmen);
+      const offenerEintrag = offene.find(einnahme => einnahme.medikamentId === medikamentId);
+      setOffenerSlotHeute(offenerEintrag?.slot || null);
       // Packungsdaten laden
       const letzte = await getLetztePackung(medikamentId);
       setLetztePackung(letzte);
@@ -394,6 +400,17 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
   const rezeptTerminVorschlag = reichweite.leerDatum
     ? calculateRezeptTerminFromLeerDatum(reichweite.leerDatum, REZEPT_TERMIN_TAGE_VOR_LEER)
     : null;
+  const offenerSlotMeta = offenerSlotHeute ? SLOT_META[offenerSlotHeute] : null;
+  const offenerSlotPlan = offenerSlotHeute
+    ? parseEinnahmeplan(medikament.einnahme_uhrzeiten || '[]').find(slot => slot.slot === offenerSlotHeute)
+    : undefined;
+  const offeneDosisHeute = offenerSlotHeute
+    ? getDosisFuerSlot(
+        parseEinnahmeplan(medikament.einnahme_uhrzeiten || '[]'),
+        offenerSlotHeute,
+        medikament.einzeldosis,
+      )
+    : null;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -411,6 +428,26 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
           </View>
         ) : medikament.zusatz ? (
           <Text style={styles.zusatzUntertitel}>{medikament.zusatz}</Text>
+        ) : null}
+
+        {offenerSlotHeute && offenerSlotMeta && offeneDosisHeute !== null ? (
+          <TouchableOpacity
+            style={styles.prioritaetEinnahmeButton}
+            onPress={handleEinnahme}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel={`${medikament.name} als eingenommen markieren`}
+            accessibilityHint="Offene Einnahme für heute direkt bestätigen"
+          >
+            <Text style={styles.prioritaetBadge}>Heute offen</Text>
+            <Text style={styles.prioritaetTitle}>Einnahme bestätigen</Text>
+            <Text style={styles.prioritaetSubtext}>
+              {offenerSlotMeta.emoji} {offenerSlotMeta.label}: {offeneDosisHeute} {medikament.einheit}
+            </Text>
+            {offenerSlotPlan?.uhrzeit ? (
+              <Text style={styles.prioritaetTime}>Geplant für {offenerSlotPlan.uhrzeit} Uhr</Text>
+            ) : null}
+          </TouchableOpacity>
         ) : null}
 
         {/* Bestand-Anzeige */}
@@ -495,45 +532,6 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
               </View>
             );
           } catch { return null; }
-        })()}
-
-        {/* Einnahme-Button */}
-        {(() => {
-          // Zeige welche Tageszeit gerade dran ist
-          let tageszeitInfo = '';
-          try {
-            const plan = parseEinnahmeplan(medikament.einnahme_uhrzeiten || '[]');
-            const aktuelle = getAktuelleTageszeit();
-            const eintrag = plan.find((s: EinnahmeSlot) => s.slot === aktuelle);
-            if (eintrag && medikament.erinnerung_aktiv === 1) {
-              const meta = SLOT_META[aktuelle];
-              tageszeitInfo = `${meta.emoji} ${meta.label} – jetzt`;
-            }
-          } catch { /* ignore */ }
-
-          return (
-            <TouchableOpacity
-              style={styles.einnahmeButton}
-              onPress={handleEinnahme}
-              activeOpacity={0.7}
-              accessibilityRole="button"
-              accessibilityLabel={`${medikament.name} als eingenommen markieren`}
-              accessibilityHint="Bestand wird automatisch reduziert"
-            >
-              <Text style={styles.einnahmeButtonText}>
-                Einnahme bestätigen
-              </Text>
-              <Text style={styles.einnahmeButtonSubtext}>
-                -{(() => {
-                  const plan = parseEinnahmeplan(medikament.einnahme_uhrzeiten || '[]');
-                  return getDosisFuerSlot(plan, getAktuelleTageszeit(), medikament.einzeldosis);
-                })()} {medikament.einheit}
-              </Text>
-              {tageszeitInfo ? (
-                <Text style={styles.einnahmeTageszeitInfo}>{tageszeitInfo}</Text>
-              ) : null}
-            </TouchableOpacity>
-          );
         })()}
 
         {/* Letzte Packung (Option B) */}
@@ -813,6 +811,41 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 8,
   },
+  prioritaetEinnahmeButton: {
+    backgroundColor: '#FFF5E6',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    borderWidth: 2,
+    borderColor: '#FFB347',
+  },
+  prioritaetBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#FFB347',
+    color: '#5A3510',
+    fontSize: 13,
+    fontWeight: '700',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    marginBottom: 10,
+  },
+  prioritaetTitle: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#2C1A08',
+    marginBottom: 6,
+  },
+  prioritaetSubtext: {
+    fontSize: 18,
+    color: '#5A3510',
+    fontWeight: '700',
+  },
+  prioritaetTime: {
+    fontSize: 16,
+    color: '#7A5427',
+    marginTop: 6,
+  },
   wirkstoffeCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
@@ -960,35 +993,6 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 16,
   },
-  einnahmeButton: {
-    backgroundColor: '#27ae60',
-    borderRadius: 16,
-    padding: 24,
-    alignItems: 'center',
-    marginBottom: 12,
-    minHeight: 80,
-    justifyContent: 'center',
-  },
-  einnahmeButtonText: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  einnahmeButtonSubtext: {
-    fontSize: 16,
-    color: '#fff',
-    opacity: 0.9,
-  },
-
-  // Tageszeit-Info unter Einnahme-Button
-  einnahmeTageszeitInfo: {
-    fontSize: 16,
-    color: '#ffd700',
-    fontWeight: '600',
-    marginTop: 4,
-  },
-
-  // Einnahmeplan-Karte
   einnahmeplanCard: {
     backgroundColor: '#fff',
     borderRadius: 14,
