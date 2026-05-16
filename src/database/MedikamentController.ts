@@ -124,6 +124,32 @@ export async function einnahmeVerbuchen(
 }
 
 /**
+ * Vergessene Einnahme nachtragen.
+ * Reduziert den Bestand wie eine normale Einnahme, speichert aber den echten Einnahmetag.
+ */
+export async function einnahmeNachtragen(
+  medikamentId: string,
+  menge: number,
+  timestamp: string,
+  slot?: string,
+): Promise<number> {
+  const med = await getMedikamentById(medikamentId);
+  if (!med) throw new Error(`Medikament ${medikamentId} nicht gefunden`);
+
+  const finalBestand = Math.max(0, med.aktueller_bestand - menge);
+  await updateBestand(medikamentId, finalBestand);
+
+  const db = await getDatabase();
+  await db.executeSql(
+    `INSERT INTO einnahmen (id, medikament_id, person_id, menge, timestamp, slot)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [generateUUID(), medikamentId, med.person_id || 'person-default-001', menge, timestamp, slot || ''],
+  );
+
+  return finalBestand;
+}
+
+/**
  * Einnahme im Log speichern
  */
 export async function logEinnahme(

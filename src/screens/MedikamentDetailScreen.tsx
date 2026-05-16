@@ -28,6 +28,7 @@ import type { RootStackParamList } from '../navigation/AppNavigator';
 import { useMedikamente } from '../context/MedikamentContext';
 import { MedikamentRow, PackungRow } from '../database/Database';
 import { getEinnahmenByMedikament, EinnahmeWithDate, storniereEinnahme } from '../database/EinnahmeController';
+import { einnahmeNachtragen } from '../database/MedikamentController';
 import { getLetztePackung, getOffenePackungenCount, getPackungenByMedikament } from '../database/PackungController';
 import { getRezeptTerminUrlaubsKonflikt } from '../database/UrlaubController';
 import {
@@ -116,6 +117,10 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
   const [korrekturWert, setKorrekturWert] = useState('');
   const [rezeptTermin, setRezeptTermin] = useState<RezeptTerminInfo | null>(null);
   const [offenerSlotHeute, setOffenerSlotHeute] = useState<TageszeitSlot | null>(null);
+  const [zeigeEinnahmeHistorie, setZeigeEinnahmeHistorie] = useState(false);
+  const [nachtragModal, setNachtragModal] = useState(false);
+  const [nachtragTageZurueck, setNachtragTageZurueck] = useState(1);
+  const [nachtragSlot, setNachtragSlot] = useState<TageszeitSlot>('morgens');
 
   // Medikament + Historie laden
   const loadData = useCallback(async () => {
@@ -425,6 +430,25 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
     }
   }, [bestaetigeBestandskorrektur, medikament]);
 
+  const handleEinnahmeNachtragen = useCallback(async () => {
+    if (!medikament) return;
+
+    const plan = parseEinnahmeplan(medikament.einnahme_uhrzeiten || '[]');
+    const dosis = getDosisFuerSlot(plan, nachtragSlot, medikament.einzeldosis);
+    const timestamp = buildNachtragTimestamp(nachtragTageZurueck, plan.find(item => item.slot === nachtragSlot)?.uhrzeit, nachtragSlot);
+
+    try {
+      const neuerBestand = await einnahmeNachtragen(medikament.id, dosis, timestamp, nachtragSlot);
+      const syncResult = await synchronisiereRezeptTermin({ ...medikament, aktueller_bestand: neuerBestand });
+      setNachtragModal(false);
+      await loadData();
+      zeigeEinnahmeNachtragErgebnis(medikament.aktueller_bestand, neuerBestand, medikament.einheit, syncResult);
+    } catch (error) {
+      logger.error('Einnahme konnte nicht nachgetragen werden:', error);
+      Alert.alert('Fehler', 'Die Einnahme konnte nicht nachgetragen werden.');
+    }
+  }, [loadData, medikament, nachtragSlot, nachtragTageZurueck]);
+
   if (!medikament) {
     return (
       <View style={styles.center}>
@@ -486,7 +510,7 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
             <Text style={styles.prioritaetBadge}>Heute offen</Text>
             <Text style={styles.prioritaetTitle}>Einnahme bestätigen</Text>
             <Text style={styles.prioritaetSubtext}>
-              {offenerSlotMeta.emoji} {offenerSlotMeta.label}: {offeneDosisHeute} {medikament.einheit}
+              {offenerSlotMeta.label}: {offeneDosisHeute} {medikament.einheit}
             </Text>
             {offenerSlotPlan?.uhrzeit ? (
               <Text style={styles.prioritaetTime}>Geplant für {offenerSlotPlan.uhrzeit} Uhr</Text>
@@ -500,7 +524,7 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
         accessibilityLabel={`Bestand: ${medikament.aktueller_bestand} ${medikament.einheit}${staerkeText ? `, Stärke: ${staerkeText}` : ''}, ${reichweite.textLang}`}
           accessibilityLiveRegion="polite"
         >
-          <Text style={styles.bestandLabel} accessibilityRole="header">Aktueller Bestand</Text>
+          <Text style={styles.bestandLabel} accessibilityRole="header">Vorrat zuhause</Text>
           <Text style={[styles.bestandWert, isUnterSchwelle && styles.bestandWertWarning]} maxFontSizeMultiplier={1.3}>
             {medikament.aktueller_bestand}
           </Text>
@@ -517,10 +541,10 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
             </View>
           ) : null}
           <Text style={[styles.bestandStatusLabel, isUnterSchwelle ? styles.bestandStatusWarning : styles.bestandStatusOk]}>
-            {isUnterSchwelle ? '⚠ Nachbestellen empfohlen' : '✓ Bestand OK'}
+            {isUnterSchwelle ? 'Nachbestellen empfohlen' : 'Bestand ausreichend'}
           </Text>
           <Text style={[styles.tageInfo, reichweite.istKritisch && styles.tageInfoCritical]}>
-            📅 {reichweite.textLang}
+            {reichweite.textLang}
           </Text>
           {premium && (
             <TouchableOpacity
@@ -529,19 +553,66 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
               accessibilityLabel="Bestand korrigieren"
               accessibilityHint="Bestand manuell anpassen, z.B. bei Verlust"
             >
-              <Text style={styles.korrekturButtonText}>✏️ Bestand korrigieren</Text>
+              <Text style={styles.korrekturButtonText}>Bestand korrigieren</Text>
             </TouchableOpacity>
           )}
         </View>
 
-        {/* Details */}
-        <View style={styles.detailCard}>
-          <DetailRow label="Einzeldosis" value={`${medikament.einzeldosis} ${medikament.einheit}`} />
-          <DetailRow label="Packungsgröße" value={`${medikament.packungsgroesse} ${medikament.einheit}`} />
-          <DetailRow label="Warnung ab" value={`${medikament.warnung_ab_bestand} ${medikament.einheit}`} />
-          {medikament.pzn ? <DetailRow label="PZN" value={medikament.pzn} /> : null}
-          {arztName ? <DetailRow label="Verschrieben von" value={arztName} /> : null}
-        </View>
+        {/* Rezept-Erinnerung */}
+        {medikament.aktueller_bestand > 0 && (
+          <View style={styles.rezeptTerminCard}>
+            <Text style={styles.sectionTitle}>Rezept</Text>
+            {rezeptTermin ? (
+              <Text style={styles.sectionBodyStrong}>
+                Erinnerung am {formatGermanDate(rezeptTermin.terminDatumIso)}
+              </Text>
+            ) : rezeptTerminVorschlag ? (
+              <Text style={styles.sectionBodyStrong}>
+                Vorschlag: {formatGermanDate(rezeptTerminVorschlag.terminDatumIso)}
+              </Text>
+            ) : (
+              <Text style={styles.sectionBody}>Noch kein Termin geplant.</Text>
+            )}
+            {arztEmail ? (
+              <TouchableOpacity
+                style={styles.secondaryButton}
+                onPress={handleRezeptEmail}
+                accessibilityRole="button"
+                accessibilityLabel="Arzt per E-Mail wegen Rezept anschreiben"
+              >
+                <Text style={styles.secondaryButtonText}>
+                  Arzt per E-Mail anschreiben
+                </Text>
+              </TouchableOpacity>
+            ) : null}
+            <TouchableOpacity
+              style={styles.primaryButton}
+              onPress={handleRezeptTerminErstellen}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Kalendereintrag als Rezept-Erinnerung erstellen"
+              accessibilityHint="Prüft zuerst Arzturlaub und erstellt dann einen Kalendertermin"
+            >
+              <Text style={styles.primaryButtonText}>
+                Rezept-Erinnerung erstellen
+              </Text>
+            </TouchableOpacity>
+            {rezeptTermin ? (
+              <TouchableOpacity
+                style={styles.doneButton}
+                onPress={handleRezeptBesorgt}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel="Rezept besorgt"
+                accessibilityHint="Markiert die Rezept-Erinnerung als erledigt und entfernt den Kalendereintrag"
+              >
+                <Text style={styles.doneButtonText}>
+                  Rezept besorgt
+                </Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        )}
 
         {/* Einnahmeplan (falls Erinnerung aktiv) */}
         {medikament.erinnerung_aktiv === 1 && (() => {
@@ -551,7 +622,7 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
             const aktuelle = getAktuelleTageszeit();
             return (
               <View style={styles.einnahmeplanCard}>
-                <Text style={styles.einnahmeplanTitle} accessibilityRole="header">Einnahmeplan</Text>
+                <Text style={styles.sectionTitle} accessibilityRole="header">Einnahmeplan</Text>
                 <View style={styles.einnahmeplanRow}>
                   {SLOT_REIHENFOLGE.map(slot => {
                     const meta = SLOT_META[slot];
@@ -578,11 +649,21 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
           } catch { return null; }
         })()}
 
+        {/* Details */}
+        <View style={styles.detailCard}>
+          <Text style={styles.sectionTitle}>Details</Text>
+          <DetailRow label="Einzeldosis" value={`${medikament.einzeldosis} ${medikament.einheit}`} />
+          <DetailRow label="Packungsgröße" value={`${medikament.packungsgroesse} ${medikament.einheit}`} />
+          <DetailRow label="Warnung ab" value={`${medikament.warnung_ab_bestand} ${medikament.einheit}`} />
+          {medikament.pzn ? <DetailRow label="PZN" value={medikament.pzn} /> : null}
+          {arztName ? <DetailRow label="Verschrieben von" value={arztName} /> : null}
+        </View>
+
         {/* Letzte Packung (Option B) */}
         {letztePackung && (
           <View style={styles.packungCard}>
             <View style={styles.packungHeader}>
-              <Text style={styles.packungTitle} accessibilityRole="header">Letzte Packung</Text>
+              <Text style={styles.sectionTitle} accessibilityRole="header">Letzte Packung</Text>
               {offenePackungen > 1 && (
                 <Text style={styles.packungCount}>
                   {offenePackungen} Packungen offen
@@ -643,23 +724,44 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
 
         {/* Nachkauf-Button -> NachkaufScreen */}
         <TouchableOpacity
-          style={styles.nachkaufButton}
+          style={styles.primaryButton}
           onPress={() => navigation.navigate('Nachkauf', { medikamentId: medikament.id })}
           activeOpacity={0.7}
           accessibilityRole="button"
           accessibilityLabel="Nachkauf erfassen"
         >
-          <Text style={styles.nachkaufButtonText}>
-            + Nachkauf
+          <Text style={styles.primaryButtonText}>
+            Nachkauf erfassen
           </Text>
         </TouchableOpacity>
 
         {/* Einnahme-Historie */}
         <View style={styles.historieSection}>
-          <Text style={styles.historieTitle} accessibilityRole="header">Einnahme-Historie</Text>
-          {historie.length === 0 ? (
+          <TouchableOpacity
+            style={styles.sectionToggle}
+            onPress={() => setZeigeEinnahmeHistorie(prev => !prev)}
+            accessibilityRole="button"
+            accessibilityLabel={`Einnahme-Historie ${zeigeEinnahmeHistorie ? 'ausblenden' : 'anzeigen'}`}
+          >
+            <Text style={styles.sectionTitle}>Einnahme-Historie</Text>
+            <Text style={styles.sectionToggleText}>{zeigeEinnahmeHistorie ? 'Ausblenden' : 'Anzeigen'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.secondaryButton}
+            onPress={() => {
+              setNachtragSlot(getNachtragSlots(medikament)[0]);
+              setNachtragModal(true);
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Vergessene Einnahme nachtragen"
+            accessibilityHint="Reduziert den Bestand und ergänzt die Einnahme-Historie"
+          >
+            <Text style={styles.secondaryButtonText}>Einnahme nachtragen</Text>
+          </TouchableOpacity>
+          {zeigeEinnahmeHistorie && historie.length === 0 ? (
             <Text style={styles.historieEmpty}>Noch keine Einnahmen erfasst.</Text>
-          ) : (
+          ) : null}
+          {zeigeEinnahmeHistorie && historie.length > 0 ? (
             historie.map(item => (
               <View key={item.id} style={styles.historieRow}>
                 <View style={styles.historieLeft}>
@@ -685,7 +787,7 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
                 </View>
               </View>
             ))
-          )}
+          ) : null}
         </View>
 
         {/* Loeschen */}
@@ -698,7 +800,7 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
           accessibilityLabel="Medikament bearbeiten"
           style={styles.editLinkContainer}
         >
-          <Text style={styles.editLinkText}>✏️ Medikament bearbeiten</Text>
+          <Text style={styles.editLinkText}>Medikament bearbeiten</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -711,67 +813,6 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
         >
           <Text style={styles.deleteButtonText}>Medikament löschen</Text>
         </TouchableOpacity>
-
-        {/* Rezept-Erinnerung im Kalender */}
-        {medikament.aktueller_bestand > 0 && (
-          <View style={styles.rezeptTerminCard}>
-            <Text style={styles.rezeptTerminTitle}>Rezept besorgen</Text>
-            {rezeptTermin ? (
-              <Text style={styles.rezeptTerminText}>
-                Erinnerung am {formatGermanDate(rezeptTermin.terminDatumIso)}
-              </Text>
-            ) : rezeptTerminVorschlag ? (
-              <Text style={styles.rezeptTerminText}>
-                Vorschlag: {formatGermanDate(rezeptTerminVorschlag.terminDatumIso)}
-              </Text>
-            ) : (
-              <Text style={styles.rezeptTerminText}>Noch kein Termin geplant.</Text>
-            )}
-            {rezeptTermin ? (
-              <Text style={styles.rezeptTerminSubtext}>
-                Erstellt am {formatGermanDate(rezeptTermin.createdAt.split('T')[0])}
-              </Text>
-            ) : null}
-            {arztEmail ? (
-              <TouchableOpacity
-                style={styles.rezeptEmailButton}
-                onPress={handleRezeptEmail}
-                accessibilityRole="button"
-                accessibilityLabel="Arzt per E-Mail wegen Rezept anschreiben"
-              >
-                <Text style={styles.rezeptEmailButtonText}>
-                  ✉️ Arzt per E-Mail anschreiben
-                </Text>
-              </TouchableOpacity>
-            ) : null}
-            <TouchableOpacity
-              style={styles.kalenderButton}
-              onPress={handleRezeptTerminErstellen}
-              activeOpacity={0.7}
-              accessibilityRole="button"
-              accessibilityLabel="Kalendereintrag als Rezept-Erinnerung erstellen"
-              accessibilityHint="Prüft zuerst Arzturlaub und erstellt dann einen Kalendertermin"
-            >
-              <Text style={styles.kalenderButtonText}>
-                📅 Rezept-Erinnerung erstellen
-              </Text>
-            </TouchableOpacity>
-            {rezeptTermin ? (
-              <TouchableOpacity
-                style={styles.rezeptTerminDoneButton}
-                onPress={handleRezeptBesorgt}
-                activeOpacity={0.7}
-                accessibilityRole="button"
-                accessibilityLabel="Rezept besorgt"
-                accessibilityHint="Markiert die Rezept-Erinnerung als erledigt und entfernt den Kalendereintrag"
-              >
-                <Text style={styles.rezeptTerminDoneButtonText}>
-                  ✓ Rezept besorgt
-                </Text>
-              </TouchableOpacity>
-            ) : null}
-          </View>
-        )}
       </ScrollView>
 
       {/* Android Bestandskorrektur Modal */}
@@ -828,8 +869,111 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
           </View>
         </View>
       </Modal>
+
+      <Modal
+        visible={nachtragModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setNachtragModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Einnahme nachtragen</Text>
+            <Text style={styles.modalHint}>
+              Wenn eine Einnahme vergessen wurde, wird sie hier in der Historie ergänzt und vom Vorrat abgezogen.
+            </Text>
+
+            <Text style={styles.modalLabel}>Wann?</Text>
+            <View style={styles.choiceRow}>
+              {[
+                { label: 'Heute', value: 0 },
+                { label: 'Gestern', value: 1 },
+                { label: 'Vorgestern', value: 2 },
+              ].map(option => (
+                <TouchableOpacity
+                  key={option.value}
+                  style={[styles.choiceButton, nachtragTageZurueck === option.value && styles.choiceButtonActive]}
+                  onPress={() => setNachtragTageZurueck(option.value)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: nachtragTageZurueck === option.value }}
+                >
+                  <Text style={[styles.choiceButtonText, nachtragTageZurueck === option.value && styles.choiceButtonTextActive]}>
+                    {option.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={styles.modalLabel}>Welche Einnahme?</Text>
+            <View style={styles.choiceRow}>
+              {getNachtragSlots(medikament).map(slot => {
+                const meta = SLOT_META[slot];
+                const selected = nachtragSlot === slot;
+                return (
+                  <TouchableOpacity
+                    key={slot}
+                    style={[styles.choiceButton, selected && styles.choiceButtonActive]}
+                    onPress={() => setNachtragSlot(slot)}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
+                  >
+                    <Text style={[styles.choiceButtonText, selected && styles.choiceButtonTextActive]}>
+                      {meta.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <Text style={styles.modalHint}>
+              Menge: {getDosisFuerSlot(parseEinnahmeplan(medikament.einnahme_uhrzeiten || '[]'), nachtragSlot, medikament.einzeldosis)} {medikament.einheit}
+            </Text>
+
+            <View style={styles.modalButtonRow}>
+              <TouchableOpacity
+                style={styles.modalButtonCancel}
+                onPress={() => setNachtragModal(false)}
+                accessibilityRole="button"
+                accessibilityLabel="Abbrechen"
+              >
+                <Text style={styles.modalButtonCancelText}>Abbrechen</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalButtonOk}
+                onPress={handleEinnahmeNachtragen}
+                accessibilityRole="button"
+                accessibilityLabel="Einnahme nachtragen"
+              >
+                <Text style={styles.modalButtonOkText}>Nachtragen</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
+}
+
+function getNachtragSlots(medikament: MedikamentRow): TageszeitSlot[] {
+  const plan = parseEinnahmeplan(medikament.einnahme_uhrzeiten || '[]');
+  const slots = plan.map(item => item.slot);
+  return slots.length > 0 ? slots : ['morgens'];
+}
+
+function buildNachtragTimestamp(tageZurueck: number, uhrzeit: string | undefined, slot: TageszeitSlot): string {
+  const fallback: Record<TageszeitSlot, string> = {
+    morgens: '08:00',
+    mittags: '12:00',
+    abends: '18:00',
+    nachts: '22:00',
+  };
+  const [hours, minutes] = (uhrzeit || fallback[slot]).split(':').map(value => Number(value));
+  const date = new Date();
+  date.setDate(date.getDate() - tageZurueck);
+  date.setHours(Number.isFinite(hours) ? hours : 8, Number.isFinite(minutes) ? minutes : 0, 0, 0);
+
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:00`;
 }
 
 function zeigeBestandskorrekturErgebnis(
@@ -870,6 +1014,44 @@ function zeigeBestandskorrekturErgebnis(
   }
 }
 
+function zeigeEinnahmeNachtragErgebnis(
+  alterBestand: number,
+  neuerBestand: number,
+  einheit: string,
+  syncResult: RezeptTerminSyncResult,
+) {
+  const basisText = `Der Vorrat wurde von ${alterBestand} auf ${neuerBestand} ${einheit} reduziert.`;
+
+  switch (syncResult.status) {
+    case 'updated':
+      Alert.alert(
+        'Einnahme nachgetragen',
+        `${basisText}\n\nDie vorhandene Rezept-Erinnerung wurde auf den ${formatGermanDate(syncResult.info!.terminDatumIso)} angepasst.`,
+      );
+      return;
+    case 'removed_conflict':
+      Alert.alert(
+        'Einnahme nachgetragen',
+        `${basisText}\n\nDie bisherige Rezept-Erinnerung wurde entfernt, weil der neue Termin in einen Arzturlaub fällt. Bitte neu planen.`,
+      );
+      return;
+    case 'removed_unavailable':
+      Alert.alert(
+        'Einnahme nachgetragen',
+        `${basisText}\n\nDie bisherige Rezept-Erinnerung wurde entfernt, weil aktuell kein passender Termin mehr berechnet werden kann.`,
+      );
+      return;
+    case 'failed':
+      Alert.alert(
+        'Einnahme nachgetragen',
+        `${basisText}\n\nDie bestehende Rezept-Erinnerung konnte nicht automatisch aktualisiert werden. Bitte prüfen.`,
+      );
+      return;
+    default:
+      Alert.alert('Einnahme nachgetragen', basisText);
+  }
+}
+
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
     <View style={detailStyles.row}>
@@ -884,7 +1066,7 @@ function DetailRow({ label, value }: { label: string; value: string }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#F4F6F8',
   },
   center: {
     flex: 1,
@@ -903,17 +1085,17 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   prioritaetEinnahmeButton: {
-    backgroundColor: '#FFF5E6',
-    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
     padding: 20,
     marginBottom: 16,
     borderWidth: 2,
-    borderColor: '#FFB347',
+    borderColor: '#B45309',
   },
   prioritaetBadge: {
     alignSelf: 'flex-start',
-    backgroundColor: '#FFB347',
-    color: '#5A3510',
+    backgroundColor: '#FFF7ED',
+    color: '#92400E',
     fontSize: 13,
     fontWeight: '700',
     paddingHorizontal: 10,
@@ -924,17 +1106,17 @@ const styles = StyleSheet.create({
   prioritaetTitle: {
     fontSize: 28,
     fontWeight: '800',
-    color: '#2C1A08',
+    color: '#1F2933',
     marginBottom: 6,
   },
   prioritaetSubtext: {
     fontSize: 18,
-    color: '#5A3510',
+    color: '#374151',
     fontWeight: '700',
   },
   prioritaetTime: {
     fontSize: 16,
-    color: '#7A5427',
+    color: '#6B7280',
     marginTop: 6,
   },
   wirkstoffeCard: {
@@ -942,12 +1124,12 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
-    borderLeftWidth: 4,
-    borderLeftColor: '#0B63CE',
+    borderWidth: 1,
+    borderColor: '#D8DEE6',
   },
   wirkstoffeTitle: {
     fontSize: 18,
-    color: '#1a1a2e',
+    color: '#1F2933',
     fontWeight: '700',
     marginBottom: 10,
   },
@@ -960,8 +1142,8 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#E8F1FF',
-    color: '#0B63CE',
+    backgroundColor: '#EEF2F7',
+    color: '#374151',
     textAlign: 'center',
     textAlignVertical: 'center',
     fontSize: 15,
@@ -972,42 +1154,39 @@ const styles = StyleSheet.create({
   wirkstoffText: {
     flex: 1,
     fontSize: 17,
-    color: '#1a1a2e',
+    color: '#1F2933',
     fontWeight: '600',
     lineHeight: 24,
   },
   bestandCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    borderRadius: 12,
     padding: 24,
     alignItems: 'center',
     marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#D8DEE6',
   },
   bestandCardWarning: {
     borderLeftWidth: 4,
-    borderLeftColor: '#e74c3c',
+    borderLeftColor: '#B45309',
   },
   bestandLabel: {
     fontSize: 18,
-    color: '#666',
+    color: '#5F6B7A',
     marginBottom: 8,
   },
   bestandWert: {
     fontSize: 56,
     fontWeight: '700',
-    color: '#27ae60',
+    color: '#1F2933',
   },
   bestandWertWarning: {
-    color: '#e74c3c',
+    color: '#92400E',
   },
   bestandEinheit: {
     fontSize: 20,
-    color: '#555',
+    color: '#4B5563',
     marginTop: 4,
   },
   bestandStatusLabel: {
@@ -1016,18 +1195,18 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   bestandStatusOk: {
-    color: '#27ae60',
+    color: '#4B5563',
   },
   bestandStatusWarning: {
-    color: '#e74c3c',
+    color: '#92400E',
   },
   tageInfo: {
     fontSize: 16,
-    color: '#888',
+    color: '#5F6B7A',
     marginTop: 8,
   },
   tageInfoCritical: {
-    color: '#FF6D00',
+    color: '#92400E',
     fontWeight: '600',
   },
   staerkeBadge: {
@@ -1063,19 +1242,19 @@ const styles = StyleSheet.create({
   },
   bestandCardCritical: {
     borderLeftWidth: 4,
-    borderLeftColor: '#FF6D00',
+    borderLeftColor: '#B45309',
   },
   korrekturButton: {
     marginTop: 12,
     paddingVertical: 8,
     paddingHorizontal: 16,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: '#EEF2F7',
     borderRadius: 8,
     alignSelf: 'flex-start',
   },
   korrekturButtonText: {
     fontSize: 16,
-    color: '#555',
+    color: '#374151',
     fontWeight: '500',
   },
   detailCard: {
@@ -1084,13 +1263,80 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 16,
   },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1F2933',
+    marginBottom: 10,
+  },
+  sectionBodyStrong: {
+    fontSize: 18,
+    color: '#1F2933',
+    fontWeight: '700',
+    marginBottom: 10,
+    lineHeight: 25,
+  },
+  sectionBody: {
+    fontSize: 17,
+    color: '#5F6B7A',
+    marginBottom: 10,
+    lineHeight: 24,
+  },
+  primaryButton: {
+    backgroundColor: '#243B53',
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 56,
+    marginBottom: 12,
+  },
+  primaryButtonText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  secondaryButton: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingVertical: 15,
+    paddingHorizontal: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 54,
+    borderWidth: 1,
+    borderColor: '#C9D2DC',
+    marginBottom: 10,
+  },
+  secondaryButtonText: {
+    fontSize: 17,
+    color: '#243B53',
+    fontWeight: '700',
+  },
+  doneButton: {
+    backgroundColor: '#F3F6F9',
+    borderRadius: 12,
+    paddingVertical: 15,
+    paddingHorizontal: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 54,
+    borderWidth: 1,
+    borderColor: '#C9D2DC',
+  },
+  doneButtonText: {
+    fontSize: 17,
+    color: '#374151',
+    fontWeight: '700',
+  },
   einnahmeplanCard: {
     backgroundColor: '#fff',
-    borderRadius: 14,
+    borderRadius: 12,
     padding: 16,
     marginBottom: 12,
-    borderWidth: 2,
-    borderColor: '#e0e0e0',
+    borderWidth: 1,
+    borderColor: '#D8DEE6',
   },
   einnahmeplanTitle: {
     fontSize: 20,
@@ -1112,7 +1358,7 @@ const styles = StyleSheet.create({
     minWidth: 80,
   },
   einnahmeSlotAktuell: {
-    backgroundColor: '#1a1a2e',
+    backgroundColor: '#243B53',
     borderWidth: 0,
   },
   einnahmeSlotEmoji: {
@@ -1154,7 +1400,7 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: '#D8DEE6',
   },
   packungHeader: {
     flexDirection: 'row',
@@ -1209,7 +1455,7 @@ const styles = StyleSheet.create({
   },
   historieToggleText: {
     fontSize: 16,
-    color: '#3498db',
+    color: '#374151',
     fontWeight: '500',
   },
   packungHistRow: {
@@ -1255,7 +1501,7 @@ const styles = StyleSheet.create({
   },
   editLinkText: {
     fontSize: 16,
-    color: '#666',
+    color: '#5F6B7A',
     textDecorationLine: 'underline',
   },
   historieSection: {
@@ -1263,6 +1509,17 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     marginBottom: 20,
+  },
+  sectionToggle: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
+  },
+  sectionToggleText: {
+    fontSize: 16,
+    color: '#374151',
+    fontWeight: '700',
   },
   historieTitle: {
     fontSize: 20,
@@ -1298,7 +1555,7 @@ const styles = StyleSheet.create({
   historieMenge: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#e74c3c',
+    color: '#374151',
   },
   historieRight: {
     flexDirection: 'row',
@@ -1339,7 +1596,7 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#D6E8F8',
+    borderColor: '#D8DEE6',
   },
   rezeptTerminTitle: {
     fontSize: 20,
@@ -1426,6 +1683,40 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
     marginBottom: 16,
+  },
+  modalLabel: {
+    fontSize: 17,
+    color: '#1F2933',
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  choiceRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 16,
+  },
+  choiceButton: {
+    borderWidth: 1,
+    borderColor: '#C9D2DC',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    backgroundColor: '#FFFFFF',
+    minHeight: 48,
+    justifyContent: 'center',
+  },
+  choiceButtonActive: {
+    backgroundColor: '#243B53',
+    borderColor: '#243B53',
+  },
+  choiceButtonText: {
+    fontSize: 16,
+    color: '#374151',
+    fontWeight: '700',
+  },
+  choiceButtonTextActive: {
+    color: '#FFFFFF',
   },
   modalInput: {
     borderWidth: 2,
