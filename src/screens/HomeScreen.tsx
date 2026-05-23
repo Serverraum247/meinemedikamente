@@ -56,6 +56,11 @@ import {
   getVerifiedAllRezeptTermine,
   type RezeptTerminInfo,
 } from '../services/RezeptTerminService';
+import {
+  getEinnahmenForLocalDay,
+  type TagesEinnahmeWithMedikament,
+} from '../database/EinnahmeController';
+import { parseEinnahmeplan, istSlotAnDatumAktiv } from '../utils/Einnahmeplan';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
 
@@ -70,6 +75,7 @@ export default function HomeScreen({ navigation }: Props) {
   const [offeneEinnahmeMedikamentIds, setOffeneEinnahmeMedikamentIds] = useState<Set<string>>(new Set());
   const [ueberfaelligeEinnahmeMedikamentIds, setUeberfaelligeEinnahmeMedikamentIds] = useState<Set<string>>(new Set());
   const [rezeptTermine, setRezeptTermine] = useState<Record<string, RezeptTerminInfo>>({});
+  const [heutigeProtokolle, setHeutigeProtokolle] = useState<TagesEinnahmeWithMedikament[]>([]);
 
   // Medikamente nach aktiver Person filtern
   const gefilterteMedikamente = useMemo(() => {
@@ -89,21 +95,41 @@ export default function HomeScreen({ navigation }: Props) {
     return medikamenteUnterSchwelle.filter(m => m.person_id === aktivePerson.id);
   }, [medikamenteUnterSchwelle, aktivePerson]);
 
+  const bedarfsMedikamente = useMemo(() => {
+    return gefilterteMedikamente.filter(m => parseEinnahmeplan(m.einnahme_uhrzeiten || '[]').length === 0);
+  }, [gefilterteMedikamente]);
+
+  const heutigePlanMedikamente = useMemo(() => {
+    const heute = new Date();
+    return gefilterteMedikamente.filter(m => {
+      const plan = parseEinnahmeplan(m.einnahme_uhrzeiten || '[]');
+      return plan.some(slot => istSlotAnDatumAktiv(slot, heute));
+    });
+  }, [gefilterteMedikamente]);
+
+  const offeneEinnahmenFuerPerson = useMemo(() => {
+    const erlaubteIds = new Set(gefilterteMedikamente.map(m => m.id));
+    return offeneEinnahmen.filter(e => erlaubteIds.has(e.medikamentId));
+  }, [gefilterteMedikamente, offeneEinnahmen]);
+
   // Premium-Status einmal laden
   const [premiumStatus, setPremiumStatus] = useState(false);
   useEffect(() => { isPremium().then(setPremiumStatus); }, []);
 
   const ladeEinnahmeStatus = useCallback(async () => {
-    const [eingenommenIds, offene, ueberfaelligeIds] = await Promise.all([
+    const [eingenommenIds, offene, ueberfaelligeIds, heutigeEinnahmen] = await Promise.all([
       getHeutigeEinnahmeMedikamentIds(),
       getOffeneEinnahmen(0),
       getUeberfaelligeEinnahmeMedikamentIds(),
+      getEinnahmenForLocalDay(new Date(), aktivePerson?.id),
     ]);
     setHeuteEingenommenIds(eingenommenIds);
+    setOffeneEinnahmen(offene);
     setOffeneEinnahmeMedikamentIds(new Set(offene.map(e => e.medikamentId)));
     setUeberfaelligeEinnahmeMedikamentIds(ueberfaelligeIds);
+    setHeutigeProtokolle(heutigeEinnahmen);
     return { eingenommenIds, offene };
-  }, []);
+  }, [aktivePerson?.id]);
 
   // Hamburger-Menü im Header links
   useEffect(() => {
@@ -351,6 +377,144 @@ export default function HomeScreen({ navigation }: Props) {
     );
   };
 
+  const openProtokollHilfe = () => {
+    Alert.alert(
+      'Protokollieren',
+      'Hier bestätigst du die Einnahmen für den ausgewählten Tag. Wenn du eine Einnahme vergessen hast, kannst du sie im Medikament nachtragen.',
+      [{ text: 'OK' }],
+    );
+  };
+
+  const openEinnahmeModal = () => {
+    if (offeneEinnahmenFuerPerson.length === 0) return;
+    setOffeneEinnahmen(offeneEinnahmenFuerPerson);
+    setErinnerungOffen(true);
+  };
+
+  const renderTagesHeader = () => {
+    const tage = buildDayStrip();
+    const offeneCount = offeneEinnahmenFuerPerson.length;
+    const geplantCount = heutigePlanMedikamente.length;
+    const erledigtCount = heutigeProtokolle.length;
+    const ersteOffene = offeneEinnahmenFuerPerson[0];
+    const protokolliert = groupHeutigeProtokolle(heutigeProtokolle);
+
+    return (
+      <View>
+        {renderUrlaubsReminderTask()}
+
+        <View style={styles.dayHeader}>
+          <Text style={styles.dayTitle}>{formatTodayTitle(new Date())}</Text>
+          <View style={styles.dayStrip} accessibilityLabel="Tagesübersicht">
+            {tage.map(tag => (
+              <View
+                key={tag.key}
+                style={[styles.dayDotWrap, tag.isToday && styles.dayDotWrapActive]}
+              >
+                <Text style={[styles.dayWeekday, tag.isToday && styles.dayWeekdayActive]}>
+                  {tag.weekday}
+                </Text>
+                <View style={[styles.dayDot, tag.isToday && styles.dayDotActive]}>
+                  <Text style={[styles.dayNumber, tag.isToday && styles.dayNumberActive]}>
+                    {tag.day}
+                  </Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        </View>
+
+        <View style={styles.sectionTitleRow}>
+          <Text style={styles.sectionTitle}>Protokollieren</Text>
+          <TouchableOpacity
+            style={styles.helpButton}
+            onPress={openProtokollHilfe}
+            accessibilityRole="button"
+            accessibilityLabel="Erklärung zur Protokollierung"
+          >
+            <Text style={styles.helpButtonText}>?</Text>
+          </TouchableOpacity>
+        </View>
+
+        {offeneCount > 0 ? (
+          <TouchableOpacity
+            style={styles.logActionCard}
+            onPress={openEinnahmeModal}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel={`${offeneCount} Einnahme(n) heute offen. Antippen zum Bestätigen.`}
+          >
+            <View style={styles.logActionTextWrap}>
+              <Text style={styles.logActionTitle}>
+                {offeneCount === 1 ? 'Eine Einnahme heute offen' : `${offeneCount} Einnahmen heute offen`}
+              </Text>
+              <Text style={styles.logActionSub}>
+                {ersteOffene
+                  ? `${ersteOffene.slotUhrzeit} · ${ersteOffene.medikamentName}`
+                  : 'Jetzt bestätigen'}
+              </Text>
+            </View>
+            <Text style={styles.logActionButton}>Bestätigen</Text>
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.logDoneCard} accessibilityLiveRegion="polite">
+            <Text style={styles.logDoneTitle}>
+              {geplantCount > 0
+                ? 'Alle geplanten Einnahmen heute protokolliert'
+                : 'Heute keine feste Einnahme geplant'}
+            </Text>
+            <Text style={styles.logDoneSub}>
+              {geplantCount > 0
+                ? `${erledigtCount} Eintrag${erledigtCount === 1 ? '' : 'e'} im heutigen Protokoll`
+                : 'Bedarfsmedikamente kannst du unten erfassen.'}
+            </Text>
+          </View>
+        )}
+
+        {bedarfsMedikamente.length > 0 ? (
+          <TouchableOpacity
+            style={styles.bedarfCard}
+            onPress={() => navigation.navigate('MedikamentDetail', { medikamentId: bedarfsMedikamente[0].id })}
+            accessibilityRole="button"
+            accessibilityLabel={`${bedarfsMedikamente.length} Bedarfsmedikament(e). Antippen zum Erfassen.`}
+          >
+            <Text style={styles.bedarfTitle}>Bedarfsmedikamente</Text>
+            <Text style={styles.bedarfCount}>{bedarfsMedikamente.length}</Text>
+          </TouchableOpacity>
+        ) : null}
+
+        {protokolliert.length > 0 ? (
+          <View style={styles.protocolCard}>
+            <View style={styles.protocolHeaderRow}>
+              <Text style={styles.protocolTitle}>Protokolliert</Text>
+              <Text style={styles.protocolTime}>{protokolliert[0].time}</Text>
+            </View>
+            {protokolliert.slice(0, 5).map(item => (
+              <View key={`${item.name}-${item.time}`} style={styles.protocolItem}>
+                <Text style={styles.protocolCheck}>✓</Text>
+                <Text style={styles.protocolName}>{item.name}</Text>
+              </View>
+            ))}
+            {protokolliert.length > 5 ? (
+              <Text style={styles.protocolMore}>+ {protokolliert.length - 5} weitere</Text>
+            ) : null}
+          </View>
+        ) : null}
+
+        <View style={styles.medicationsHeaderRow}>
+          <Text style={styles.sectionTitle}>Deine Medikamente</Text>
+          <TouchableOpacity
+            onPress={openAddMedikament}
+            accessibilityRole="button"
+            accessibilityLabel="Medikament hinzufügen"
+          >
+            <Text style={styles.medicationsHeaderAction}>Hinzufügen</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Personen-Umschalter */}
@@ -428,7 +592,7 @@ export default function HomeScreen({ navigation }: Props) {
           data={gefilterteMedikamente}
           keyExtractor={item => item.id}
           renderItem={renderMedikament}
-          ListHeaderComponent={renderUrlaubsReminderTask}
+          ListHeaderComponent={renderTagesHeader}
           contentContainerStyle={styles.list}
         />
       )}
@@ -613,6 +777,55 @@ function getBestandStatusLabel(status: BestandStatusInput): string {
   return 'kein Einnahmestatus';
 }
 
+function formatTodayTitle(date: Date): string {
+  return `Heute, ${date.toLocaleDateString('de-DE', {
+    day: 'numeric',
+    month: 'long',
+  })}`;
+}
+
+function buildDayStrip(): Array<{
+  key: string;
+  weekday: string;
+  day: string;
+  isToday: boolean;
+}> {
+  const today = new Date();
+  const start = new Date(today);
+  start.setDate(today.getDate() - 3);
+
+  return Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(start);
+    date.setDate(start.getDate() + index);
+    const isToday = date.toDateString() === today.toDateString();
+    return {
+      key: date.toISOString(),
+      weekday: date.toLocaleDateString('de-DE', { weekday: 'short' }).replace('.', ''),
+      day: String(date.getDate()),
+      isToday,
+    };
+  });
+}
+
+function groupHeutigeProtokolle(
+  einnahmen: TagesEinnahmeWithMedikament[],
+): Array<{ name: string; time: string }> {
+  const seen = new Set<string>();
+  const grouped: Array<{ name: string; time: string }> = [];
+
+  for (const einnahme of einnahmen) {
+    const key = `${einnahme.medikament_id}-${einnahme.slot || ''}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    grouped.push({
+      name: einnahme.medikament_name,
+      time: einnahme.uhrzeit_formatted,
+    });
+  }
+
+  return grouped;
+}
+
 // --- Styles (Senioren-freundlich, WCAG AA Kontrast) ---
 
 const styles = StyleSheet.create({
@@ -675,6 +888,223 @@ const styles = StyleSheet.create({
   list: {
     padding: 16,
     paddingBottom: 100,
+  },
+  dayHeader: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingTop: 18,
+    paddingHorizontal: 14,
+    paddingBottom: 14,
+    marginBottom: 14,
+  },
+  dayTitle: {
+    fontSize: 28,
+    color: '#111827',
+    fontWeight: '800',
+    textAlign: 'center',
+    marginBottom: 14,
+  },
+  dayStrip: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  dayDotWrap: {
+    alignItems: 'center',
+    minWidth: 38,
+  },
+  dayDotWrapActive: {
+    transform: [{ translateY: -2 }],
+  },
+  dayWeekday: {
+    fontSize: 14,
+    color: '#7A7F87',
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  dayWeekdayActive: {
+    color: '#111827',
+  },
+  dayDot: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#ECEEF2',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dayDotActive: {
+    backgroundColor: '#4FB7D8',
+  },
+  dayNumber: {
+    fontSize: 15,
+    color: '#6B7280',
+    fontWeight: '700',
+  },
+  dayNumberActive: {
+    color: '#FFFFFF',
+  },
+  sectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  sectionTitle: {
+    fontSize: 26,
+    color: '#111827',
+    fontWeight: '800',
+  },
+  helpButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#E8F3FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#B7D8F5',
+  },
+  helpButtonText: {
+    fontSize: 20,
+    color: '#155C96',
+    fontWeight: '800',
+  },
+  logActionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1F6F8B',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    minHeight: 92,
+  },
+  logActionTextWrap: {
+    flex: 1,
+    paddingRight: 12,
+  },
+  logActionTitle: {
+    color: '#FFFFFF',
+    fontSize: 22,
+    lineHeight: 28,
+    fontWeight: '800',
+  },
+  logActionSub: {
+    color: '#E9F7FB',
+    fontSize: 16,
+    marginTop: 6,
+    fontWeight: '600',
+  },
+  logActionButton: {
+    color: '#FFFFFF',
+    fontSize: 17,
+    fontWeight: '800',
+  },
+  logDoneCard: {
+    backgroundColor: '#EAF7F0',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#BFE6CE',
+  },
+  logDoneTitle: {
+    fontSize: 21,
+    lineHeight: 27,
+    color: '#14532D',
+    fontWeight: '800',
+  },
+  logDoneSub: {
+    fontSize: 16,
+    color: '#376B49',
+    marginTop: 6,
+    fontWeight: '600',
+  },
+  bedarfCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: 58,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    backgroundColor: '#EAF6FA',
+    marginBottom: 12,
+  },
+  bedarfTitle: {
+    fontSize: 20,
+    color: '#102A43',
+    fontWeight: '800',
+  },
+  bedarfCount: {
+    minWidth: 34,
+    textAlign: 'center',
+    fontSize: 20,
+    color: '#155C96',
+    fontWeight: '900',
+  },
+  protocolCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 18,
+  },
+  protocolHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    paddingBottom: 10,
+    marginBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  protocolTitle: {
+    fontSize: 22,
+    color: '#111827',
+    fontWeight: '800',
+  },
+  protocolTime: {
+    fontSize: 18,
+    color: '#6B7280',
+    fontWeight: '700',
+  },
+  protocolItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 34,
+  },
+  protocolCheck: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    textAlign: 'center',
+    lineHeight: 26,
+    backgroundColor: '#4FB7D8',
+    color: '#FFFFFF',
+    fontWeight: '900',
+    marginRight: 10,
+  },
+  protocolName: {
+    fontSize: 20,
+    color: '#111827',
+    fontWeight: '700',
+    flexShrink: 1,
+  },
+  protocolMore: {
+    marginTop: 6,
+    fontSize: 16,
+    color: '#6B7280',
+    fontWeight: '700',
+  },
+  medicationsHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  medicationsHeaderAction: {
+    fontSize: 18,
+    color: '#0B63CE',
+    fontWeight: '800',
   },
   card: {
     flexDirection: 'row',

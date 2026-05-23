@@ -10,6 +10,10 @@ export interface EinnahmeWithDate extends EinnahmeRow {
   uhrzeit_formatted: string;
 }
 
+export interface TagesEinnahmeWithMedikament extends EinnahmeWithDate {
+  medikament_name: string;
+}
+
 /**
  * Einnahmen eines Medikaments abrufen (neueste zuerst)
  */
@@ -85,6 +89,54 @@ export async function getRecentEinnahmen(
 }
 
 /**
+ * Einnahmen fuer einen Kalendertag inkl. Medikamentenname.
+ * Wird fuer die Startseiten-Protokollierung genutzt.
+ */
+export async function getEinnahmenForLocalDay(
+  datum: Date,
+  personId?: string,
+): Promise<TagesEinnahmeWithMedikament[]> {
+  const db = await getDatabase();
+  const datumIso = toLocalIsoDate(datum);
+  const params: Array<string> = [`${datumIso} 00:00:00`, `${datumIso} 23:59:59`];
+  const personFilter = personId ? 'AND e.person_id = ?' : '';
+  if (personId) params.push(personId);
+
+  const results = await db.executeSql(
+    `SELECT e.*, m.name AS medikament_name
+     FROM einnahmen e
+     LEFT JOIN medikamente m ON m.id = e.medikament_id
+     WHERE e.timestamp >= ?
+       AND e.timestamp <= ?
+       ${personFilter}
+     ORDER BY e.timestamp DESC`,
+    params,
+  );
+
+  const rows: TagesEinnahmeWithMedikament[] = [];
+  results.forEach(result => {
+    for (let i = 0; i < result.rows.length; i++) {
+      const row = result.rows.item(i);
+      const d = new Date(row.timestamp);
+      rows.push({
+        ...row,
+        medikament_name: row.medikament_name || 'Medikament',
+        datum_formatted: d.toLocaleDateString('de-DE', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+        }),
+        uhrzeit_formatted: d.toLocaleTimeString('de-DE', {
+          hour: '2-digit',
+          minute: '2-digit',
+        }),
+      });
+    }
+  });
+  return rows;
+}
+
+/**
  * Einnahme stornieren – loescht den Eintrag UND setzt den Bestand zurueck
  * Bestand wird um die stornierte Menge erhoeht (Bestand + menge)
  */
@@ -118,4 +170,11 @@ export async function storniereEinnahme(
   }
 
   return { success: true };
+}
+
+function toLocalIsoDate(datum: Date): string {
+  const year = datum.getFullYear();
+  const month = String(datum.getMonth() + 1).padStart(2, '0');
+  const day = String(datum.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
