@@ -46,8 +46,17 @@ import { showPremiumRequiredAlert } from '../utils/PremiumAlerts';
 import { version as APP_VERSION } from '../../package.json';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
+type SettingsTab = 'allgemein' | 'medikamente' | 'speicherung' | 'hilfe';
+
+const SETTINGS_TABS: Array<{ key: SettingsTab; label: string }> = [
+  { key: 'allgemein', label: 'Allgemein' },
+  { key: 'medikamente', label: 'Medikamente' },
+  { key: 'speicherung', label: 'Speicherung' },
+  { key: 'hilfe', label: 'Hilfe' },
+];
 
 export default function SettingsScreen({ navigation }: Props) {
+  const [activeTab, setActiveTab] = useState<SettingsTab>('allgemein');
   // Personen
   const {
     personen, aktivePerson, setAktivePerson,
@@ -63,6 +72,7 @@ export default function SettingsScreen({ navigation }: Props) {
   // Premium-Override fuer Debug- und interne Test-Builds
   const [devOverride, setDevOverrideState] = useState<string>('');
   const premiumTestOverrideAvailable = canUsePremiumTestOverride();
+  const [premiumActive, setPremiumActive] = useState(false);
 
   // Uhrzeiten-State
   const [uhrzeiten, setUhrzeiten] = useState<Record<TageszeitSlot, string>>({
@@ -100,6 +110,7 @@ export default function SettingsScreen({ navigation }: Props) {
       getMaxAerzte(),
     ]);
     setAerzte(list);
+    setPremiumActive(isPrem);
     setMaxAerzteState(max);
   };
 
@@ -223,12 +234,13 @@ export default function SettingsScreen({ navigation }: Props) {
     );
   };
 
-  const handleSupportMail = async () => {
+  const openPreparedMail = async (subject: string, intro = '') => {
     const constants = Platform.constants as Record<string, unknown>;
     const geraet = [constants.Manufacturer, constants.Brand, constants.Model]
       .filter(Boolean)
       .join(' ');
     const body = [
+      intro,
       '',
       '',
       'Supportdaten:',
@@ -237,7 +249,7 @@ export default function SettingsScreen({ navigation }: Props) {
       `Systemversion: ${String(Platform.Version)}`,
       `Gerät: ${geraet || 'unbekannt'}`,
     ].join('\n');
-    const url = `mailto:kontakt@serverraum247.dev?subject=${encodeURIComponent('Anfrage Mein MediPlan')}&body=${encodeURIComponent(body)}`;
+    const url = `mailto:kontakt@serverraum247.dev?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 
     try {
       const supported = await Linking.canOpenURL(url);
@@ -251,396 +263,321 @@ export default function SettingsScreen({ navigation }: Props) {
     }
   };
 
-  return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+  const handleSupportMail = async () => {
+    await openPreparedMail('Anfrage Mein MediPlan');
+  };
 
-        <Text style={styles.title}>Einstellungen</Text>
+  const handleProblemMail = async () => {
+    await openPreparedMail('Problem melden - Mein MediPlan', 'Bitte beschreibe kurz, was passiert ist:');
+  };
 
-        {/* === Personen / Patienten === */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle} accessibilityRole="header">
-              👥 Personen
-            </Text>
+  const handleFeatureMail = async () => {
+    await openPreparedMail('Verbesserungsvorschlag - Mein MediPlan', 'Meine Idee oder mein Wunsch:');
+  };
+
+  const renderPersonen = () => (
+    <SettingsCard title="Personen" subtitle="Verwalte Medikamente getrennt nach Person.">
+      {personen.length < maxPersonen ? (
+        <View style={styles.inlineForm}>
+          <TextInput
+            style={[styles.input, { flex: 1 }]}
+            value={neuePersonName}
+            onChangeText={setNeuePersonName}
+            placeholder="Name der neuen Person"
+            placeholderTextColor="#999"
+            accessibilityLabel="Name der neuen Person"
+          />
+          <TouchableOpacity
+            style={styles.compactPrimaryButton}
+            onPress={async () => {
+              if (!neuePersonName.trim()) return;
+              const result = await addPerson({ name: neuePersonName.trim() });
+              if (result.success) {
+                setNeuePersonName('');
+                announceChange('Person hinzugefügt');
+              } else {
+                showPremiumRequiredAlert('Mehrere Personen sind nur mit Premium möglich.', navigation);
+              }
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Person hinzufügen"
+          >
+            <Text style={styles.compactPrimaryButtonText}>+</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
+
+      {personen.map(person => {
+        const isEditing = editPersonId === person.id;
+        const isActive = aktivePerson?.id === person.id;
+        return (
+          <View key={person.id} style={styles.personRow}>
+            {isEditing ? (
+              <View style={styles.inlineForm}>
+                <TouchableOpacity onPress={() => setShowEmojiPicker(person.id)} accessibilityRole="button" accessibilityLabel="Avatar ändern">
+                  <Text style={styles.personEmoji}>{person.avatar_emoji}</Text>
+                </TouchableOpacity>
+                <TextInput
+                  style={[styles.input, { flex: 1 }]}
+                  value={editPersonName}
+                  onChangeText={setEditPersonName}
+                  placeholder="Name"
+                  placeholderTextColor="#999"
+                  accessibilityLabel="Name bearbeiten"
+                />
+                <TouchableOpacity
+                  onPress={async () => {
+                    if (!editPersonName.trim()) return;
+                    await editPerson(person.id, {
+                      name: editPersonName.trim(),
+                      avatar_emoji: editPersonEmoji || person.avatar_emoji,
+                    });
+                    setEditPersonId(null);
+                    announceChange('Person aktualisiert');
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Speichern"
+                >
+                  <Text style={styles.saveButton}>✓</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => setEditPersonId(null)} accessibilityRole="button" accessibilityLabel="Abbrechen">
+                  <Text style={styles.cancelButton}>✕</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={styles.inlineForm}>
+                <TouchableOpacity onPress={() => setShowEmojiPicker(person.id)} accessibilityRole="button" accessibilityLabel={`Avatar von ${person.name} ändern`}>
+                  <Text style={styles.personEmoji}>{person.avatar_uri ? '📷' : person.avatar_emoji}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={{ flex: 1 }}
+                  onPress={() => {
+                    setAktivePerson(person);
+                    announceChange(`${person.name} ausgewählt`);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${person.name}${isActive ? ' (aktiv)' : ''}. Tippen zum Auswählen.`}
+                >
+                  <Text style={[styles.personNameText, isActive && styles.personNameActive]}>
+                    {person.name}
+                  </Text>
+                  {isActive ? <Text style={styles.rowSubText}>Aktive Person</Text> : null}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => {
+                    setEditPersonId(person.id);
+                    setEditPersonName(person.name);
+                    setEditPersonEmoji(person.avatar_emoji);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${person.name} bearbeiten`}
+                >
+                  <Text style={styles.editIcon}>✎</Text>
+                </TouchableOpacity>
+                {person.ist_standard !== 1 ? (
+                  <TouchableOpacity
+                    onPress={() => {
+                      Alert.alert(`${person.name} löschen?`, 'Medikamente dieser Person werden der Hauptperson zugeordnet.', [
+                        { text: 'Abbrechen', style: 'cancel' },
+                        {
+                          text: 'Löschen',
+                          style: 'destructive',
+                          onPress: async () => {
+                            const result = await removePerson(person.id);
+                            if (!result.success) Alert.alert('Fehler', result.error);
+                            else announceChange('Person gelöscht');
+                          },
+                        },
+                      ]);
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${person.name} löschen`}
+                  >
+                    <Text style={styles.deleteIcon}>⌫</Text>
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+            )}
+          </View>
+        );
+      })}
+    </SettingsCard>
+  );
+
+  const renderAerzte = () => (
+    <SettingsCard title="Meine Ärzte" subtitle="Kontaktdaten für Rezept, Urlaub und Rückfragen.">
+      <SettingsRow
+        icon="＋"
+        title="Arzt hinzufügen"
+        value={`${aerzte.length}/${maxAerzte}`}
+        onPress={handleAddArzt}
+      />
+      {aerzte.length === 0 && !editArzt ? <Text style={styles.emptyText}>Noch kein Arzt hinterlegt.</Text> : null}
+      {aerzte.map(arzt => (
+        <View key={arzt.id} style={styles.arztCard}>
+          <View style={styles.arztInfo}>
+            <Text style={styles.arztName}>{arzt.name}</Text>
+            {arzt.fachgebiet ? <Text style={styles.arztDetail}>{arzt.fachgebiet}</Text> : null}
+            {arzt.telefon ? <Text style={styles.arztDetail}>Telefon: {arzt.telefon}</Text> : null}
+            {arzt.email ? <Text style={styles.arztDetail}>E-Mail: {arzt.email}</Text> : null}
+            {arzt.adresse ? <Text style={styles.arztDetail}>{arzt.adresse}</Text> : null}
+          </View>
+          <View style={styles.arztActions}>
+            <TouchableOpacity onPress={() => { setNeuerArzt(false); setEditArzt({ ...arzt }); }} accessibilityLabel={`${arzt.name} bearbeiten`}>
+              <Text style={styles.arztEditButton}>✎</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => handleDeleteArzt(arzt)} accessibilityLabel={`${arzt.name} löschen`}>
+              <Text style={styles.arztDeleteButton}>⌫</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      ))}
+      {editArzt ? (
+        <View style={styles.arztForm}>
+          <Text style={styles.arztFormTitle}>{neuerArzt ? 'Neuer Arzt' : 'Arzt bearbeiten'}</Text>
+          <Text style={styles.fieldLabel}>Name *</Text>
+          <TextInput style={styles.fieldInput} value={editArzt.name} onChangeText={(t: string) => setEditArzt({ ...editArzt, name: t })} placeholder="Dr. Müller" placeholderTextColor="#999" />
+          <Text style={styles.fieldLabel}>Fachgebiet</Text>
+          <TextInput style={styles.fieldInput} value={editArzt.fachgebiet} onChangeText={(t: string) => setEditArzt({ ...editArzt, fachgebiet: t })} placeholder="Hausarzt, Kardiologie..." placeholderTextColor="#999" />
+          <Text style={styles.fieldLabel}>Telefon</Text>
+          <TextInput style={styles.fieldInput} value={editArzt.telefon} onChangeText={(t: string) => setEditArzt({ ...editArzt, telefon: t })} placeholder="0681 123456" placeholderTextColor="#999" keyboardType="phone-pad" />
+          <Text style={styles.fieldLabel}>E-Mail</Text>
+          <TextInput style={styles.fieldInput} value={editArzt.email} onChangeText={(t: string) => setEditArzt({ ...editArzt, email: t })} placeholder="praxis@example.de" placeholderTextColor="#999" keyboardType="email-address" autoCapitalize="none" autoCorrect={false} />
+          <Text style={styles.fieldLabel}>Adresse</Text>
+          <TextInput style={styles.fieldInput} value={editArzt.adresse} onChangeText={(t: string) => setEditArzt({ ...editArzt, adresse: t })} placeholder="Musterstraße 1, 66111 Saarbrücken" placeholderTextColor="#999" />
+          <View style={styles.arztFormButtons}>
+            <TouchableOpacity style={[styles.arztFormBtn, styles.arztFormCancel]} onPress={() => { setEditArzt(null); setNeuerArzt(false); }}>
+              <Text style={styles.arztFormCancelText}>Abbrechen</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.arztFormBtn, styles.arztFormSave]} onPress={handleSaveArzt}>
+              <Text style={styles.arztFormSaveText}>Speichern</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      ) : null}
+    </SettingsCard>
+  );
+
+  const renderUhrzeiten = () => (
+    <SettingsCard title="Standard-Uhrzeiten" subtitle="Diese Zeiten werden als Vorschlag für neue Erinnerungen genutzt.">
+      {SLOT_REIHENFOLGE.map(slot => {
+        const meta = SLOT_META[slot];
+        return (
+          <View key={slot} style={styles.uhrzeitRow}>
+            <View style={styles.uhrzeitLabelContainer}>
+              <Text style={styles.uhrzeitEmoji} accessibilityElementsHidden>{meta.emoji}</Text>
+              <Text style={styles.uhrzeitLabel}>{meta.label}</Text>
+            </View>
+            <TextInput
+              accessibilityLabel={`${meta.label} Standard-Uhrzeit`}
+              style={[styles.uhrzeitInput, geaendert.has(slot) && styles.uhrzeitInputChanged]}
+              value={uhrzeiten[slot]}
+              onChangeText={(text: string) => handleUhrzeitChange(slot, text)}
+              placeholder="HH:MM"
+              placeholderTextColor="#999"
+              keyboardType="number-pad"
+              maxLength={5}
+            />
+          </View>
+        );
+      })}
+      {geaendert.size > 0 ? (
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Änderungen speichern" style={styles.speichernButton} onPress={handleSpeichern} activeOpacity={0.7}>
+          <Text style={styles.speichernButtonText}>Speichern ({geaendert.size})</Text>
+        </TouchableOpacity>
+      ) : null}
+      <TouchableOpacity accessibilityRole="button" accessibilityLabel="Uhrzeiten auf Standard zurücksetzen" style={styles.secondaryButton} onPress={handleReset} activeOpacity={0.7}>
+        <Text style={styles.secondaryButtonText}>Uhrzeiten zurücksetzen</Text>
+      </TouchableOpacity>
+    </SettingsCard>
+  );
+
+  const renderPremiumTest = () => {
+    if (!premiumTestOverrideAvailable) return null;
+    return (
+      <SettingsCard title="Interne Testversion" subtitle="Premium-Status für Tests simulieren. Nur in Debug/Internal sichtbar.">
+        <View style={styles.devButtonRow}>
+          {(['premium', 'free', ''] as const).map(mode => (
             <TouchableOpacity
+              key={mode || 'real'}
+              style={[styles.devButton, devOverride === mode && styles.devButtonActive]}
               onPress={async () => {
-                if (!neuePersonName.trim()) return;
-                const result = await addPerson({ name: neuePersonName.trim() });
-                if (result.success) {
-                  setNeuePersonName('');
-                  announceChange('Person hinzugefügt');
-                } else {
-                  showPremiumRequiredAlert('Mehrere Personen sind nur mit Premium möglich.', navigation);
-                }
+                await setDevPremiumOverride(mode);
+                setDevOverrideState(mode);
+                await loadAerzte();
               }}
               accessibilityRole="button"
-              accessibilityLabel="Person hinzufügen"
+              accessibilityLabel={mode === 'premium' ? 'Premium simulieren' : mode === 'free' ? 'Free simulieren' : 'Override entfernen'}
             >
-              <Text style={styles.addButton}>+ Hinzufügen</Text>
-            </TouchableOpacity>
-          </View>
-          <Text style={styles.sectionHint}>
-            Verwalte Medikamente für mehrere Personen.
-          </Text>
-
-          {/* Neue Person anlegen (nur wenn Premium oder < max) */}
-          {personen.length < maxPersonen && (
-            <View style={styles.inlineForm}>
-              <TextInput
-                style={[styles.input, { flex: 1 }]}
-                value={neuePersonName}
-                onChangeText={setNeuePersonName}
-                placeholder="Name der neuen Person"
-                placeholderTextColor="#999"
-                accessibilityLabel="Name der neuen Person"
-              />
-            </View>
-          )}
-
-          {/* Personen-Liste */}
-          {personen.map(person => {
-            const isEditing = editPersonId === person.id;
-            const isActive = aktivePerson?.id === person.id;
-            return (
-              <View key={person.id} style={styles.personRow}>
-                {isEditing ? (
-                  <View style={styles.inlineForm}>
-                    <TouchableOpacity
-                      onPress={() => setShowEmojiPicker(person.id)}
-                      accessibilityRole="button"
-                      accessibilityLabel="Avatar ändern"
-                    >
-                      <Text style={styles.personEmoji}>{person.avatar_emoji}</Text>
-                    </TouchableOpacity>
-                    <TextInput
-                      style={[styles.input, { flex: 1 }]}
-                      value={editPersonName}
-                      onChangeText={setEditPersonName}
-                      placeholder="Name"
-                      placeholderTextColor="#999"
-                      accessibilityLabel="Name bearbeiten"
-                    />
-                    <TouchableOpacity
-                      onPress={async () => {
-                        if (!editPersonName.trim()) return;
-                        await editPerson(person.id, {
-                          name: editPersonName.trim(),
-                          avatar_emoji: editPersonEmoji || person.avatar_emoji,
-                        });
-                        setEditPersonId(null);
-                        announceChange('Person aktualisiert');
-                      }}
-                      accessibilityRole="button"
-                      accessibilityLabel="Speichern"
-                    >
-                      <Text style={styles.saveButton}>✓</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={() => setEditPersonId(null)}
-                      accessibilityRole="button"
-                      accessibilityLabel="Abbrechen"
-                    >
-                      <Text style={styles.cancelButton}>✕</Text>
-                    </TouchableOpacity>
-                  </View>
-                ) : (
-                  <View style={styles.inlineForm}>
-                    <TouchableOpacity
-                      onPress={() => setShowEmojiPicker(person.id)}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Avatar von ${person.name} ändern`}
-                    >
-                      <Text style={styles.personEmoji}>
-                        {person.avatar_uri ? '📷' : person.avatar_emoji}
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={{ flex: 1 }}
-                      onPress={() => {
-                        setAktivePerson(person);
-                        announceChange(`${person.name} ausgewählt`);
-                      }}
-                      accessibilityRole="button"
-                      accessibilityLabel={`${person.name}${isActive ? ' (aktiv)' : ''}. Tippen zum Auswählen.`}
-                    >
-                      <Text style={[
-                        styles.personNameText,
-                        isActive && styles.personNameActive,
-                      ]}>
-                        {person.name} {isActive && '(aktiv)'}
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={() => {
-                        setEditPersonId(person.id);
-                        setEditPersonName(person.name);
-                        setEditPersonEmoji(person.avatar_emoji);
-                      }}
-                      accessibilityRole="button"
-                      accessibilityLabel={`${person.name} bearbeiten`}
-                    >
-                      <Text style={styles.editIcon}>✏️</Text>
-                    </TouchableOpacity>
-                    {person.ist_standard !== 1 && (
-                      <TouchableOpacity
-                        onPress={() => {
-                          Alert.alert(
-                            `${person.name} löschen?`,
-                            'Medikamente dieser Person werden der Hauptperson zugeordnet.',
-                            [
-                              { text: 'Abbrechen', style: 'cancel' },
-                              {
-                                text: 'Löschen',
-                                style: 'destructive',
-                                onPress: async () => {
-                                  const result = await removePerson(person.id);
-                                  if (!result.success) {
-                                    Alert.alert('Fehler', result.error);
-                                  } else {
-                                    announceChange('Person gelöscht');
-                                  }
-                                },
-                              },
-                            ]
-                          );
-                        }}
-                        accessibilityRole="button"
-                        accessibilityLabel={`${person.name} löschen`}
-                      >
-                        <Text style={styles.deleteIcon}>🗑️</Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                )}
-              </View>
-            );
-          })}
-
-          {/* Emoji-Picker Modal */}
-          <Modal visible={!!showEmojiPicker} transparent animationType="fade">
-            <View style={styles.emojiPickerOverlay}>
-              <View style={styles.emojiPickerCard}>
-                <Text style={styles.emojiPickerTitle}>Avatar auswählen</Text>
-                <View style={styles.emojiGrid}>
-                  {AVATAR_EMOJIS.map(emoji => (
-                    <TouchableOpacity
-                      key={emoji}
-                      style={styles.emojiOption}
-                      onPress={async () => {
-                        if (showEmojiPicker === 'new') {
-                          // wird beim Erstellen gesetzt
-                        } else if (showEmojiPicker) {
-                          await editPerson(showEmojiPicker, { avatar_emoji: emoji });
-                          if (editPersonId === showEmojiPicker) {
-                            setEditPersonEmoji(emoji);
-                          }
-                        }
-                        setShowEmojiPicker(null);
-                        announceChange('Avatar geändert');
-                      }}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Avatar ${emoji}`}
-                    >
-                      <Text style={styles.emojiOptionText}>{emoji}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-                <TouchableOpacity
-                  onPress={() => setShowEmojiPicker(null)}
-                  style={styles.emojiPickerClose}
-                  accessibilityRole="button"
-                  accessibilityLabel="Avatar-Auswahl schließen"
-                >
-                  <Text style={styles.emojiPickerCloseText}>Schließen</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </Modal>
-        </View>
-
-        {/* === Meine Aerzte === */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle} accessibilityRole="header">
-              👨‍⚕️ Meine Ärzte
-            </Text>
-            <TouchableOpacity onPress={handleAddArzt} accessibilityRole="button" accessibilityLabel="Arzt hinzufügen">
-              <Text style={styles.addButton}>+ Hinzufügen</Text>
-            </TouchableOpacity>
-          </View>
-          <Text style={styles.sectionHint}>
-            Hinterlege Kontaktdaten deiner Ärzte.
-          </Text>
-
-          {aerzte.length === 0 && !editArzt && (
-            <Text style={styles.emptyText}>Noch kein Arzt hinterlegt.</Text>
-          )}
-
-          {aerzte.map(arzt => (
-            <View key={arzt.id} style={styles.arztCard}>
-              <View style={styles.arztInfo}>
-                <Text style={styles.arztName}>{arzt.name}</Text>
-                {arzt.fachgebiet ? (
-                  <Text style={styles.arztDetail}>{arzt.fachgebiet}</Text>
-                ) : null}
-                {arzt.telefon ? (
-                  <Text style={styles.arztDetail}>📞 {arzt.telefon}</Text>
-                ) : null}
-                {arzt.email ? (
-                  <Text style={styles.arztDetail}>✉️ {arzt.email}</Text>
-                ) : null}
-                {arzt.adresse ? (
-                  <Text style={styles.arztDetail}>📍 {arzt.adresse}</Text>
-                ) : null}
-              </View>
-              <View style={styles.arztActions}>
-                <TouchableOpacity
-                  onPress={() => { setNeuerArzt(false); setEditArzt({ ...arzt }); }}
-                  accessibilityLabel={`${arzt.name} bearbeiten`}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                >
-                  <Text style={styles.arztEditButton}>✏️</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => handleDeleteArzt(arzt)}
-                  accessibilityLabel={`${arzt.name} löschen`}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                >
-                  <Text style={styles.arztDeleteButton}>🗑️</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          ))}
-
-          {/* Arzt bearbeiten/hinzufuegen Formular */}
-          {editArzt && (
-            <View style={styles.arztForm}>
-              <Text style={styles.arztFormTitle}>
-                {neuerArzt ? 'Neuer Arzt' : 'Arzt bearbeiten'}
+              <Text style={[styles.devButtonText, devOverride === mode && styles.devButtonTextActive]}>
+                {mode === 'premium' ? 'Premium' : mode === 'free' ? 'Free' : 'Echt'}
               </Text>
-
-              <Text style={styles.fieldLabel}>Name *</Text>
-              <TextInput
-                style={styles.fieldInput}
-                value={editArzt.name}
-                onChangeText={t => setEditArzt({ ...editArzt, name: t })}
-                placeholder="Dr. Müller"
-                placeholderTextColor="#999"
-              />
-
-              <Text style={styles.fieldLabel}>Fachgebiet</Text>
-              <TextInput
-                style={styles.fieldInput}
-                value={editArzt.fachgebiet}
-                onChangeText={t => setEditArzt({ ...editArzt, fachgebiet: t })}
-                placeholder="Hausarzt, Kardiologie..."
-                placeholderTextColor="#999"
-              />
-
-              <Text style={styles.fieldLabel}>Telefon</Text>
-              <TextInput
-                style={styles.fieldInput}
-                value={editArzt.telefon}
-                onChangeText={t => setEditArzt({ ...editArzt, telefon: t })}
-                placeholder="0681 123456"
-                placeholderTextColor="#999"
-                keyboardType="phone-pad"
-              />
-
-              <Text style={styles.fieldLabel}>E-Mail</Text>
-              <TextInput
-                style={styles.fieldInput}
-                value={editArzt.email}
-                onChangeText={t => setEditArzt({ ...editArzt, email: t })}
-                placeholder="praxis@example.de"
-                placeholderTextColor="#999"
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-
-              <Text style={styles.fieldLabel}>Adresse</Text>
-              <TextInput
-                style={styles.fieldInput}
-                value={editArzt.adresse}
-                onChangeText={t => setEditArzt({ ...editArzt, adresse: t })}
-                placeholder="Musterstraße 1, 66111 Saarbrücken"
-                placeholderTextColor="#999"
-              />
-
-              <View style={styles.arztFormButtons}>
-                <TouchableOpacity
-                  style={[styles.arztFormBtn, styles.arztFormCancel]}
-                  onPress={() => { setEditArzt(null); setNeuerArzt(false); }}
-                >
-                  <Text style={styles.arztFormCancelText}>Abbrechen</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.arztFormBtn, styles.arztFormSave]}
-                  onPress={handleSaveArzt}
-                >
-                  <Text style={styles.arztFormSaveText}>Speichern</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          )}
+            </TouchableOpacity>
+          ))}
         </View>
+        <StatusBadge label={devOverride === 'premium' ? 'Premium simuliert' : devOverride === 'free' ? 'Free simuliert' : 'Echte Prüfung'} tone="warning" />
+      </SettingsCard>
+    );
+  };
 
-        {/* === Standard-Uhrzeiten === */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle} accessibilityRole="header">Standard-Uhrzeiten</Text>
-          <Text style={styles.sectionHint}>
-            Diese Uhrzeiten werden verwendet, wenn du bei einem Medikament
-            eine Tageszeit aktivierst. Du kannst sie hier anpassen.
-          </Text>
+  const renderActiveTab = () => {
+    if (activeTab === 'allgemein') {
+      return (
+        <>
+          {renderPersonen()}
+          <SettingsCard title="Darstellung">
+            <SettingsRow icon="Aa" title="Schriftgröße" value="System" subtitle="Die App folgt der Schriftgröße deines Geräts." />
+            <SettingsRow icon="◐" title="Kontrast" value="Klar" subtitle="Ruhige Farben, deutliche Statusanzeigen." />
+          </SettingsCard>
+          <SettingsCard title="Abo & App">
+            <SettingsRow icon="♕" title="Status" value={premiumActive ? 'Premium' : 'Free'} onPress={() => navigation.navigate('Premium')} />
+            <SettingsRow icon="i" title="Version" value={APP_VERSION} />
+          </SettingsCard>
+          {renderPremiumTest()}
+        </>
+      );
+    }
 
-          {SLOT_REIHENFOLGE.map(slot => {
-            const meta = SLOT_META[slot];
-            return (
-              <View key={slot} style={styles.uhrzeitRow}>
-                <View style={styles.uhrzeitLabelContainer}>
-                  <Text style={styles.uhrzeitEmoji} accessibilityElementsHidden>{meta.emoji}</Text>
-                  <Text style={styles.uhrzeitLabel}>{meta.label}</Text>
-                </View>
-                <TextInput
-                  accessibilityLabel={`${meta.label} Standard-Uhrzeit`}
-                  style={[
-                    styles.uhrzeitInput,
-                    geaendert.has(slot) && styles.uhrzeitInputChanged,
-                  ]}
-                  value={uhrzeiten[slot]}
-                  onChangeText={text => handleUhrzeitChange(slot, text)}
-                  placeholder="HH:MM"
-                  placeholderTextColor="#999"
-                  keyboardType="number-pad"
-                  maxLength={5}
-                />
-              </View>
-            );
-          })}
-        </View>
+    if (activeTab === 'medikamente') {
+      return (
+        <>
+          <SettingsCard title="Medikamente">
+            <SettingsRow icon="⏰" title="Erinnerungen" value="Aktiv" subtitle="Einnahmen werden außerhalb der App erinnert, wenn erlaubt." />
+            <SettingsRow icon="⚠" title="Bestandswarnung" value={premiumActive ? 'Premium' : 'Premium'} subtitle="Warnungen bei niedrigem Vorrat." />
+            <SettingsRow icon="📅" title="Arzt-Urlaub" value="Verwalten" onPress={() => navigation.navigate('ArztUrlaub')} />
+          </SettingsCard>
+          {renderUhrzeiten()}
+          {renderAerzte()}
+        </>
+      );
+    }
 
-        {/* Speichern-Button */}
-        {geaendert.size > 0 && (
-          <TouchableOpacity
-            accessibilityRole="button"
-            accessibilityLabel="Änderungen speichern"
-            style={styles.speichernButton}
-            onPress={handleSpeichern}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.speichernButtonText}>
-              Speichern ({geaendert.size} geändert)
+    if (activeTab === 'speicherung') {
+      return (
+        <>
+          <SettingsCard title="Speicherung">
+            <SettingsRow icon="⌂" title="Lokale Daten" value="Auf diesem Gerät" subtitle="Deine Medikamentendaten werden zuerst lokal gespeichert." />
+            <SettingsRow icon="☁" title="Cloud-Backup" value={premiumActive ? 'Verfügbar' : 'Premium'} subtitle="Zusätzliche Sicherung, wenn du sie aktiv nutzt." onPress={() => navigation.navigate('Backup')} />
+            <SettingsRow icon="⇄" title="Live-Sync" value="Nicht aktiv" subtitle="Android und iOS haben keine automatische gemeinsame Datenbank." />
+          </SettingsCard>
+          <View style={styles.privacyNotice}>
+            <Text style={styles.privacyNoticeTitle}>Datenschutz-Hinweis</Text>
+            <Text style={styles.privacyNoticeText}>
+              Deine Medikamentendaten bleiben auf deinem Gerät. Cloud-Backup wird nur verwendet, wenn du es aktiv einrichtest.
             </Text>
-          </TouchableOpacity>
-        )}
+          </View>
+        </>
+      );
+    }
 
-        <View
-          style={styles.disclaimerSection}
-          accessibilityRole="summary"
-          accessibilityLabel="Wichtiger Hinweis zur Medikamenteneinnahme"
-        >
+    return (
+      <>
+        <SettingsCard title="Hilfe & Feedback">
+          <SettingsRow icon="✉" title="Kontakt" value="E-Mail" subtitle="kontakt@serverraum247.dev" onPress={handleSupportMail} />
+          <SettingsRow icon="!" title="Problem melden" value="Mail" subtitle="Öffnet eine E-Mail mit Geräte- und Versionsdaten." onPress={handleProblemMail} />
+          <SettingsRow icon="💡" title="Verbesserung vorschlagen" value="Mail" onPress={handleFeatureMail} />
+        </SettingsCard>
+        <View style={styles.disclaimerSection} accessibilityRole="summary" accessibilityLabel="Wichtiger Hinweis zur Medikamenteneinnahme">
           <Text style={styles.disclaimerTitle}>Wichtiger Hinweis</Text>
           <Text style={styles.disclaimerText}>
             Diese App unterstützt nur bei Übersicht, Erinnerung und Bestandsplanung. Sie ersetzt keine ärztliche oder pharmazeutische Beratung.
@@ -649,114 +586,304 @@ export default function SettingsScreen({ navigation }: Props) {
             Wir übernehmen keine Haftung für eine fehlerhafte Einnahme von Medikamenten. Jeder Nutzer ist selbst dafür verantwortlich, Medikamente nach ärztlicher Vorgabe einzunehmen.
           </Text>
         </View>
+        <SettingsCard title="Rechtliches">
+          <SettingsRow icon="§" title="Datenschutz & Rechtliches" value="Öffnen" onPress={() => navigation.navigate('DatenschutzRecht')} />
+          <SettingsRow icon="♕" title="Premium" value={premiumActive ? 'Aktiv' : 'Free'} onPress={() => navigation.navigate('Premium')} />
+        </SettingsCard>
+        <SettingsCard title="Gefährliche Aktionen">
+          <SettingsRow
+            icon="!"
+            title="App-Daten zurücksetzen"
+            value="Später"
+            subtitle="Diese Funktion wird erst aktiviert, wenn ein vollständiger Löschdialog vorhanden ist."
+          />
+        </SettingsCard>
+      </>
+    );
+  };
 
-        {/* Zuruecksetzen */}
-        <TouchableOpacity
-          accessibilityRole="button"
-          accessibilityLabel="Auf Standard zurücksetzen"
-          style={styles.resetButton}
-          onPress={handleReset}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.resetButtonText}>Auf Standard zurücksetzen</Text>
+  return (
+    <SafeAreaView style={styles.container}>
+      <View style={styles.topBar}>
+        <TouchableOpacity style={styles.closeButton} onPress={() => navigation.goBack()} accessibilityRole="button" accessibilityLabel="Einstellungen schließen">
+          <Text style={styles.closeButtonText}>×</Text>
         </TouchableOpacity>
+        <Text style={styles.title}>Einstellungen</Text>
+        <View style={styles.topBarSpacer} />
+      </View>
 
-        {/* === TEST-MODE: Premium-Override (nur in Debug-/Intern-Builds) === */}
-        {premiumTestOverrideAvailable && (
-          <View style={styles.devSection}>
-            <Text style={styles.devSectionTitle}>Interne Testversion</Text>
-            <Text style={styles.devSectionInfo}>
-              Premium-Status simulieren zum Testen.{'\n'}
-              Nur sichtbar in Debug- und internen Test-Builds.
-            </Text>
-            <View style={styles.devButtonRow}>
-              <TouchableOpacity
-                style={[styles.devButton, devOverride === 'premium' && styles.devButtonActive]}
-                onPress={async () => {
-                  await setDevPremiumOverride('premium');
-                  setDevOverrideState('premium');
-                  await loadAerzte();
-                }}
-                accessibilityRole="button"
-                accessibilityLabel="Premium simulieren"
-              >
-                <Text style={styles.devButtonText}>
-                  {devOverride === 'premium' ? '✓ Premium' : '⭐ Premium'}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.devButton, devOverride === 'free' && styles.devButtonActive]}
-                onPress={async () => {
-                  await setDevPremiumOverride('free');
-                  setDevOverrideState('free');
-                  await loadAerzte();
-                }}
-                accessibilityRole="button"
-                accessibilityLabel="Free simulieren"
-              >
-                <Text style={styles.devButtonText}>
-                  {devOverride === 'free' ? '✓ Free' : '🔒 Free'}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.devButton, devOverride === '' && styles.devButtonActive]}
-                onPress={async () => {
-                  await setDevPremiumOverride('');
-                  setDevOverrideState('');
-                  await loadAerzte();
-                }}
-                accessibilityRole="button"
-                accessibilityLabel="Override entfernen"
-              >
-                <Text style={styles.devButtonText}>
-                  {devOverride === '' ? '✓ Echtes' : '↩ Echtes'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-            <Text style={styles.devStatusText}>
-              Aktiv: {devOverride === 'premium' ? '⭐ Premium (simuliert)' : devOverride === 'free' ? '🔒 Free (simuliert)' : '📡 Echte IAP-Prüfung'}
-            </Text>
-          </View>
-        )}
+      <View style={styles.tabBar} accessibilityRole="tablist">
+        {SETTINGS_TABS.map(tab => {
+          const selected = activeTab === tab.key;
+          return (
+            <TouchableOpacity
+              key={tab.key}
+              style={[styles.tabButton, selected && styles.tabButtonActive]}
+              onPress={() => setActiveTab(tab.key)}
+              accessibilityRole="tab"
+              accessibilityState={{ selected }}
+              accessibilityLabel={tab.label}
+            >
+              <Text style={[styles.tabText, selected && styles.tabTextActive]} numberOfLines={1}>
+                {tab.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
 
-        <View
-          style={styles.contactSection}
-          accessibilityRole="summary"
-          accessibilityLabel="Support und Herausgeber"
-        >
-          <Text style={styles.contactTitle}>Support</Text>
-          <Text style={styles.contactText}>Herausgeber: Serverraum247</Text>
-          <TouchableOpacity
-            onPress={handleSupportMail}
-            accessibilityRole="link"
-            accessibilityLabel="E-Mail an kontakt@serverraum247.dev schreiben"
-          >
-            <Text style={styles.contactMail}>kontakt@serverraum247.dev</Text>
-          </TouchableOpacity>
-          <Text style={styles.contactHint}>
-            Für Fragen, Support und Verbesserungsvorschläge. Die E-Mail wird mit App-Version, Plattform und Systemversion vorbereitet.
-          </Text>
-          <Text style={styles.contactMeta}>App-Version {APP_VERSION}</Text>
-        </View>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        {renderActiveTab()}
       </ScrollView>
+
+      <Modal visible={!!showEmojiPicker} transparent animationType="fade">
+        <View style={styles.emojiPickerOverlay}>
+          <View style={styles.emojiPickerCard}>
+            <Text style={styles.emojiPickerTitle}>Avatar auswählen</Text>
+            <View style={styles.emojiGrid}>
+              {AVATAR_EMOJIS.map(emoji => (
+                <TouchableOpacity
+                  key={emoji}
+                  style={styles.emojiOption}
+                  onPress={async () => {
+                    if (showEmojiPicker && showEmojiPicker !== 'new') {
+                      await editPerson(showEmojiPicker, { avatar_emoji: emoji });
+                      if (editPersonId === showEmojiPicker) setEditPersonEmoji(emoji);
+                    }
+                    setShowEmojiPicker(null);
+                    announceChange('Avatar geändert');
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Avatar ${emoji}`}
+                >
+                  <Text style={styles.emojiOptionText}>{emoji}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <TouchableOpacity onPress={() => setShowEmojiPicker(null)} style={styles.emojiPickerClose} accessibilityRole="button" accessibilityLabel="Avatar-Auswahl schließen">
+              <Text style={styles.emojiPickerCloseText}>Schließen</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
+  );
+}
+
+function SettingsCard({
+  title,
+  subtitle,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <View style={styles.settingsCard}>
+      <Text style={styles.settingsCardTitle} accessibilityRole="header">{title}</Text>
+      {subtitle ? <Text style={styles.settingsCardSubtitle}>{subtitle}</Text> : null}
+      {children}
+    </View>
+  );
+}
+
+function SettingsRow({
+  icon,
+  title,
+  subtitle,
+  value,
+  onPress,
+}: {
+  icon: string;
+  title: string;
+  subtitle?: string;
+  value?: string;
+  onPress?: () => void;
+}) {
+  const content = (
+    <>
+      <View style={styles.settingsRowIcon}>
+        <Text style={styles.settingsRowIconText}>{icon}</Text>
+      </View>
+      <View style={styles.settingsRowContent}>
+        <Text style={styles.settingsRowTitle}>{title}</Text>
+        {subtitle ? <Text style={styles.settingsRowSubtitle}>{subtitle}</Text> : null}
+      </View>
+      {value ? <Text style={styles.settingsRowValue}>{value}</Text> : null}
+      {onPress ? <Text style={styles.settingsRowChevron}>›</Text> : null}
+    </>
+  );
+
+  if (onPress) {
+    return (
+      <TouchableOpacity style={styles.settingsRow} onPress={onPress} accessibilityRole="button" accessibilityLabel={title}>
+        {content}
+      </TouchableOpacity>
+    );
+  }
+
+  return <View style={styles.settingsRow}>{content}</View>;
+}
+
+function StatusBadge({ label, tone = 'neutral' }: { label: string; tone?: 'neutral' | 'warning' }) {
+  return (
+    <View style={[styles.statusBadge, tone === 'warning' && styles.statusBadgeWarning]}>
+      <Text style={[styles.statusBadgeText, tone === 'warning' && styles.statusBadgeWarningText]}>{label}</Text>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f3',
+    backgroundColor: '#F1F1F5',
   },
   scrollContent: {
-    padding: 20,
+    padding: 16,
     paddingBottom: 60,
   },
-  title: {
-    fontSize: 28,
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 12,
+    backgroundColor: '#F1F1F5',
+  },
+  closeButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#5A6472',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  closeButtonText: {
+    color: '#FFFFFF',
+    fontSize: 30,
+    lineHeight: 34,
     fontWeight: '700',
-    color: '#1a1a2e',
-    marginBottom: 24,
+  },
+  topBarSpacer: {
+    width: 42,
+    height: 42,
+  },
+  title: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#101828',
+  },
+  tabBar: {
+    flexDirection: 'row',
+    marginHorizontal: 16,
+    marginBottom: 12,
+    padding: 4,
+    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+  },
+  tabButton: {
+    flex: 1,
+    minHeight: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  tabButtonActive: {
+    backgroundColor: '#EEF2F7',
+  },
+  tabText: {
+    fontSize: 13,
+    color: '#6B7280',
+    fontWeight: '700',
+  },
+  tabTextActive: {
+    color: '#111827',
+  },
+  settingsCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+  },
+  settingsCardTitle: {
+    fontSize: 20,
+    color: '#101828',
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+  settingsCardSubtitle: {
+    fontSize: 14,
+    color: '#667085',
+    lineHeight: 20,
+    marginBottom: 10,
+  },
+  settingsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 58,
+    borderTopWidth: 1,
+    borderTopColor: '#EEF0F3',
+    paddingVertical: 8,
+  },
+  settingsRowIcon: {
+    width: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
+  },
+  settingsRowIconText: {
+    fontSize: 20,
+    color: '#2684C7',
+    fontWeight: '800',
+  },
+  settingsRowContent: {
+    flex: 1,
+    paddingRight: 8,
+  },
+  settingsRowTitle: {
+    fontSize: 17,
+    color: '#101828',
+    fontWeight: '700',
+  },
+  settingsRowSubtitle: {
+    fontSize: 13,
+    color: '#667085',
+    lineHeight: 18,
+    marginTop: 2,
+  },
+  settingsRowValue: {
+    fontSize: 15,
+    color: '#667085',
+    fontWeight: '700',
+    textAlign: 'right',
+    maxWidth: 110,
+  },
+  settingsRowChevron: {
+    fontSize: 30,
+    color: '#98A2B3',
+    marginLeft: 6,
+  },
+  statusBadge: {
+    alignSelf: 'flex-start',
+    borderRadius: 999,
+    backgroundColor: '#EEF2F7',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginTop: 10,
+  },
+  statusBadgeText: {
+    color: '#344054',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  statusBadgeWarning: {
+    backgroundColor: '#FFF4E5',
+  },
+  statusBadgeWarningText: {
+    color: '#A15C00',
   },
   // Personen
   personRow: {
@@ -774,6 +901,11 @@ const styles = StyleSheet.create({
   personNameActive: {
     color: '#155724',
     fontWeight: '600',
+  },
+  rowSubText: {
+    fontSize: 13,
+    color: '#667085',
+    marginTop: 2,
   },
   editIcon: {
     fontSize: 20,
@@ -861,6 +993,19 @@ const styles = StyleSheet.create({
     color: '#333',
     backgroundColor: '#fafafa',
     minHeight: 44,
+  },
+  compactPrimaryButton: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1F6F8B',
+  },
+  compactPrimaryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 28,
+    fontWeight: '500',
   },
   section: {
     backgroundColor: '#fff',
@@ -1041,11 +1186,44 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     minHeight: 56,
     justifyContent: 'center',
+    marginTop: 14,
   },
   speichernButtonText: {
     color: '#fff',
     fontSize: 18,
     fontWeight: '700',
+  },
+  secondaryButton: {
+    borderRadius: 12,
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#EEF2F7',
+    marginTop: 10,
+  },
+  secondaryButtonText: {
+    color: '#344054',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  privacyNotice: {
+    backgroundColor: '#EAF6FA',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#BFE4EF',
+  },
+  privacyNoticeTitle: {
+    color: '#123E52',
+    fontSize: 18,
+    fontWeight: '800',
+    marginBottom: 6,
+  },
+  privacyNoticeText: {
+    color: '#234B5B',
+    fontSize: 15,
+    lineHeight: 21,
   },
   disclaimerSection: {
     backgroundColor: '#FFF8E1',
@@ -1160,13 +1338,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   devButtonActive: {
-    backgroundColor: '#FF9800',
-    borderColor: '#E65100',
+    backgroundColor: '#1F6F8B',
+    borderColor: '#1F6F8B',
   },
   devButtonText: {
     fontSize: 15,
     fontWeight: '600',
     color: '#333',
+  },
+  devButtonTextActive: {
+    color: '#FFFFFF',
   },
   devStatusText: {
     fontSize: 14,

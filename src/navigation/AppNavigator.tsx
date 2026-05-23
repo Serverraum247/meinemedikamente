@@ -87,7 +87,7 @@ export default function AppNavigator() {
         <Stack.Screen
           name="Settings"
           component={SettingsScreen}
-          options={{ title: 'Einstellungen' }}
+          options={{ headerShown: false }}
         />
         <Stack.Screen name="ArztUrlaub" component={ArztUrlaubScreen} options={{ title: 'Arzt-Urlaub' }} />
         <Stack.Screen name="Premium" component={PremiumScreen} options={{ title: 'Premium' }} />
