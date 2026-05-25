@@ -19,6 +19,21 @@ import Foundation
 import UIKit
 import VisionKit
 
+@objc(AppRuntimeConfig)
+class AppRuntimeConfig: NSObject {
+  @objc
+  static func requiresMainQueueSetup() -> Bool {
+    return false
+  }
+
+  @objc
+  func constantsToExport() -> [AnyHashable: Any] {
+    return [
+      "internalPremiumTestMode": Bundle.main.object(forInfoDictionaryKey: "MMInternalPremiumTestMode") ?? false
+    ]
+  }
+}
+
 @objc(CloudKitBackup)
 class CloudKitBackup: NSObject {
 

@@ -24,6 +24,9 @@ RCT_EXTERN_METHOD(deleteBackup:(RCTPromiseResolveBlock)resolve
 
 @end
 
+@interface RCT_EXTERN_MODULE(AppRuntimeConfig, NSObject)
+@end
+
 @interface RCT_EXTERN_MODULE(MedicationVisionScanner, NSObject)
 
 RCT_EXTERN_METHOD(scanMedicationPackage:(RCTPromiseResolveBlock)resolve
