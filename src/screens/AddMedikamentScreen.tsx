@@ -39,20 +39,14 @@ import {
   toggleSlotWochentag,
   setSlotTaeglich,
   serializeEinnahmeplan,
-  parseEinnahmeplan,
   getAllDefaultUhrzeiten,
 } from '../utils/Einnahmeplan';
-import { getMaxReminderSlots, isPremium, setDevPremiumOverride } from '../services/PremiumService';
-import { canUsePremiumTestOverride } from '../services/AppRuntimeConfigService';
+import { getMaxReminderSlots, isPremium } from '../services/PremiumService';
 import { getAllAerzte } from '../database/ArztController';
 import type { ArztRow } from '../database/Database';
 import PremiumGate from '../components/PremiumGate';
 import { logger } from '../utils/Logger';
 import { MEDICATION_UNITS, isPremiumMedicationUnit } from '../constants/MedicationUnits';
-import {
-  getMedicationTestPreset,
-  MedicationTestPresetKey,
-} from '../constants/MedicationTestPresets';
 import {
   formatMedicationNameSuggestion,
   getMedicationNameSuggestionMetadata,
@@ -87,7 +81,6 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
   const [frueheEinnahmeErlaubt, setFrueheEinnahmeErlaubt] = useState(true);
   const [maxSlots, setMaxSlots] = useState(1);
   const [premium, setPremiumStatus] = useState(false);
-  const premiumTestOverrideAvailable = canUsePremiumTestOverride();
   const [aerzte, setAerzte] = useState<ArztRow[]>([]);
   const [gewaehlterArzt, setGewaehlterArzt] = useState('');
   const [staerkeWert, setStaerkeWert] = useState('');
@@ -349,74 +342,6 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
     });
   }, [handleSave, isDirty, navigation]);
 
-  const applyTestPreset = (presetKey: MedicationTestPresetKey) => {
-    const preset = getMedicationTestPreset(presetKey);
-    setName(preset.name);
-    setEinheit(preset.unit);
-    setEinzeldosis(preset.singleDose);
-    setBestand(preset.stock);
-    setPackungsgroesse(preset.packageSize);
-    setWarnungAb(preset.warningThreshold);
-    if (presetKey === 'weekday') {
-      setErinnerungAktiv(true);
-      setEinnahmePlan([{ slot: 'morgens', uhrzeit: defaultUhrzeiten.morgens || '08:00' }]);
-      setAutoAbzugAktiv(false);
-    }
-  };
-
-  const saveTestPreset = async (presetKey: MedicationTestPresetKey) => {
-    const preset = getMedicationTestPreset(presetKey);
-    if (isPremiumMedicationUnit(preset.unit) && !premium) {
-      showPremiumRequiredAlert('Diese Testdaten sind nur mit Premium möglich.', navigation);
-      return;
-    }
-
-    try {
-      await addMedikament({
-        id: generateUUID(),
-        name: preset.name,
-        zusatz: '',
-        person_id: aktivePerson?.id || 'person-default-001',
-        aktueller_bestand: parseDeFloat(preset.stock) || 0,
-        einzeldosis: parseDeFloat(preset.singleDose) || 1,
-        einheit: preset.unit,
-        pzn: '',
-        packungsgroesse: parseDeFloat(preset.packageSize) || 0,
-        warnung_ab_bestand: parseDeFloat(preset.warningThreshold) || 7,
-        sync_status: 0,
-        erinnerung_aktiv: 0,
-        einnahme_uhrzeiten: serializeEinnahmeplan([]),
-        auto_abzug_aktiv: 0,
-        fruehe_einnahme_erlaubt: 1,
-        arzt_id: '',
-        staerke_wert: 0,
-        staerke_einheit: '',
-      });
-
-      announceChange('Medikament wurde gespeichert');
-      Alert.alert(
-        'Gespeichert',
-        `"${preset.name}" wurde hinzugefügt.`,
-        [{ text: 'OK', onPress: goBackAfterSave }]
-      );
-    } catch (error) {
-      Alert.alert('Fehler', 'Medikament konnte nicht gespeichert werden.');
-      logger.error(error);
-    }
-  };
-
-  const enableDevPremiumForE2E = async () => {
-    await setDevPremiumOverride('premium');
-    setPremiumStatus(true);
-    setMaxSlots(await getMaxReminderSlots());
-  };
-
-  const enableDevFreeForE2E = async () => {
-    await setDevPremiumOverride('free');
-    setPremiumStatus(false);
-    setMaxSlots(await getMaxReminderSlots());
-  };
-
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
@@ -429,88 +354,23 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'none'}
         >
-        {premiumTestOverrideAvailable && (
-          <View style={styles.testPresetBox}>
-            <Text style={styles.testPresetTitle}>Interne Testversion</Text>
-            <Text style={styles.testPresetHint}>Testwerte für E2E-Flows setzen.</Text>
-            <View style={styles.testPresetRow}>
-              <TouchableOpacity
-                style={styles.testPresetButton}
-                onPress={() => applyTestPreset('tablet')}
-                accessibilityRole="button"
-                accessibilityLabel="Testdaten Tablette einsetzen"
-              >
-                <Text style={styles.testPresetButtonText}>Tablette</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.testPresetButton}
-                onPress={() => applyTestPreset('liquid')}
-                accessibilityRole="button"
-                accessibilityLabel="Testdaten Flüssigkeit einsetzen"
-              >
-                <Text style={styles.testPresetButtonText}>Flüssigkeit</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.testPresetButton}
-                onPress={() => applyTestPreset('spray')}
-                accessibilityRole="button"
-                accessibilityLabel="Testdaten Spray einsetzen"
-              >
-                <Text style={styles.testPresetButtonText}>Spray</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.testPresetButton}
-                onPress={enableDevPremiumForE2E}
-                accessibilityRole="button"
-                accessibilityLabel="Premium für E2E simulieren"
-              >
-                <Text style={styles.testPresetButtonText}>Premium</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.testPresetButton}
-                onPress={enableDevFreeForE2E}
-                accessibilityRole="button"
-                accessibilityLabel="Free für E2E simulieren"
-              >
-                <Text style={styles.testPresetButtonText}>Free</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.testPresetButton}
-                onPress={() => applyTestPreset('weekday')}
-                accessibilityRole="button"
-                accessibilityLabel="Testdaten Wochentage einsetzen"
-              >
-                <Text style={styles.testPresetButtonText}>Wochentage</Text>
-              </TouchableOpacity>
-            </View>
-            <View style={styles.testPresetRow}>
-              <TouchableOpacity
-                style={styles.testPresetButton}
-                onPress={() => saveTestPreset('tablet')}
-                accessibilityRole="button"
-                accessibilityLabel="E2E Tablette speichern"
-              >
-                <Text style={styles.testPresetButtonText}>Tablette speichern</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.testPresetButton}
-                onPress={() => saveTestPreset('liquid')}
-                accessibilityRole="button"
-                accessibilityLabel="E2E Flüssigkeit speichern"
-              >
-                <Text style={styles.testPresetButtonText}>Flüssigkeit speichern</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.testPresetButton}
-                onPress={() => saveTestPreset('spray')}
-                accessibilityRole="button"
-                accessibilityLabel="E2E Spray speichern"
-              >
-                <Text style={styles.testPresetButtonText}>Spray speichern</Text>
-              </TouchableOpacity>
-            </View>
+        <View style={styles.scanHero}>
+          <View style={styles.scanHeroTextWrap}>
+            <Text style={styles.scanHeroTitle}>Packung scannen</Text>
+            <Text style={styles.scanHeroSubtitle}>
+              Optional: Barcode, PZN oder Text auf der Packung erkennen und als Vorschlag übernehmen.
+            </Text>
           </View>
-        )}
+          <TouchableOpacity
+            style={styles.scanHeroButton}
+            onPress={() => navigation.navigate('BarcodeScanner')}
+            activeOpacity={0.75}
+            accessibilityRole="button"
+            accessibilityLabel="Packung scannen"
+          >
+            <Text style={styles.scanHeroButtonText}>Scannen</Text>
+          </TouchableOpacity>
+        </View>
 
         {/* === ABSCHNITT: Medikament === */}
         <Text style={styles.sectionTitle} accessibilityRole="header">Medikament</Text>
@@ -580,29 +440,19 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
           )}
         </View>
 
-        {/* PZN / Barcode */}
+        {/* PZN */}
         <View style={styles.fieldGroup}>
-          <Text style={styles.label}>PZN / Barcode</Text>
-          <View style={styles.pznRow}>
-            <TextInput
-              style={[styles.input, styles.pznInput]}
-              value={pzn}
-              onChangeText={setPzn}
-              placeholder="Optional"
-              placeholderTextColor="#999"
-              accessibilityLabel="PZN"
-              keyboardType="number-pad"
-            />
-            {/* Scanner-Button – wird in Phase 3 aktiviert */}
-            <TouchableOpacity
-              style={styles.scanButton}
-              onPress={() => navigation.navigate('BarcodeScanner')}
-              activeOpacity={0.7}
-              accessibilityLabel="Barcode scannen"
-            >
-              <Text style={styles.scanButtonText}>Scan</Text>
-            </TouchableOpacity>
-          </View>
+          <Text style={styles.label}>PZN manuell eingeben</Text>
+          <TextInput
+            style={styles.input}
+            value={pzn}
+            onChangeText={setPzn}
+            placeholder="Optional, z.B. 12345678"
+            placeholderTextColor="#999"
+            accessibilityLabel="PZN manuell eingeben"
+            keyboardType="number-pad"
+          />
+          <Text style={styles.hint}>Die PZN kannst du auch später ergänzen. Der Scan oben ist davon unabhängig.</Text>
         </View>
 
         {/* Arzt-Zuordnung */}
@@ -1208,69 +1058,43 @@ const styles = StyleSheet.create({
     lineHeight: 21,
   },
 
-  // Debug-only Testdaten
-  testPresetBox: {
-    backgroundColor: '#fff7e6',
-    borderColor: '#ff9800',
-    borderWidth: 2,
-    borderStyle: 'dashed',
-    borderRadius: 12,
-    padding: 14,
+  scanHero: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#DADDE2',
+    padding: 16,
     marginBottom: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
   },
-  testPresetTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#bf360c',
+  scanHeroTextWrap: {
+    flex: 1,
+  },
+  scanHeroTitle: {
+    fontSize: 21,
+    fontWeight: '800',
+    color: '#1a1a2e',
     marginBottom: 4,
   },
-  testPresetHint: {
-    fontSize: 16,
-    color: '#bf360c',
-    marginBottom: 10,
+  scanHeroSubtitle: {
+    fontSize: 15,
+    lineHeight: 21,
+    color: '#4D5660',
   },
-  testPresetRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 10,
-  },
-  testPresetButton: {
-    flex: 1,
-    backgroundColor: '#fff',
-    borderColor: '#ff9800',
-    borderWidth: 2,
-    borderRadius: 10,
-    minHeight: 52,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 12,
-  },
-  testPresetButtonText: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#1a1a2e',
-  },
-
-  // PZN mit Scanner-Button
-  pznRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  pznInput: {
-    flex: 1,
-  },
-  scanButton: {
+  scanHeroButton: {
     backgroundColor: '#1a1a2e',
     borderRadius: 14,
-    minWidth: 80,
-    minHeight: 64,
+    minHeight: 56,
+    minWidth: 104,
+    paddingHorizontal: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  scanButtonText: {
-    fontSize: 20,
-    fontWeight: '700',
+  scanHeroButtonText: {
+    fontSize: 18,
+    fontWeight: '800',
     color: '#FFFFFF',
   },
 
