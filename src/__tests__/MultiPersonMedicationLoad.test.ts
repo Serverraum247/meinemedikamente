@@ -112,6 +112,7 @@ function doctor(id: string, name: string): ArztRow {
   return {
     id,
     name,
+    telefon_landesvorwahl: '+49',
     telefon: '0681 123456',
     email: 'praxis@example.de',
     adresse: '',

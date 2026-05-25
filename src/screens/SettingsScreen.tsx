@@ -180,6 +180,7 @@ export default function SettingsScreen({ navigation }: Props) {
     setEditArzt({
       id: '',
       name: '',
+      telefon_landesvorwahl: '+49',
       telefon: '',
       email: '',
       adresse: '',
@@ -201,6 +202,7 @@ export default function SettingsScreen({ navigation }: Props) {
       if (neuerArzt) {
         const result = await createArzt({
           name: editArzt.name.trim(),
+          telefon_landesvorwahl: editArzt.telefon_landesvorwahl.trim() || '+49',
           telefon: editArzt.telefon.trim(),
           email: editArzt.email.trim(),
           adresse: editArzt.adresse.trim(),
@@ -216,6 +218,7 @@ export default function SettingsScreen({ navigation }: Props) {
       } else {
         await updateArzt(editArzt.id, {
           name: editArzt.name.trim(),
+          telefon_landesvorwahl: editArzt.telefon_landesvorwahl.trim() || '+49',
           telefon: editArzt.telefon.trim(),
           email: editArzt.email.trim(),
           adresse: editArzt.adresse.trim(),
@@ -254,6 +257,10 @@ export default function SettingsScreen({ navigation }: Props) {
   const formatArztAdresse = (arzt: ArztRow): string => {
     const ortZeile = [arzt.plz?.trim(), arzt.ort?.trim()].filter(Boolean).join(' ');
     return [arzt.adresse?.trim(), ortZeile, arzt.land?.trim()].filter(Boolean).join(', ');
+  };
+
+  const formatArztTelefon = (arzt: ArztRow): string => {
+    return [arzt.telefon_landesvorwahl?.trim(), arzt.telefon?.trim()].filter(Boolean).join(' ');
   };
 
   const openPreparedMail = async (subject: string, intro = '') => {
@@ -440,7 +447,7 @@ export default function SettingsScreen({ navigation }: Props) {
           <View style={styles.arztInfo}>
             <Text style={styles.arztName}>{arzt.name}</Text>
             {arzt.fachgebiet ? <Text style={styles.arztDetail}>{arzt.fachgebiet}</Text> : null}
-            {arzt.telefon ? <Text style={styles.arztDetail}>Telefon: {arzt.telefon}</Text> : null}
+            {formatArztTelefon(arzt) ? <Text style={styles.arztDetail}>Telefon: {formatArztTelefon(arzt)}</Text> : null}
             {arzt.email ? <Text style={styles.arztDetail}>E-Mail: {arzt.email}</Text> : null}
             {formatArztAdresse(arzt) ? <Text style={styles.arztDetail}>{formatArztAdresse(arzt)}</Text> : null}
           </View>
@@ -462,7 +469,16 @@ export default function SettingsScreen({ navigation }: Props) {
           <Text style={styles.fieldLabel}>Fachgebiet</Text>
           <TextInput style={styles.fieldInput} value={editArzt.fachgebiet} onChangeText={(t: string) => setEditArzt({ ...editArzt, fachgebiet: t })} placeholder="Hausarzt, Kardiologie..." placeholderTextColor="#999" />
           <Text style={styles.fieldLabel}>Telefon</Text>
-          <TextInput style={styles.fieldInput} value={editArzt.telefon} onChangeText={(t: string) => setEditArzt({ ...editArzt, telefon: t })} placeholder="0681 123456" placeholderTextColor="#999" keyboardType="phone-pad" />
+          <View style={styles.arztPhoneRow}>
+            <View style={styles.arztPhonePrefix}>
+              <Text style={styles.fieldLabel}>Vorwahl</Text>
+              <TextInput style={styles.fieldInput} value={editArzt.telefon_landesvorwahl} onChangeText={(t: string) => setEditArzt({ ...editArzt, telefon_landesvorwahl: t })} placeholder="+49" placeholderTextColor="#999" keyboardType="phone-pad" />
+            </View>
+            <View style={styles.arztPhoneNumber}>
+              <Text style={styles.fieldLabel}>Nummer</Text>
+              <TextInput style={styles.fieldInput} value={editArzt.telefon} onChangeText={(t: string) => setEditArzt({ ...editArzt, telefon: t })} placeholder="0681 123456" placeholderTextColor="#999" keyboardType="phone-pad" />
+            </View>
+          </View>
           <Text style={styles.fieldLabel}>E-Mail</Text>
           <TextInput style={styles.fieldInput} value={editArzt.email} onChangeText={(t: string) => setEditArzt({ ...editArzt, email: t })} placeholder="praxis@example.de" placeholderTextColor="#999" keyboardType="email-address" autoCapitalize="none" autoCorrect={false} />
           <Text style={styles.fieldLabel}>Adresse</Text>
@@ -1151,6 +1167,16 @@ const styles = StyleSheet.create({
   arztAddressRow: {
     flexDirection: 'row',
     gap: 10,
+  },
+  arztPhoneRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  arztPhonePrefix: {
+    flex: 0.75,
+  },
+  arztPhoneNumber: {
+    flex: 1.45,
   },
   arztAddressZip: {
     flex: 0.8,

@@ -155,7 +155,7 @@ const ArztUrlaubScreen: React.FC<ArztUrlaubScreenProps> = ({ navigation }) => {
   const handleArztAuswahlen = (arzt: ArztRow) => {
     setSelectedArztId(arzt.id);
     setPraxisName(arzt.name);
-    setTelefon(arzt.telefon);
+    setTelefon([arzt.telefon_landesvorwahl?.trim(), arzt.telefon?.trim()].filter(Boolean).join(' '));
     setMenueOffen(false);
   };
 
@@ -167,6 +167,7 @@ const ArztUrlaubScreen: React.FC<ArztUrlaubScreenProps> = ({ navigation }) => {
     }
     const result = await createArzt({
       name: neuArztName.trim(),
+      telefon_landesvorwahl: '+49',
       telefon: neuArztTelefon.trim(),
       email: neuArztEmail.trim(),
       adresse: '',

@@ -19,6 +19,7 @@ const otherPerson: PersonRow = {
 const doctor: ArztRow = {
   id: 'arzt-1',
   name: 'Dr. Müller',
+  telefon_landesvorwahl: '+49',
   telefon: '0681 123456',
   email: 'praxis@example.de',
   adresse: 'Musterstraße 1',
@@ -81,7 +82,7 @@ describe('MedicationPlanExportService', () => {
     expect(exportPlan.text).toContain('Morgens 08:00 Uhr: 0,5 Tabletten (Mo, Mi, Fr)');
     expect(exportPlan.text).toContain('Abends 20:00 Uhr: 1 Tabletten (täglich)');
     expect(exportPlan.text).toContain('PZN: 12345678');
-    expect(exportPlan.text).toContain('Arzt: Dr. Müller, Hausarzt, Tel. 0681 123456, E-Mail praxis@example.de, Musterstraße 1, 66111 Saarbrücken, Deutschland');
+    expect(exportPlan.text).toContain('Arzt: Dr. Müller, Hausarzt, Tel. +49 0681 123456, E-Mail praxis@example.de, Musterstraße 1, 66111 Saarbrücken, Deutschland');
     expect(exportPlan.text).toContain('Dieser Plan ersetzt keine ärztliche oder pharmazeutische Beratung.');
     expect(exportPlan.text).not.toContain('Fremdes Medikament');
   });

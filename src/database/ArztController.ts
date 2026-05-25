@@ -89,11 +89,12 @@ export async function createArzt(
   const id = generateUUID();
 
   await db.executeSql(
-    `INSERT INTO aerzte (id, name, telefon, email, adresse, plz, ort, land, fachgebiet)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO aerzte (id, name, telefon_landesvorwahl, telefon, email, adresse, plz, ort, land, fachgebiet)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       data.name,
+      data.telefon_landesvorwahl || '+49',
       data.telefon || '',
       data.email || '',
       data.adresse || '',
@@ -119,6 +120,7 @@ export async function updateArzt(
   const values: any[] = [];
 
   if (data.name !== undefined) { fields.push('name = ?'); values.push(data.name); }
+  if (data.telefon_landesvorwahl !== undefined) { fields.push('telefon_landesvorwahl = ?'); values.push(data.telefon_landesvorwahl); }
   if (data.telefon !== undefined) { fields.push('telefon = ?'); values.push(data.telefon); }
   if (data.email !== undefined) { fields.push('email = ?'); values.push(data.email); }
   if (data.adresse !== undefined) { fields.push('adresse = ?'); values.push(data.adresse); }

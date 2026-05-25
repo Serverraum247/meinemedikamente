@@ -13,7 +13,7 @@ SQLite.DEBUG(true);
 SQLite.enablePromise(true);
 
 const DATABASE_NAME = 'meine_medikamente.db';
-const DATABASE_VERSION = 16; // V16: Arztadresse um PLZ, Ort und Land erweitert
+const DATABASE_VERSION = 17; // V17: Arzt-Telefon um Landesvorwahl erweitert
 
 export interface MedikamentRow {
   id: string;
@@ -63,6 +63,7 @@ export interface ArztUrlaubRow {
 export interface ArztRow {
   id: string;
   name: string;          // Name der Praxis / des Arztes
+  telefon_landesvorwahl: string; // Telefon-Landesvorwahl, z.B. +49 oder +33
   telefon: string;       // Telefonnummer
   email: string;          // E-Mail-Adresse der Praxis
   adresse: string;       // Adresse (optional)
@@ -185,6 +186,7 @@ class Database {
       CREATE TABLE IF NOT EXISTS aerzte (
         id          TEXT PRIMARY KEY NOT NULL,
         name        TEXT NOT NULL,
+        telefon_landesvorwahl TEXT NOT NULL DEFAULT '+49',
         telefon     TEXT NOT NULL DEFAULT '',
         email       TEXT NOT NULL DEFAULT '',
         adresse     TEXT NOT NULL DEFAULT '',
@@ -251,6 +253,7 @@ class Database {
     await this.migrateV13toV14();
     await this.migrateV14toV15();
     await this.migrateV15toV16();
+    await this.migrateV16toV17();
   }
 
   /**
@@ -418,6 +421,7 @@ class Database {
         CREATE TABLE IF NOT EXISTS aerzte (
           id          TEXT PRIMARY KEY NOT NULL,
           name        TEXT NOT NULL,
+          telefon_landesvorwahl TEXT NOT NULL DEFAULT '+49',
           telefon     TEXT NOT NULL DEFAULT '',
           email       TEXT NOT NULL DEFAULT '',
           adresse     TEXT NOT NULL DEFAULT '',
@@ -643,6 +647,19 @@ class Database {
         `ALTER TABLE aerzte ADD COLUMN land TEXT NOT NULL DEFAULT 'Deutschland';`
       );
       logger.log('[DB] Migration V15->V16: land Spalte in aerzte hinzugefuegt');
+    }
+  }
+
+  /**
+   * Migration V16 -> V17: Telefon-Landesvorwahl fuer Aerzte speichern.
+   */
+  private async migrateV16toV17(): Promise<void> {
+    const arztCols = await this.getColumnNames('aerzte');
+    if (!arztCols.includes('telefon_landesvorwahl')) {
+      await this.db!.executeSql(
+        `ALTER TABLE aerzte ADD COLUMN telefon_landesvorwahl TEXT NOT NULL DEFAULT '+49';`
+      );
+      logger.log('[DB] Migration V16->V17: telefon_landesvorwahl Spalte in aerzte hinzugefuegt');
     }
   }
 }

@@ -7,6 +7,7 @@ import { getAllAerzte, getMaxAerzte } from '../database/ArztController';
 let mockAerzte: Array<{
   id: string;
   name: string;
+  telefon_landesvorwahl: string;
   telefon: string;
   email: string;
   adresse: string;
@@ -165,6 +166,8 @@ describe('SettingsScreen', () => {
     });
 
     const text = flattenText(tree.toJSON());
+    expect(text).toContain('Vorwahl');
+    expect(tree.root.findByProps({ placeholder: '+49' }).props.value).toBe('+49');
     expect(text).toContain('PLZ');
     expect(text).toContain('Ort');
     expect(text).toContain('Land');
@@ -175,6 +178,7 @@ describe('SettingsScreen', () => {
     mockAerzte = [{
       id: 'arzt-1',
       name: 'Dr. Müller',
+      telefon_landesvorwahl: '+49',
       telefon: '',
       email: '',
       adresse: '',

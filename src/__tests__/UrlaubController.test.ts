@@ -33,6 +33,7 @@ function med(overrides: Partial<MedikamentRow>): MedikamentRow {
 const doctor: ArztRow = {
   id: 'arzt-1',
   name: 'Hausarzt Müller',
+  telefon_landesvorwahl: '+49',
   telefon: '',
   email: '',
   adresse: '',
