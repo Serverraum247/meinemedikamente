@@ -17,6 +17,7 @@ import {
   Modal,
   Linking,
   Platform,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -687,9 +688,20 @@ export default function SettingsScreen({ navigation }: Props) {
         })}
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        {renderActiveTab()}
-      </ScrollView>
+      <KeyboardAvoidingView
+        style={styles.keyboardAvoiding}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
+      >
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+        >
+          {renderActiveTab()}
+        </ScrollView>
+      </KeyboardAvoidingView>
 
       <Modal visible={!!showEmojiPicker} transparent animationType="fade">
         <View style={styles.emojiPickerOverlay}>
@@ -794,9 +806,15 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F1F1F5',
   },
+  keyboardAvoiding: {
+    flex: 1,
+  },
+  scroll: {
+    flex: 1,
+  },
   scrollContent: {
     padding: 16,
-    paddingBottom: 60,
+    paddingBottom: 220,
   },
   topBar: {
     flexDirection: 'row',
