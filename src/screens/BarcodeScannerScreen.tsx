@@ -1,5 +1,5 @@
 /**
- * BarcodeScannerScreen.tsx – Kamera-Barcode-Scanner + manuelle PZN-Eingabe
+ * BarcodeScannerScreen.tsx – Packungs-/PZN-Scan + manuelle PZN-Eingabe
  *
  * Nutzt react-native-camera-kit für native Kamera-Barcode-Erkennung.
  * Senioren-freundlich: Großer Kamera-View, automatische Erkennung,
@@ -50,7 +50,7 @@ export default function BarcodeScannerScreen({ navigation }: Props) {
   const [hasScanned, setHasScanned] = useState(false);
   const appleVisionAvailable = Platform.OS === 'ios' && Boolean(MedicationVisionScanner?.scanMedicationPackage);
 
-  // Barcode vom Kamera-Scanner verarbeiten
+  // Barcode vom Kamera-Scanner verarbeiten. Auf iOS ergänzt Apple Vision zusätzlich OCR-Texte.
   const onBarcodeScanned = async (event: any) => {
     if (hasScanned) return; // Debounce: nur ein Scan pro Aktion
 
@@ -132,7 +132,7 @@ export default function BarcodeScannerScreen({ navigation }: Props) {
 
   const handleAppleVisionScan = async () => {
     if (!MedicationVisionScanner?.scanMedicationPackage) {
-      Alert.alert('Nicht verfügbar', 'Der Apple Vision Scanner ist auf diesem Gerät nicht verfügbar.');
+      Alert.alert('Nicht verfügbar', 'Der Packungs-Scan ist auf diesem Gerät nicht verfügbar.');
       return;
     }
 
@@ -185,7 +185,7 @@ export default function BarcodeScannerScreen({ navigation }: Props) {
       Alert.alert('Nichts erkannt', 'Es wurde kein Barcode und kein klarer Medikamentenname erkannt. Bitte versuche es erneut oder gib die PZN manuell ein.');
     } catch (error) {
       setIsLookingUp(false);
-      Alert.alert('Scan nicht möglich', error instanceof Error ? error.message : 'Der Apple Vision Scan konnte nicht gestartet werden.');
+      Alert.alert('Scan nicht möglich', error instanceof Error ? error.message : 'Der Packungs-Scan konnte nicht gestartet werden.');
     }
   };
 
@@ -194,7 +194,7 @@ export default function BarcodeScannerScreen({ navigation }: Props) {
     const trimmed = pznInput.trim();
     const normalized = normalizePzn(trimmed) || trimmed;
     if (!trimmed) {
-      Alert.alert('Leer', 'Bitte gib eine PZN oder Barcode ein.');
+      Alert.alert('Leer', 'Bitte gib eine PZN ein.');
       return;
     }
 
@@ -229,7 +229,7 @@ export default function BarcodeScannerScreen({ navigation }: Props) {
       <View style={styles.header}>
         <Text style={styles.headerIcon}>📷</Text>
         <Text style={styles.headerText} accessibilityRole="header">
-          {tab === 'kamera' ? 'Barcode scannen' : 'Barcode / PZN eingeben'}
+          {tab === 'kamera' ? 'Packung scannen' : 'PZN eingeben'}
         </Text>
       </View>
 
@@ -239,7 +239,7 @@ export default function BarcodeScannerScreen({ navigation }: Props) {
           style={[styles.tab, tab === 'kamera' && styles.tabActive]}
           onPress={() => setTab('kamera')}
           accessibilityRole="button"
-          accessibilityLabel="Kamera-Scanner"
+          accessibilityLabel="Packung per Kamera scannen"
         >
           <Text style={[styles.tabText, tab === 'kamera' && styles.tabTextActive]}>
             📷 Kamera
@@ -262,7 +262,7 @@ export default function BarcodeScannerScreen({ navigation }: Props) {
         <View style={styles.cameraContainer}>
           {appleVisionAvailable ? (
             <View style={styles.appleVisionBox}>
-              <Text style={styles.appleVisionTitle}>Packung oder Barcode scannen</Text>
+              <Text style={styles.appleVisionTitle}>Packung scannen</Text>
               <Text style={styles.appleVisionText}>
                 Erkennt Barcodes, PZN und Text auf Packung oder Blister. Name, Wirkstoff und Stärke werden nur vorgeschlagen.
               </Text>
@@ -270,7 +270,7 @@ export default function BarcodeScannerScreen({ navigation }: Props) {
                 style={styles.appleVisionButton}
                 onPress={handleAppleVisionScan}
                 accessibilityRole="button"
-                accessibilityLabel="Apple Vision Scan starten"
+                accessibilityLabel="Packung scannen starten"
                 disabled={isLookingUp}
               >
                 {isLookingUp ? (
@@ -310,7 +310,7 @@ export default function BarcodeScannerScreen({ navigation }: Props) {
       {tab === 'manuell' && (
         <View style={styles.content}>
           <View style={styles.fieldGroup}>
-            <Text style={styles.label}>PZN oder Barcode</Text>
+            <Text style={styles.label}>PZN eingeben</Text>
             <TextInput
               style={styles.input}
               value={pznInput}
@@ -318,7 +318,7 @@ export default function BarcodeScannerScreen({ navigation }: Props) {
               placeholder="z.B. 12345678"
               placeholderTextColor="#999"
               keyboardType="number-pad"
-              accessibilityLabel="PZN oder Barcode eingeben"
+              accessibilityLabel="PZN eingeben"
               autoFocus
             />
             <Text style={styles.hint}>

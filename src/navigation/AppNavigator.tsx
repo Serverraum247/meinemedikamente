@@ -83,7 +83,7 @@ export default function AppNavigator() {
         <Stack.Screen
           name="BarcodeScanner"
           component={BarcodeScannerScreen}
-          options={{ title: 'Barcode scannen', headerShown: false }}
+          options={{ title: 'Packung scannen', headerShown: false }}
         />
         <Stack.Screen
           name="Nachkauf"
