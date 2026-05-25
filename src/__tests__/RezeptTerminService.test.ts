@@ -48,6 +48,7 @@ function createMedikament(overrides: Partial<MedikamentRow> = {}): MedikamentRow
     erinnerung_aktiv: 1,
     einnahme_uhrzeiten: JSON.stringify([{ slot: 'morgens', uhrzeit: '08:00', dosis: 1 }]),
     auto_abzug_aktiv: 0,
+    fruehe_einnahme_erlaubt: 1,
     arzt_id: 'arzt-1',
     staerke_wert: 5,
     staerke_einheit: 'mg',

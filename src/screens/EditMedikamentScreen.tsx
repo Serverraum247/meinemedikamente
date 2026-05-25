@@ -79,6 +79,7 @@ export default function EditMedikamentScreen({ route, navigation }: Props) {
     morgens: '08:00', mittags: '12:00', abends: '18:00', nachts: '22:00',
   });
   const [autoAbzugAktiv, setAutoAbzugAktiv] = useState(false);
+  const [frueheEinnahmeErlaubt, setFrueheEinnahmeErlaubt] = useState(true);
   const [premium, setPremiumStatus] = useState(false);
   const [aerzte, setAerzte] = useState<ArztRow[]>([]);
   const [gewaehlterArzt, setGewaehlterArzt] = useState('');
@@ -113,6 +114,7 @@ export default function EditMedikamentScreen({ route, navigation }: Props) {
       erinnerungAktiv !== (medikament.erinnerung_aktiv === 1) ||
       serializeEinnahmeplan(einnahmePlan) !== originalPlan ||
       autoAbzugAktiv !== (medikament.auto_abzug_aktiv === 1) ||
+      frueheEinnahmeErlaubt !== ((medikament.fruehe_einnahme_erlaubt ?? 1) !== 0) ||
       gewaehlterArzt !== (medikament.arzt_id || '') ||
       staerkeWert !== (medikament.staerke_wert ? String(medikament.staerke_wert) : '') ||
       staerkeEinheit !== (medikament.staerke_einheit || '')
@@ -123,6 +125,7 @@ export default function EditMedikamentScreen({ route, navigation }: Props) {
     einheit,
     einnahmePlan,
     einzeldosis,
+    frueheEinnahmeErlaubt,
     erinnerungAktiv,
     gewaehlterArzt,
     medikament,
@@ -179,6 +182,7 @@ export default function EditMedikamentScreen({ route, navigation }: Props) {
         setEinnahmePlan(plan);
       } catch { setEinnahmePlan([]); }
       setAutoAbzugAktiv(found.auto_abzug_aktiv === 1);
+      setFrueheEinnahmeErlaubt((found.fruehe_einnahme_erlaubt ?? 1) !== 0);
       setGewaehlterArzt(found.arzt_id || '');
       setStaerkeWert(found.staerke_wert ? String(found.staerke_wert) : '');
       setStaerkeEinheit(found.staerke_einheit || '');
@@ -259,6 +263,7 @@ export default function EditMedikamentScreen({ route, navigation }: Props) {
         erinnerung_aktiv: erinnerungAktiv ? 1 : 0,
         einnahme_uhrzeiten: serializeEinnahmeplan(einnahmePlan),
         auto_abzug_aktiv: autoAbzugAktiv ? 1 : 0,
+        fruehe_einnahme_erlaubt: frueheEinnahmeErlaubt ? 1 : 0,
         arzt_id: gewaehlterArzt,
         staerke_wert: isCombination ? 0 : parseDeFloat(staerkeWert) || 0,
         staerke_einheit: isCombination ? '' : staerkeEinheit,
@@ -281,6 +286,7 @@ export default function EditMedikamentScreen({ route, navigation }: Props) {
     einheit,
     einnahmePlan,
     einzeldosis,
+    frueheEinnahmeErlaubt,
     erinnerungAktiv,
     gewaehlterArzt,
     goBackAfterSave,
@@ -720,6 +726,23 @@ export default function EditMedikamentScreen({ route, navigation }: Props) {
                 onValueChange={setAutoAbzugAktiv}
                 trackColor={{ false: '#ccc', true: '#1a1a2e' }}
                 thumbColor={autoAbzugAktiv ? '#fff' : '#f4f4f4'}
+                style={{ transform: [{ scaleX: 1.3 }, { scaleY: 1.3 }] }}
+              />
+            </View>
+
+            <View style={styles.switchRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.label}>Früher einnehmen erlauben</Text>
+                <Text style={styles.hint}>Am selben Tag auch vor der Uhrzeit abhaken</Text>
+              </View>
+              <Switch
+                value={frueheEinnahmeErlaubt}
+                accessibilityRole="switch"
+                accessibilityLabel="Früher einnehmen erlauben"
+                accessibilityState={{ checked: frueheEinnahmeErlaubt }}
+                onValueChange={setFrueheEinnahmeErlaubt}
+                trackColor={{ false: '#ccc', true: '#1a1a2e' }}
+                thumbColor={frueheEinnahmeErlaubt ? '#fff' : '#f4f4f4'}
                 style={{ transform: [{ scaleX: 1.3 }, { scaleY: 1.3 }] }}
               />
             </View>

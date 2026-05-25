@@ -42,6 +42,10 @@ import {
   type EinnahmeSlot,
   type TageszeitSlot,
 } from '../utils/Einnahmeplan';
+import {
+  findBestaetigbarenSlotHeute,
+  istFrueheEinnahmeErlaubt,
+} from '../utils/EinnahmeBestaetigung';
 import { announceChange } from '../utils/AccessibilityHelpers';
 import { erstelleRezeptAbholtermin } from '../services/KalenderService';
 import { canCreateCalendarEvent, recordCalendarEvent, isPremium } from '../services/PremiumService';
@@ -73,12 +77,13 @@ import {
 type Props = NativeStackScreenProps<RootStackParamList, 'MedikamentDetail'>;
 
 async function resolveSlotFuerBestaetigung(
-  medikamentId: string,
+  medikament: MedikamentRow,
   plan: EinnahmeSlot[],
-): Promise<TageszeitSlot> {
+  einnahmen: EinnahmeWithDate[],
+): Promise<TageszeitSlot | null> {
   try {
     const offene = await getOffeneEinnahmen(0);
-    const offenerEintrag = offene.find(einnahme => einnahme.medikamentId === medikamentId);
+    const offenerEintrag = offene.find(einnahme => einnahme.medikamentId === medikament.id);
     if (offenerEintrag) {
       return offenerEintrag.slot;
     }
@@ -86,10 +91,20 @@ async function resolveSlotFuerBestaetigung(
     logger.error('Offener Einnahme-Slot konnte nicht ermittelt werden:', error);
   }
 
+  const bestaetigbarerSlot = findBestaetigbarenSlotHeute({
+    plan,
+    eingenommeneSlots: getEingenommeneSlotsHeute(einnahmen),
+    frueheEinnahmeErlaubt: istFrueheEinnahmeErlaubt(medikament.fruehe_einnahme_erlaubt),
+  });
+
+  if (bestaetigbarerSlot) {
+    return bestaetigbarerSlot.slot;
+  }
+
   const aktuelle = getAktuelleTageszeit();
   const heute = new Date();
   const aktuellerPlanSlot = plan.find(slot => slot.slot === aktuelle && istSlotAnDatumAktiv(slot, heute));
-  if (aktuellerPlanSlot) {
+  if (aktuellerPlanSlot && istFrueheEinnahmeErlaubt(medikament.fruehe_einnahme_erlaubt)) {
     return aktuellerPlanSlot.slot;
   }
 
@@ -97,7 +112,9 @@ async function resolveSlotFuerBestaetigung(
     .sort((a, b) => SLOT_REIHENFOLGE.indexOf(a.slot) - SLOT_REIHENFOLGE.indexOf(b.slot))
     .find(slot => istSlotAnDatumAktiv(slot, heute));
 
-  return ersterAktiverSlot?.slot || aktuelle;
+  return istFrueheEinnahmeErlaubt(medikament.fruehe_einnahme_erlaubt)
+    ? ersterAktiverSlot?.slot || aktuelle
+    : null;
 }
 
 export default function MedikamentDetailScreen({ route, navigation }: Props) {
@@ -146,7 +163,19 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
       ]);
       setHistorie(einnahmen);
       const offenerEintrag = offene.find(einnahme => einnahme.medikamentId === medikamentId);
-      setOffenerSlotHeute(offenerEintrag?.slot || null);
+      if (offenerEintrag) {
+        setOffenerSlotHeute(offenerEintrag.slot);
+      } else if (found) {
+        const plan = parseEinnahmeplan(found.einnahme_uhrzeiten || '[]');
+        const bestaetigbarerSlot = findBestaetigbarenSlotHeute({
+          plan,
+          eingenommeneSlots: getEingenommeneSlotsHeute(einnahmen),
+          frueheEinnahmeErlaubt: istFrueheEinnahmeErlaubt(found.fruehe_einnahme_erlaubt),
+        });
+        setOffenerSlotHeute(bestaetigbarerSlot?.slot || null);
+      } else {
+        setOffenerSlotHeute(null);
+      }
       // Packungsdaten laden
       const letzte = await getLetztePackung(medikamentId);
       setLetztePackung(letzte);
@@ -171,7 +200,11 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
   const handleEinnahme = useCallback(async () => {
     if (!medikament) return;
     const plan = parseEinnahmeplan(medikament.einnahme_uhrzeiten || '[]');
-    const slot = await resolveSlotFuerBestaetigung(medikament.id, plan);
+    const slot = await resolveSlotFuerBestaetigung(medikament, plan, historie);
+    if (!slot) {
+      Alert.alert('Noch nicht fällig', 'Diese Einnahme ist heute noch nicht fällig.');
+      return;
+    }
     const dosis = getDosisFuerSlot(plan, slot, medikament.einzeldosis);
     const slotLabel = SLOT_META[slot].label;
 
@@ -199,7 +232,7 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
         },
       ]
     );
-  }, [medikament, bestätigeEinnahme, loadData]);
+  }, [historie, medikament, bestätigeEinnahme, loadData]);
 
   const handleDelete = useCallback(() => {
     if (!medikament) return;
@@ -958,6 +991,41 @@ function getNachtragSlots(medikament: MedikamentRow): TageszeitSlot[] {
   const plan = parseEinnahmeplan(medikament.einnahme_uhrzeiten || '[]');
   const slots = plan.map(item => item.slot);
   return slots.length > 0 ? slots : ['morgens'];
+}
+
+function getEingenommeneSlotsHeute(einnahmen: EinnahmeWithDate[]): Set<TageszeitSlot> {
+  const heute = new Date();
+  const slots = new Set<TageszeitSlot>();
+
+  for (const einnahme of einnahmen) {
+    const datum = new Date(einnahme.timestamp);
+    if (
+      datum.getFullYear() !== heute.getFullYear() ||
+      datum.getMonth() !== heute.getMonth() ||
+      datum.getDate() !== heute.getDate()
+    ) {
+      continue;
+    }
+
+    if (isTageszeitSlot(einnahme.slot)) {
+      slots.add(einnahme.slot);
+    } else {
+      slots.add(stundeZuTageszeitSlot(datum.getHours()));
+    }
+  }
+
+  return slots;
+}
+
+function isTageszeitSlot(value: string): value is TageszeitSlot {
+  return value === 'morgens' || value === 'mittags' || value === 'abends' || value === 'nachts';
+}
+
+function stundeZuTageszeitSlot(stunde: number): TageszeitSlot {
+  if (stunde >= 4 && stunde < 11) return 'morgens';
+  if (stunde >= 11 && stunde < 15) return 'mittags';
+  if (stunde >= 15 && stunde < 21) return 'abends';
+  return 'nachts';
 }
 
 function buildNachtragTimestamp(tageZurueck: number, uhrzeit: string | undefined, slot: TageszeitSlot): string {

@@ -103,8 +103,16 @@ describe('SettingsScreen', () => {
     return tree!;
   }
 
+  async function openTab(tree: ReactTestRenderer.ReactTestRenderer, label: string) {
+    await ReactTestRenderer.act(async () => {
+      tree.root.findByProps({ accessibilityLabel: label }).props.onPress();
+      await Promise.resolve();
+    });
+  }
+
   it('shows a clear medication intake liability disclaimer', async () => {
     const tree = await renderScreen();
+    await openTab(tree, 'Hilfe');
 
     const text = flattenText(tree.toJSON());
     expect(text).toContain('Wichtiger Hinweis');
@@ -114,6 +122,7 @@ describe('SettingsScreen', () => {
 
   it('shows app publisher and contact information', async () => {
     const tree = await renderScreen();
+    await openTab(tree, 'Hilfe');
 
     const text = flattenText(tree.toJSON());
     expect(text).toContain('Serverraum247');
@@ -126,6 +135,7 @@ describe('SettingsScreen', () => {
 
   it('does not show a permanent premium upsell in the doctors section', async () => {
     const tree = await renderScreen();
+    await openTab(tree, 'Medikamente');
 
     const text = flattenText(tree.toJSON());
     expect(text).toContain('Hinterlege Kontaktdaten deiner Ärzte.');
@@ -146,6 +156,7 @@ describe('SettingsScreen', () => {
     (getAllAerzte as jest.Mock).mockResolvedValue(mockAerzte);
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     const tree = await renderScreen();
+    await openTab(tree, 'Medikamente');
 
     await ReactTestRenderer.act(async () => {
       tree.root.findByProps({ accessibilityLabel: 'Arzt hinzufügen' }).props.onPress();

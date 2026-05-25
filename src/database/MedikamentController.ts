@@ -18,8 +18,8 @@ export async function createMedikament(
   const id = medikament.id || generateUUID();
 
   await db.executeSql(
-    `INSERT INTO medikamente (id, name, zusatz, person_id, aktueller_bestand, einzeldosis, einheit, pzn, packungsgroesse, warnung_ab_bestand, sync_status, erinnerung_aktiv, einnahme_uhrzeiten, auto_abzug_aktiv, arzt_id, staerke_wert, staerke_einheit)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO medikamente (id, name, zusatz, person_id, aktueller_bestand, einzeldosis, einheit, pzn, packungsgroesse, warnung_ab_bestand, sync_status, erinnerung_aktiv, einnahme_uhrzeiten, auto_abzug_aktiv, fruehe_einnahme_erlaubt, arzt_id, staerke_wert, staerke_einheit)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       medikament.name,
@@ -35,6 +35,7 @@ export async function createMedikament(
       medikament.erinnerung_aktiv ?? 0,
       medikament.einnahme_uhrzeiten ?? '[]',
       medikament.auto_abzug_aktiv ?? 0,
+      medikament.fruehe_einnahme_erlaubt ?? 1,
       medikament.arzt_id || '',
       medikament.staerke_wert ?? 0,      // Float: z.B. 500.0 (Premium)
       medikament.staerke_einheit || '',  // String: 'mg', 'ml' (Premium)
@@ -191,6 +192,7 @@ export async function updateMedikament(
   if (updates.erinnerung_aktiv !== undefined) { fields.push('erinnerung_aktiv = ?'); values.push(updates.erinnerung_aktiv); }
   if (updates.einnahme_uhrzeiten !== undefined) { fields.push('einnahme_uhrzeiten = ?'); values.push(updates.einnahme_uhrzeiten); }
   if (updates.auto_abzug_aktiv !== undefined) { fields.push('auto_abzug_aktiv = ?'); values.push(updates.auto_abzug_aktiv); }
+  if (updates.fruehe_einnahme_erlaubt !== undefined) { fields.push('fruehe_einnahme_erlaubt = ?'); values.push(updates.fruehe_einnahme_erlaubt); }
   if (updates.staerke_wert !== undefined) { fields.push('staerke_wert = ?'); values.push(updates.staerke_wert); }
   if (updates.staerke_einheit !== undefined) { fields.push('staerke_einheit = ?'); values.push(updates.staerke_einheit); }
 

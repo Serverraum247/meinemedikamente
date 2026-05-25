@@ -13,7 +13,7 @@ SQLite.DEBUG(true);
 SQLite.enablePromise(true);
 
 const DATABASE_NAME = 'meine_medikamente.db';
-const DATABASE_VERSION = 14; // V14: E-Mail-Adresse fuer Aerzte
+const DATABASE_VERSION = 15; // V15: Fruehe Einnahme pro Medikament steuerbar
 
 export interface MedikamentRow {
   id: string;
@@ -31,6 +31,7 @@ export interface MedikamentRow {
   erinnerung_aktiv: number;     // 0=aus, 1=an
   einnahme_uhrzeiten: string;   // JSON-Array, z.B. '["08:00","20:00"]'
   auto_abzug_aktiv: number;     // 0=aus, 1=an – Bestand automatisch pro Einnahme abziehen
+  fruehe_einnahme_erlaubt: number; // 0=aus, 1=an – Einnahme am selben Tag vor Uhrzeit bestaetigen
   arzt_id: string;              // verschreibender Arzt (Premium, '' = nicht zugeordnet)
   staerke_wert: number;         // Staerke/Dosierung pro Einheit, z.B. 500.0 (Premium)
   staerke_einheit: string;      // Einheit: 'mg', 'ml', 'µg', 'IE', '' (Premium)
@@ -148,6 +149,7 @@ class Database {
         erinnerung_aktiv   INTEGER NOT NULL DEFAULT 0,
         einnahme_uhrzeiten TEXT NOT NULL DEFAULT '[]',
         auto_abzug_aktiv   INTEGER NOT NULL DEFAULT 0,
+        fruehe_einnahme_erlaubt INTEGER NOT NULL DEFAULT 1,
         created_at        TEXT NOT NULL DEFAULT (datetime('now')),
         updated_at        TEXT NOT NULL DEFAULT (datetime('now'))
       );
@@ -241,6 +243,7 @@ class Database {
     await this.migrateV11toV12();
     await this.migrateV12toV13();
     await this.migrateV13toV14();
+    await this.migrateV14toV15();
   }
 
   /**
@@ -591,6 +594,20 @@ class Database {
         `ALTER TABLE aerzte ADD COLUMN email TEXT NOT NULL DEFAULT '';`
       );
       logger.log('[DB] Migration V13->V14: email Spalte in aerzte hinzugefuegt');
+    }
+  }
+
+  /**
+   * Migration V14 -> V15: Fruehe Einnahme vor geplanter Uhrzeit pro Medikament.
+   * Default 1 erhaelt das gewuenschte Standardverhalten fuer bestehende Eintraege.
+   */
+  private async migrateV14toV15(): Promise<void> {
+    const medCols = await this.getColumnNames('medikamente');
+    if (!medCols.includes('fruehe_einnahme_erlaubt')) {
+      await this.db!.executeSql(
+        `ALTER TABLE medikamente ADD COLUMN fruehe_einnahme_erlaubt INTEGER NOT NULL DEFAULT 1;`
+      );
+      logger.log('[DB] Migration V14->V15: fruehe_einnahme_erlaubt Spalte hinzugefuegt');
     }
   }
 }

@@ -20,6 +20,7 @@ function med(overrides: Partial<MedikamentRow>): MedikamentRow {
     erinnerung_aktiv: 1,
     einnahme_uhrzeiten: '[]',
     auto_abzug_aktiv: 1,
+    fruehe_einnahme_erlaubt: 1,
     arzt_id: 'arzt-1',
     staerke_wert: 0,
     staerke_einheit: '',

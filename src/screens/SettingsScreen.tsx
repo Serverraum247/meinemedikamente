@@ -405,7 +405,7 @@ export default function SettingsScreen({ navigation }: Props) {
   );
 
   const renderAerzte = () => (
-    <SettingsCard title="Meine Ärzte" subtitle="Kontaktdaten für Rezept, Urlaub und Rückfragen.">
+    <SettingsCard title="Meine Ärzte" subtitle="Hinterlege Kontaktdaten deiner Ärzte.">
       <SettingsRow
         icon="＋"
         title="Arzt hinzufügen"
@@ -576,6 +576,11 @@ export default function SettingsScreen({ navigation }: Props) {
           <SettingsRow icon="✉" title="Kontakt" value="E-Mail" subtitle="kontakt@serverraum247.dev" onPress={handleSupportMail} />
           <SettingsRow icon="!" title="Problem melden" value="Mail" subtitle="Öffnet eine E-Mail mit Geräte- und Versionsdaten." onPress={handleProblemMail} />
           <SettingsRow icon="💡" title="Verbesserung vorschlagen" value="Mail" onPress={handleFeatureMail} />
+        </SettingsCard>
+        <SettingsCard title="Anbieter">
+          <SettingsRow icon="i" title="Serverraum247" subtitle="Kontakt & Support" value="Support" />
+          <SettingsRow icon="i" title="App-Version" value={APP_VERSION} />
+          <SettingsRow icon="i" title="Systemversion" value={String(Platform.Version)} />
         </SettingsCard>
         <View style={styles.disclaimerSection} accessibilityRole="summary" accessibilityLabel="Wichtiger Hinweis zur Medikamenteneinnahme">
           <Text style={styles.disclaimerTitle}>Wichtiger Hinweis</Text>

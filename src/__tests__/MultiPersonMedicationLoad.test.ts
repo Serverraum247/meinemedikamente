@@ -136,6 +136,7 @@ function medication(overrides: Partial<MedikamentRow>): MedikamentRow {
     erinnerung_aktiv: 1,
     einnahme_uhrzeiten: JSON.stringify([{ slot: 'morgens', uhrzeit: '08:00', dosis: 1 }]),
     auto_abzug_aktiv: 1,
+    fruehe_einnahme_erlaubt: 1,
     arzt_id: '',
     staerke_wert: 5,
     staerke_einheit: 'mg',

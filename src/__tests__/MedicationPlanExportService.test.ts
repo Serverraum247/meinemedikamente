@@ -45,6 +45,7 @@ function medication(overrides: Partial<MedikamentRow> = {}): MedikamentRow {
       { slot: 'abends', uhrzeit: '20:00', dosis: 1 },
     ]),
     auto_abzug_aktiv: 1,
+    fruehe_einnahme_erlaubt: 1,
     arzt_id: doctor.id,
     staerke_wert: 5,
     staerke_einheit: 'mg',
