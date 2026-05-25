@@ -89,9 +89,19 @@ export async function createArzt(
   const id = generateUUID();
 
   await db.executeSql(
-    `INSERT INTO aerzte (id, name, telefon, email, adresse, fachgebiet)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-    [id, data.name, data.telefon || '', data.email || '', data.adresse || '', data.fachgebiet || '']
+    `INSERT INTO aerzte (id, name, telefon, email, adresse, plz, ort, land, fachgebiet)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      id,
+      data.name,
+      data.telefon || '',
+      data.email || '',
+      data.adresse || '',
+      data.plz || '',
+      data.ort || '',
+      data.land || 'Deutschland',
+      data.fachgebiet || '',
+    ]
   );
 
   return { success: true, id };
@@ -112,6 +122,9 @@ export async function updateArzt(
   if (data.telefon !== undefined) { fields.push('telefon = ?'); values.push(data.telefon); }
   if (data.email !== undefined) { fields.push('email = ?'); values.push(data.email); }
   if (data.adresse !== undefined) { fields.push('adresse = ?'); values.push(data.adresse); }
+  if (data.plz !== undefined) { fields.push('plz = ?'); values.push(data.plz); }
+  if (data.ort !== undefined) { fields.push('ort = ?'); values.push(data.ort); }
+  if (data.land !== undefined) { fields.push('land = ?'); values.push(data.land); }
   if (data.fachgebiet !== undefined) { fields.push('fachgebiet = ?'); values.push(data.fachgebiet); }
 
   if (fields.length === 0) return;

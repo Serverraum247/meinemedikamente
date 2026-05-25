@@ -36,6 +36,9 @@ const doctor: ArztRow = {
   telefon: '',
   email: '',
   adresse: '',
+  plz: '',
+  ort: '',
+  land: 'Deutschland',
   fachgebiet: 'Hausarzt',
   created_at: '',
 };

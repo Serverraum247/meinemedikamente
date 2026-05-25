@@ -4,7 +4,18 @@ import { Alert } from 'react-native';
 import SettingsScreen from '../screens/SettingsScreen';
 import { getAllAerzte, getMaxAerzte } from '../database/ArztController';
 
-let mockAerzte: Array<{ id: string; name: string; telefon: string; email: string; adresse: string; fachgebiet: string; created_at: string }> = [];
+let mockAerzte: Array<{
+  id: string;
+  name: string;
+  telefon: string;
+  email: string;
+  adresse: string;
+  plz: string;
+  ort: string;
+  land: string;
+  fachgebiet: string;
+  created_at: string;
+}> = [];
 
 jest.mock('../context/PersonenContext', () => ({
   usePersonen: () => ({
@@ -143,6 +154,23 @@ describe('SettingsScreen', () => {
     expect(text).not.toContain('Kostenlos: 1 Arzt. Premium = unbegrenzt.');
   });
 
+  it('shows structured doctor address fields including country', async () => {
+    (getMaxAerzte as jest.Mock).mockResolvedValue(2);
+    const tree = await renderScreen();
+    await openTab(tree, 'Medikamente');
+
+    await ReactTestRenderer.act(async () => {
+      tree.root.findByProps({ accessibilityLabel: 'Arzt hinzufügen' }).props.onPress();
+      await Promise.resolve();
+    });
+
+    const text = flattenText(tree.toJSON());
+    expect(text).toContain('PLZ');
+    expect(text).toContain('Ort');
+    expect(text).toContain('Land');
+    expect(tree.root.findByProps({ placeholder: 'Deutschland' }).props.value).toBe('Deutschland');
+  });
+
   it('shows the unified premium dialog only when adding another doctor exceeds the free limit', async () => {
     mockAerzte = [{
       id: 'arzt-1',
@@ -150,6 +178,9 @@ describe('SettingsScreen', () => {
       telefon: '',
       email: '',
       adresse: '',
+      plz: '',
+      ort: '',
+      land: 'Deutschland',
       fachgebiet: 'Hausarzt',
       created_at: '',
     }];

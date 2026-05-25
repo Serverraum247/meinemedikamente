@@ -170,6 +170,9 @@ const ArztUrlaubScreen: React.FC<ArztUrlaubScreenProps> = ({ navigation }) => {
       telefon: neuArztTelefon.trim(),
       email: neuArztEmail.trim(),
       adresse: '',
+      plz: '',
+      ort: '',
+      land: 'Deutschland',
       fachgebiet: neuArztFachgebiet.trim(),
     });
     if (!result.success) {

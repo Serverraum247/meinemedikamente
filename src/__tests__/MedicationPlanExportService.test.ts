@@ -21,7 +21,10 @@ const doctor: ArztRow = {
   name: 'Dr. Müller',
   telefon: '0681 123456',
   email: 'praxis@example.de',
-  adresse: 'Saarbrücken',
+  adresse: 'Musterstraße 1',
+  plz: '66111',
+  ort: 'Saarbrücken',
+  land: 'Deutschland',
   fachgebiet: 'Hausarzt',
   created_at: '2026-05-10T10:00:00.000Z',
 };
@@ -78,7 +81,7 @@ describe('MedicationPlanExportService', () => {
     expect(exportPlan.text).toContain('Morgens 08:00 Uhr: 0,5 Tabletten (Mo, Mi, Fr)');
     expect(exportPlan.text).toContain('Abends 20:00 Uhr: 1 Tabletten (täglich)');
     expect(exportPlan.text).toContain('PZN: 12345678');
-    expect(exportPlan.text).toContain('Arzt: Dr. Müller, Hausarzt, Tel. 0681 123456, E-Mail praxis@example.de');
+    expect(exportPlan.text).toContain('Arzt: Dr. Müller, Hausarzt, Tel. 0681 123456, E-Mail praxis@example.de, Musterstraße 1, 66111 Saarbrücken, Deutschland');
     expect(exportPlan.text).toContain('Dieser Plan ersetzt keine ärztliche oder pharmazeutische Beratung.');
     expect(exportPlan.text).not.toContain('Fremdes Medikament');
   });

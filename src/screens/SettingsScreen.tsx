@@ -177,7 +177,18 @@ export default function SettingsScreen({ navigation }: Props) {
       return;
     }
     setNeuerArzt(true);
-    setEditArzt({ id: '', name: '', telefon: '', email: '', adresse: '', fachgebiet: '', created_at: '' });
+    setEditArzt({
+      id: '',
+      name: '',
+      telefon: '',
+      email: '',
+      adresse: '',
+      plz: '',
+      ort: '',
+      land: 'Deutschland',
+      fachgebiet: '',
+      created_at: '',
+    });
   };
 
   const handleSaveArzt = async () => {
@@ -193,6 +204,9 @@ export default function SettingsScreen({ navigation }: Props) {
           telefon: editArzt.telefon.trim(),
           email: editArzt.email.trim(),
           adresse: editArzt.adresse.trim(),
+          plz: editArzt.plz.trim(),
+          ort: editArzt.ort.trim(),
+          land: editArzt.land.trim() || 'Deutschland',
           fachgebiet: editArzt.fachgebiet.trim(),
         });
         if (!result.success) {
@@ -205,6 +219,9 @@ export default function SettingsScreen({ navigation }: Props) {
           telefon: editArzt.telefon.trim(),
           email: editArzt.email.trim(),
           adresse: editArzt.adresse.trim(),
+          plz: editArzt.plz.trim(),
+          ort: editArzt.ort.trim(),
+          land: editArzt.land.trim() || 'Deutschland',
           fachgebiet: editArzt.fachgebiet.trim(),
         });
       }
@@ -232,6 +249,11 @@ export default function SettingsScreen({ navigation }: Props) {
         },
       ],
     );
+  };
+
+  const formatArztAdresse = (arzt: ArztRow): string => {
+    const ortZeile = [arzt.plz?.trim(), arzt.ort?.trim()].filter(Boolean).join(' ');
+    return [arzt.adresse?.trim(), ortZeile, arzt.land?.trim()].filter(Boolean).join(', ');
   };
 
   const openPreparedMail = async (subject: string, intro = '') => {
@@ -420,7 +442,7 @@ export default function SettingsScreen({ navigation }: Props) {
             {arzt.fachgebiet ? <Text style={styles.arztDetail}>{arzt.fachgebiet}</Text> : null}
             {arzt.telefon ? <Text style={styles.arztDetail}>Telefon: {arzt.telefon}</Text> : null}
             {arzt.email ? <Text style={styles.arztDetail}>E-Mail: {arzt.email}</Text> : null}
-            {arzt.adresse ? <Text style={styles.arztDetail}>{arzt.adresse}</Text> : null}
+            {formatArztAdresse(arzt) ? <Text style={styles.arztDetail}>{formatArztAdresse(arzt)}</Text> : null}
           </View>
           <View style={styles.arztActions}>
             <TouchableOpacity onPress={() => { setNeuerArzt(false); setEditArzt({ ...arzt }); }} accessibilityLabel={`${arzt.name} bearbeiten`}>
@@ -444,7 +466,19 @@ export default function SettingsScreen({ navigation }: Props) {
           <Text style={styles.fieldLabel}>E-Mail</Text>
           <TextInput style={styles.fieldInput} value={editArzt.email} onChangeText={(t: string) => setEditArzt({ ...editArzt, email: t })} placeholder="praxis@example.de" placeholderTextColor="#999" keyboardType="email-address" autoCapitalize="none" autoCorrect={false} />
           <Text style={styles.fieldLabel}>Adresse</Text>
-          <TextInput style={styles.fieldInput} value={editArzt.adresse} onChangeText={(t: string) => setEditArzt({ ...editArzt, adresse: t })} placeholder="Musterstraße 1, 66111 Saarbrücken" placeholderTextColor="#999" />
+          <TextInput style={styles.fieldInput} value={editArzt.adresse} onChangeText={(t: string) => setEditArzt({ ...editArzt, adresse: t })} placeholder="Musterstraße 1" placeholderTextColor="#999" />
+          <View style={styles.arztAddressRow}>
+            <View style={styles.arztAddressZip}>
+              <Text style={styles.fieldLabel}>PLZ</Text>
+              <TextInput style={styles.fieldInput} value={editArzt.plz} onChangeText={(t: string) => setEditArzt({ ...editArzt, plz: t })} placeholder="66111" placeholderTextColor="#999" keyboardType="numbers-and-punctuation" />
+            </View>
+            <View style={styles.arztAddressCity}>
+              <Text style={styles.fieldLabel}>Ort</Text>
+              <TextInput style={styles.fieldInput} value={editArzt.ort} onChangeText={(t: string) => setEditArzt({ ...editArzt, ort: t })} placeholder="Saarbrücken" placeholderTextColor="#999" />
+            </View>
+          </View>
+          <Text style={styles.fieldLabel}>Land</Text>
+          <TextInput style={styles.fieldInput} value={editArzt.land} onChangeText={(t: string) => setEditArzt({ ...editArzt, land: t })} placeholder="Deutschland" placeholderTextColor="#999" />
           <View style={styles.arztFormButtons}>
             <TouchableOpacity style={[styles.arztFormBtn, styles.arztFormCancel]} onPress={() => { setEditArzt(null); setNeuerArzt(false); }}>
               <Text style={styles.arztFormCancelText}>Abbrechen</Text>
@@ -1113,6 +1147,16 @@ const styles = StyleSheet.create({
     color: '#1a1a2e',
     borderWidth: 1,
     borderColor: '#e0e0e0',
+  },
+  arztAddressRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  arztAddressZip: {
+    flex: 0.8,
+  },
+  arztAddressCity: {
+    flex: 1.4,
   },
   arztFormButtons: {
     flexDirection: 'row',

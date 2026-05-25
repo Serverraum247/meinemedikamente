@@ -13,7 +13,7 @@ SQLite.DEBUG(true);
 SQLite.enablePromise(true);
 
 const DATABASE_NAME = 'meine_medikamente.db';
-const DATABASE_VERSION = 15; // V15: Fruehe Einnahme pro Medikament steuerbar
+const DATABASE_VERSION = 16; // V16: Arztadresse um PLZ, Ort und Land erweitert
 
 export interface MedikamentRow {
   id: string;
@@ -66,6 +66,9 @@ export interface ArztRow {
   telefon: string;       // Telefonnummer
   email: string;          // E-Mail-Adresse der Praxis
   adresse: string;       // Adresse (optional)
+  plz: string;            // Postleitzahl (optional)
+  ort: string;            // Ort (optional)
+  land: string;           // Land, z.B. Deutschland, Frankreich
   fachgebiet: string;    // Fachgebiet (optional)
   created_at: string;
 }
@@ -185,6 +188,9 @@ class Database {
         telefon     TEXT NOT NULL DEFAULT '',
         email       TEXT NOT NULL DEFAULT '',
         adresse     TEXT NOT NULL DEFAULT '',
+        plz         TEXT NOT NULL DEFAULT '',
+        ort         TEXT NOT NULL DEFAULT '',
+        land        TEXT NOT NULL DEFAULT 'Deutschland',
         fachgebiet  TEXT NOT NULL DEFAULT '',
         created_at  TEXT NOT NULL DEFAULT (datetime('now'))
       );
@@ -244,6 +250,7 @@ class Database {
     await this.migrateV12toV13();
     await this.migrateV13toV14();
     await this.migrateV14toV15();
+    await this.migrateV15toV16();
   }
 
   /**
@@ -414,6 +421,9 @@ class Database {
           telefon     TEXT NOT NULL DEFAULT '',
           email       TEXT NOT NULL DEFAULT '',
           adresse     TEXT NOT NULL DEFAULT '',
+          plz         TEXT NOT NULL DEFAULT '',
+          ort         TEXT NOT NULL DEFAULT '',
+          land        TEXT NOT NULL DEFAULT 'Deutschland',
           fachgebiet  TEXT NOT NULL DEFAULT '',
           created_at  TEXT NOT NULL DEFAULT (datetime('now'))
         );
@@ -608,6 +618,31 @@ class Database {
         `ALTER TABLE medikamente ADD COLUMN fruehe_einnahme_erlaubt INTEGER NOT NULL DEFAULT 1;`
       );
       logger.log('[DB] Migration V14->V15: fruehe_einnahme_erlaubt Spalte hinzugefuegt');
+    }
+  }
+
+  /**
+   * Migration V15 -> V16: Arztadresse strukturiert speichern.
+   */
+  private async migrateV15toV16(): Promise<void> {
+    const arztCols = await this.getColumnNames('aerzte');
+    if (!arztCols.includes('plz')) {
+      await this.db!.executeSql(
+        `ALTER TABLE aerzte ADD COLUMN plz TEXT NOT NULL DEFAULT '';`
+      );
+      logger.log('[DB] Migration V15->V16: plz Spalte in aerzte hinzugefuegt');
+    }
+    if (!arztCols.includes('ort')) {
+      await this.db!.executeSql(
+        `ALTER TABLE aerzte ADD COLUMN ort TEXT NOT NULL DEFAULT '';`
+      );
+      logger.log('[DB] Migration V15->V16: ort Spalte in aerzte hinzugefuegt');
+    }
+    if (!arztCols.includes('land')) {
+      await this.db!.executeSql(
+        `ALTER TABLE aerzte ADD COLUMN land TEXT NOT NULL DEFAULT 'Deutschland';`
+      );
+      logger.log('[DB] Migration V15->V16: land Spalte in aerzte hinzugefuegt');
     }
   }
 }

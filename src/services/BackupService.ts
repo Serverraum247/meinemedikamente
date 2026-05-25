@@ -56,7 +56,7 @@ export interface BackupData {
 async function exportLocalData(): Promise<BackupData> {
   const db = await getDatabase();
   
-  const tables = ['medikamente', 'packungen', 'einnahmen', 'einnahmeplan', 'arzt_urlaub', 'einstellungen', 'pzn_cache'];
+  const tables = ['medikamente', 'packungen', 'einnahmen', 'einnahmeplan', 'arzt_urlaub', 'aerzte', 'einstellungen', 'pzn_cache'];
   const data: any = {};
   
   for (const table of tables) {
@@ -86,7 +86,7 @@ async function importLocalData(backupData: BackupData): Promise<number> {
   let medCount = 0;
   
   // Reihenfolge wichtig: Abhaengigkeiten zuerst leeren
-  for (const table of ['einstellungen', 'pzn_cache', 'einnahmen', 'einnahmeplan', 'arzt_urlaub', 'packungen', 'medikamente']) {
+  for (const table of ['einstellungen', 'pzn_cache', 'einnahmen', 'einnahmeplan', 'arzt_urlaub', 'aerzte', 'packungen', 'medikamente']) {
     const rows = (backupData as any)[table] || [];
     if (rows.length === 0) continue;
     

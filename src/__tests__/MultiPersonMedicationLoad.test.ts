@@ -115,6 +115,9 @@ function doctor(id: string, name: string): ArztRow {
     telefon: '0681 123456',
     email: 'praxis@example.de',
     adresse: '',
+    plz: '',
+    ort: '',
+    land: 'Deutschland',
     fachgebiet: 'Hausarzt',
     created_at: '2026-05-14T10:00:00.000Z',
   };

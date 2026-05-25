@@ -118,11 +118,14 @@ function formatWochentage(slot: EinnahmeSlot): string {
 }
 
 function formatDoctor(doctor: ArztRow): string {
+  const place = [doctor.plz?.trim(), doctor.ort?.trim()].filter(Boolean).join(' ');
+  const address = [doctor.adresse?.trim(), place, doctor.land?.trim()].filter(Boolean).join(', ');
   return [
     doctor.name.trim(),
     doctor.fachgebiet.trim(),
     doctor.telefon.trim() ? `Tel. ${doctor.telefon.trim()}` : '',
     doctor.email.trim() ? `E-Mail ${doctor.email.trim()}` : '',
+    address,
   ].filter(Boolean).join(', ');
 }
 
