@@ -17,6 +17,7 @@
 import CloudKit
 import Foundation
 import UIKit
+import VisionKit
 
 @objc(CloudKitBackup)
 class CloudKitBackup: NSObject {
@@ -172,6 +173,186 @@ class CloudKitBackup: NSObject {
 
   @objc static func requiresMainQueueSetup() -> Bool {
     return false
+  }
+}
+
+@objc(MedicationVisionScanner)
+class MedicationVisionScanner: NSObject {
+
+  private var resolve: RCTPromiseResolveBlock?
+  private var reject: RCTPromiseRejectBlock?
+  private var scanner: Any?
+  private var recognizedTexts = Set<String>()
+  private var recognizedBarcode: String?
+
+  @objc static func requiresMainQueueSetup() -> Bool {
+    return true
+  }
+
+  @objc func scanMedicationPackage(_ resolve: @escaping RCTPromiseResolveBlock,
+                                    rejecter reject: @escaping RCTPromiseRejectBlock) {
+    DispatchQueue.main.async {
+      guard #available(iOS 16.0, *) else {
+        reject("VISION_SCANNER_UNAVAILABLE", "Apple Vision Scan benoetigt iOS 16 oder neuer.", nil)
+        return
+      }
+
+      guard DataScannerViewController.isSupported else {
+        reject("VISION_SCANNER_UNSUPPORTED", "Dieses iPhone unterstuetzt den Apple Vision Scanner nicht.", nil)
+        return
+      }
+
+      guard DataScannerViewController.isAvailable else {
+        reject("VISION_SCANNER_NOT_AVAILABLE", "Kamera-Zugriff ist nicht verfuegbar oder nicht erlaubt.", nil)
+        return
+      }
+
+      guard let presenter = RCTPresentedViewController() else {
+        reject("VISION_SCANNER_PRESENT_ERROR", "Kein aktives Fenster zum Scannen gefunden.", nil)
+        return
+      }
+
+      self.resolve = resolve
+      self.reject = reject
+      self.recognizedTexts.removeAll()
+      self.recognizedBarcode = nil
+
+      let controller = DataScannerViewController(
+        recognizedDataTypes: [
+          .barcode(symbologies: [.ean13, .ean8, .code39, .code128, .qr]),
+          .text(languages: ["de-DE", "en-US"], textContentType: nil)
+        ],
+        qualityLevel: .balanced,
+        recognizesMultipleItems: true,
+        isHighFrameRateTrackingEnabled: false,
+        isPinchToZoomEnabled: true,
+        isGuidanceEnabled: true,
+        isHighlightingEnabled: true
+      )
+      controller.delegate = self
+
+      let navigationController = UINavigationController(rootViewController: controller)
+      navigationController.modalPresentationStyle = .fullScreen
+      controller.title = "Packung scannen"
+      controller.navigationItem.leftBarButtonItem = UIBarButtonItem(
+        title: "Abbrechen",
+        style: .plain,
+        target: self,
+        action: #selector(self.cancelScan)
+      )
+      controller.navigationItem.rightBarButtonItem = UIBarButtonItem(
+        title: "Übernehmen",
+        style: .done,
+        target: self,
+        action: #selector(self.finishScan)
+      )
+
+      self.scanner = controller
+	    presenter.present(navigationController, animated: true) {
+	        do {
+	          try controller.startScanning()
+	        } catch {
+	          Task { @MainActor in
+	            self.cleanupAndDismiss(controller)
+	          }
+	          reject("VISION_SCANNER_START_ERROR", "Scan konnte nicht gestartet werden: \(error.localizedDescription)", error)
+	        }
+	      }
+	    }
+	  }
+
+	  @objc private func cancelScan() {
+	    guard resolve != nil else { return }
+	    guard #available(iOS 16.0, *), let controller = scanner as? DataScannerViewController else {
+	      cleanup()
+	      return
+	    }
+	    Task { @MainActor in
+	      cleanupAndDismiss(controller)
+	      resolve?(["cancelled": true])
+	      cleanup()
+	    }
+	  }
+
+	  @objc private func finishScan() {
+	    guard resolve != nil else { return }
+	    guard #available(iOS 16.0, *), let controller = scanner as? DataScannerViewController else {
+	      resolve?(buildResult())
+	      cleanup()
+	      return
+	    }
+	    let result = buildResult()
+	    Task { @MainActor in
+	      cleanupAndDismiss(controller)
+	      resolve?(result)
+	      cleanup()
+	    }
+	  }
+
+  private func buildResult() -> [String: Any] {
+    return [
+      "barcode": recognizedBarcode ?? "",
+      "textLines": Array(recognizedTexts).sorted(),
+      "text": Array(recognizedTexts).sorted().joined(separator: "\n")
+    ]
+  }
+
+  @available(iOS 16.0, *)
+  @MainActor
+  private func cleanupAndDismiss(_ controller: DataScannerViewController) {
+    controller.stopScanning()
+    controller.dismiss(animated: true)
+  }
+
+  private func cleanup() {
+    resolve = nil
+    reject = nil
+    scanner = nil
+    recognizedTexts.removeAll()
+    recognizedBarcode = nil
+  }
+}
+
+@available(iOS 16.0, *)
+extension MedicationVisionScanner: DataScannerViewControllerDelegate {
+  func dataScanner(_ dataScanner: DataScannerViewController,
+                   didAdd addedItems: [RecognizedItem],
+                   allItems: [RecognizedItem]) {
+    collect(items: allItems)
+  }
+
+  func dataScanner(_ dataScanner: DataScannerViewController,
+                   didUpdate updatedItems: [RecognizedItem],
+                   allItems: [RecognizedItem]) {
+    collect(items: allItems)
+  }
+
+  func dataScanner(_ dataScanner: DataScannerViewController,
+                   didTapOn item: RecognizedItem) {
+    collect(items: [item])
+    if recognizedBarcode != nil {
+      finishScan()
+    }
+  }
+
+  private func collect(items: [RecognizedItem]) {
+    for item in items {
+      switch item {
+      case .barcode(let barcode):
+        if let value = barcode.payloadStringValue, !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+          recognizedBarcode = value
+          finishScan()
+          return
+        }
+      case .text(let text):
+        let value = text.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !value.isEmpty {
+          recognizedTexts.insert(value)
+        }
+      @unknown default:
+        continue
+      }
+    }
   }
 }
 

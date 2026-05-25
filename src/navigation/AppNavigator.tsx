@@ -23,7 +23,13 @@ import DatenschutzRechtScreen from '../screens/DatenschutzRechtScreen';
 export type RootStackParamList = {
   Home: undefined;
   MedikamentDetail: { medikamentId: string };
-  AddMedikament: { scannedPZN?: string; suggestedName?: string } | undefined;
+  AddMedikament: {
+    scannedPZN?: string;
+    suggestedName?: string;
+    suggestedActiveIngredient?: string;
+    suggestedStrengthValue?: string;
+    suggestedStrengthUnit?: string;
+  } | undefined;
   EditMedikament: { medikamentId: string };
   BarcodeScanner: undefined;
   Nachkauf: { medikamentId: string };

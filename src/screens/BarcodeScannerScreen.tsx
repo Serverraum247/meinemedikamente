@@ -15,6 +15,8 @@ import {
   StyleSheet,
   Alert,
   ActivityIndicator,
+  NativeModules,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Camera } from 'react-native-camera-kit';
@@ -24,10 +26,21 @@ import { normalizePzn, validatePZN } from '../services/BarcodeScannerService';
 import { canScanBarcode, recordBarcodeScan } from '../services/PremiumService';
 import { lookupPzn } from '../services/PznLookupService';
 import { showPremiumRequiredAlert } from '../utils/PremiumAlerts';
+import {
+  buildMedicationScanSuggestion,
+  type MedicationNativeScanResult,
+  type MedicationScanSuggestion,
+} from '../utils/MedicationScanSuggestions';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'BarcodeScanner'>;
 
 type TabMode = 'kamera' | 'manuell';
+
+const { MedicationVisionScanner } = NativeModules as {
+  MedicationVisionScanner?: {
+    scanMedicationPackage: () => Promise<MedicationNativeScanResult & { cancelled?: boolean }>;
+  };
+};
 
 export default function BarcodeScannerScreen({ navigation }: Props) {
   const [tab, setTab] = useState<TabMode>('kamera');
@@ -35,6 +48,7 @@ export default function BarcodeScannerScreen({ navigation }: Props) {
   const [isLookingUp, setIsLookingUp] = useState(false);
   const [lookupResult, setLookupResult] = useState<string | null>(null);
   const [hasScanned, setHasScanned] = useState(false);
+  const appleVisionAvailable = Platform.OS === 'ios' && Boolean(MedicationVisionScanner?.scanMedicationPackage);
 
   // Barcode vom Kamera-Scanner verarbeiten
   const onBarcodeScanned = async (event: any) => {
@@ -61,7 +75,7 @@ export default function BarcodeScannerScreen({ navigation }: Props) {
   };
 
   // PZN verarbeiten (Lookup + Navigation)
-  const processPzn = async (pzn: string) => {
+  const processPzn = async (pzn: string, scanSuggestion?: MedicationScanSuggestion) => {
     setIsLookingUp(true);
     setLookupResult(null);
     try {
@@ -80,6 +94,9 @@ export default function BarcodeScannerScreen({ navigation }: Props) {
                 navigation.navigate('AddMedikament', {
                   scannedPZN: pzn,
                   suggestedName: result.name,
+                  suggestedActiveIngredient: scanSuggestion?.suggestedActiveIngredient,
+                  suggestedStrengthValue: scanSuggestion?.suggestedStrengthValue,
+                  suggestedStrengthUnit: scanSuggestion?.suggestedStrengthUnit,
                 });
               },
             },
@@ -93,11 +110,82 @@ export default function BarcodeScannerScreen({ navigation }: Props) {
           ]
         );
       } else {
-        navigation.navigate('AddMedikament', { scannedPZN: pzn });
+        navigation.navigate('AddMedikament', {
+          scannedPZN: pzn,
+          suggestedName: scanSuggestion?.suggestedName,
+          suggestedActiveIngredient: scanSuggestion?.suggestedActiveIngredient,
+          suggestedStrengthValue: scanSuggestion?.suggestedStrengthValue,
+          suggestedStrengthUnit: scanSuggestion?.suggestedStrengthUnit,
+        });
       }
     } catch {
       setIsLookingUp(false);
-      navigation.navigate('AddMedikament', { scannedPZN: pzn });
+      navigation.navigate('AddMedikament', {
+        scannedPZN: pzn,
+        suggestedName: scanSuggestion?.suggestedName,
+        suggestedActiveIngredient: scanSuggestion?.suggestedActiveIngredient,
+        suggestedStrengthValue: scanSuggestion?.suggestedStrengthValue,
+        suggestedStrengthUnit: scanSuggestion?.suggestedStrengthUnit,
+      });
+    }
+  };
+
+  const handleAppleVisionScan = async () => {
+    if (!MedicationVisionScanner?.scanMedicationPackage) {
+      Alert.alert('Nicht verfügbar', 'Der Apple Vision Scanner ist auf diesem Gerät nicht verfügbar.');
+      return;
+    }
+
+    const { allowed } = await canScanBarcode();
+    if (!allowed) {
+      showPremiumRequiredAlert('Mehr als 3 Barcode-Scans pro Tag sind nur mit Premium möglich.', navigation);
+      return;
+    }
+
+    setIsLookingUp(true);
+    try {
+      const nativeResult = await MedicationVisionScanner.scanMedicationPackage();
+      setIsLookingUp(false);
+      if (nativeResult.cancelled) return;
+
+      await recordBarcodeScan();
+      const suggestion = buildMedicationScanSuggestion(nativeResult);
+
+      if (suggestion.scannedPZN) {
+        await processPzn(suggestion.scannedPZN, suggestion);
+        return;
+      }
+
+      if (suggestion.suggestedName || suggestion.suggestedActiveIngredient || suggestion.suggestedStrengthValue) {
+        Alert.alert(
+          'Vorschlag erkannt',
+          [
+            suggestion.suggestedName ? `Name: ${suggestion.suggestedName}` : null,
+            suggestion.suggestedActiveIngredient ? `Wirkstoff: ${suggestion.suggestedActiveIngredient}` : null,
+            suggestion.suggestedStrengthValue && suggestion.suggestedStrengthUnit
+              ? `Stärke: ${suggestion.suggestedStrengthValue} ${suggestion.suggestedStrengthUnit}`
+              : null,
+          ].filter(Boolean).join('\n'),
+          [
+            { text: 'Abbrechen', style: 'cancel' },
+            {
+              text: 'Übernehmen',
+              onPress: () => navigation.navigate('AddMedikament', {
+                suggestedName: suggestion.suggestedName,
+                suggestedActiveIngredient: suggestion.suggestedActiveIngredient,
+                suggestedStrengthValue: suggestion.suggestedStrengthValue,
+                suggestedStrengthUnit: suggestion.suggestedStrengthUnit,
+              }),
+            },
+          ],
+        );
+        return;
+      }
+
+      Alert.alert('Nichts erkannt', 'Es wurde kein Barcode und kein klarer Medikamentenname erkannt. Bitte versuche es erneut oder gib die PZN manuell ein.');
+    } catch (error) {
+      setIsLookingUp(false);
+      Alert.alert('Scan nicht möglich', error instanceof Error ? error.message : 'Der Apple Vision Scan konnte nicht gestartet werden.');
     }
   };
 
@@ -172,19 +260,43 @@ export default function BarcodeScannerScreen({ navigation }: Props) {
       {/* Kamera-Modus */}
       {tab === 'kamera' && (
         <View style={styles.cameraContainer}>
-          <Camera
-            scanBarcode={true}
-            onReadCode={onBarcodeScanned}
-            showFrame={true}
-            laserColor="#27ae60"
-            frameColor="#FFFFFF"
-            style={styles.camera}
-          />
-          <View style={styles.scanHint}>
-            <Text style={styles.scanHintText}>
-              Halte den Barcode vor die Kamera
-            </Text>
-          </View>
+          {appleVisionAvailable ? (
+            <View style={styles.appleVisionBox}>
+              <Text style={styles.appleVisionTitle}>Packung oder Barcode scannen</Text>
+              <Text style={styles.appleVisionText}>
+                Erkennt Barcodes, PZN und Text auf Packung oder Blister. Name, Wirkstoff und Stärke werden nur vorgeschlagen.
+              </Text>
+              <TouchableOpacity
+                style={styles.appleVisionButton}
+                onPress={handleAppleVisionScan}
+                accessibilityRole="button"
+                accessibilityLabel="Apple Vision Scan starten"
+                disabled={isLookingUp}
+              >
+                {isLookingUp ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.appleVisionButtonText}>Scan starten</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <>
+              <Camera
+                scanBarcode={true}
+                onReadCode={onBarcodeScanned}
+                showFrame={true}
+                laserColor="#27ae60"
+                frameColor="#FFFFFF"
+                style={styles.camera}
+              />
+              <View style={styles.scanHint}>
+                <Text style={styles.scanHintText}>
+                  Halte den Barcode vor die Kamera
+                </Text>
+              </View>
+            </>
+          )}
           {isLookingUp && (
             <View style={styles.loadingOverlay}>
               <ActivityIndicator size="large" color="#27ae60" />
@@ -304,6 +416,39 @@ const styles = StyleSheet.create({
   },
   camera: {
     flex: 1,
+  },
+  appleVisionBox: {
+    flex: 1,
+    justifyContent: 'center',
+    padding: 24,
+    backgroundColor: '#f8f8f6',
+  },
+  appleVisionTitle: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#1a1a2e',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  appleVisionText: {
+    fontSize: 20,
+    lineHeight: 28,
+    color: '#4b5563',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  appleVisionButton: {
+    backgroundColor: '#1a1a2e',
+    borderRadius: 16,
+    padding: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 68,
+  },
+  appleVisionButtonText: {
+    color: '#fff',
+    fontSize: 24,
+    fontWeight: '800',
   },
   scanHint: {
     position: 'absolute',

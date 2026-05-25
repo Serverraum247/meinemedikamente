@@ -162,13 +162,36 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
   React.useEffect(() => {
     const scannedPZN = route.params?.scannedPZN;
     const suggestedName = route.params?.suggestedName;
+    const suggestedActiveIngredient = route.params?.suggestedActiveIngredient;
+    const suggestedStrengthValue = route.params?.suggestedStrengthValue;
+    const suggestedStrengthUnit = route.params?.suggestedStrengthUnit;
     if (scannedPZN && !pzn) {
       setPzn(scannedPZN);
     }
     if (suggestedName && !name) {
       setName(suggestedName);
     }
-  }, [route.params?.scannedPZN, route.params?.suggestedName]);
+    if (suggestedActiveIngredient && !zusatz) {
+      setZusatz(suggestedActiveIngredient);
+    }
+    if (suggestedStrengthValue && !staerkeWert) {
+      setStaerkeWert(suggestedStrengthValue);
+    }
+    if (suggestedStrengthUnit && !staerkeEinheit) {
+      setStaerkeEinheit(suggestedStrengthUnit);
+    }
+  }, [
+    name,
+    pzn,
+    route.params?.scannedPZN,
+    route.params?.suggestedActiveIngredient,
+    route.params?.suggestedName,
+    route.params?.suggestedStrengthUnit,
+    route.params?.suggestedStrengthValue,
+    staerkeEinheit,
+    staerkeWert,
+    zusatz,
+  ]);
 
   React.useEffect(() => {
     if (shouldAutoEnableStockDeduction(erinnerungAktiv, bestand)) {
