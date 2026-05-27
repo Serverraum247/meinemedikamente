@@ -22,7 +22,12 @@
     "test": "jest",
     "typecheck": "tsc --noEmit --pretty false --skipLibCheck",
     "verify": "npm run lint && npm run typecheck && npm test -- --runInBand --forceExit",
-    "verify:prod": "npm run e2e:doctor && npm run typecheck && npm test -- --runInBand --forceExit"
+    "verify:prod": "npm run e2e:doctor && npm run typecheck && npm test -- --runInBand --forceExit",
+    "doctor:build": "bash scripts/doctor-build-env.sh",
+    "rn:config:check": "bash scripts/doctor-build-env.sh",
+    "android:internal:build": "bash scripts/build-android-internal.sh",
+    "ios:internal:build": "bash scripts/build-ios-internal.sh",
+    "deploy:devices": "bash scripts/deploy-connected-devices.sh"
   },
   "dependencies": {
     "@notifee/react-native": "^9.1.8",

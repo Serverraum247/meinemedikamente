@@ -7,13 +7,26 @@ This app keeps one shared functional target for Android and iOS. New features, b
 Run these checks before release work:
 
 ```bash
+npm run doctor:build
 npm run e2e:doctor
 npm run lint
 npm run typecheck
 npm test -- --runInBand --forceExit
 ```
 
-For native build confidence:
+`doctor:build` is the fail-fast gate for native deploy work. It checks the local toolchain, attached Android/iOS device visibility, React Native config/autolinking health, and duplicate Git branch ref files before Gradle or Xcode are allowed to spend minutes in a build.
+
+For native build confidence and device installation, use the project harness:
+
+```bash
+npm run android:internal:build
+npm run ios:internal:build
+npm run deploy:devices
+```
+
+The internal build scripts write full logs to `/tmp/meinmediplan-android-internal-build.log` and `/tmp/meinmediplan-ios-internal-build.log`. On failure they print the last relevant lines, so the next action is visible without scrolling through a full native build.
+
+The lower-level manual commands remain useful when isolating platform-specific signing or Gradle/Xcode issues:
 
 ```bash
 xcodebuild -workspace ios/MeineMedikamente.xcworkspace -scheme MeineMedikamente -configuration Debug -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO SKIP_BUNDLING=1 build
@@ -21,6 +34,22 @@ cd android && JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-17.jdk/Content
 ```
 
 Android builds should use JDK 17 locally. JDK 25 can fail React Native native/CMake setup with Java restricted-method warnings.
+
+## Native Harness Rules
+
+Native builds must not be started directly when `npm run doctor:build` fails. The most expensive current failure mode is a hanging `react-native config` call inside React Native autolinking. Android reaches this path through Gradle settings autolinking; iOS reaches it during React Native bundling. The probe script `scripts/rn-config-probe.js` prints the dependency it is checking before touching its platform config, so a hang points at the last printed native package instead of a black-box Gradle/Xcode timeout.
+
+If the doctor reports duplicate Git ref files such as `.git/refs/heads/... 2`, inspect the normal ref and the duplicate before removing only the duplicated `* 2` file. This prevents failed rebase/push cycles caused by stale local refs.
+
+Recommended day-to-day loop:
+
+```bash
+npm run typecheck
+npm run static:quality
+npm run doctor:build
+```
+
+Only after these are clean should a local device build or deploy be started.
 
 ## End-to-End Tests
 

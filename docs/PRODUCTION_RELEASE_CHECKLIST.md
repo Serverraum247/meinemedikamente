@@ -1,6 +1,6 @@
 # Mein MediPlan - Produktionsgang Android
 
-Stand: 2026-05-10
+Stand: 2026-05-27
 
 Diese Checkliste trennt lokale technische Vorbereitung von Schritten, die nur in der Google Play Console oder organisatorisch erledigt werden koennen.
 
@@ -153,7 +153,9 @@ Offizielle Referenz: https://support.google.com/googleplay/android-developer/ans
 
 ## Vor jedem Release
 
+- [ ] `npm run doctor:build`
 - [ ] `npm run lint`
+- [ ] `npm run typecheck`
 - [ ] `npm test -- --runInBand --forceExit`
 - [ ] `npm audit`
 - [ ] `npm run android:bundle:play`
@@ -167,6 +169,17 @@ Offizielle Referenz: https://support.google.com/googleplay/android-developer/ans
 - [ ] Medikamentenvarianten testen: Tabletten, Flüssigkeit/ml, Hübe, Mo/Mi/Fr, nur 3 Einnahmetage.
 - [ ] Senioren-UI-Check auf echtem Android-Geraet.
 - [ ] Haftungsausschluss, Kontakt und Datenschutzerklaerung in der App pruefen.
+
+## Fail-Fast Build Harness
+
+Ziel: Lange Android-/iOS-Arbeit darf nicht mehr blind in Gradle oder Xcode haengen. Vor nativen Builds wird die Umgebung mit einem kurzen Doctor geprüft.
+
+- [x] `npm run doctor:build` prüft Node, npm, Java, Xcode-Tools, ADB, React-Native-Config und doppelte lokale Git-Refs.
+- [x] `npm run android:internal:build` startet erst nach erfolgreichem Doctor und schreibt ein kompaktes Fehlerlog nach `/tmp/meinmediplan-android-internal-build.log`.
+- [x] `npm run ios:internal:build` startet erst nach erfolgreichem Doctor und schreibt ein kompaktes Fehlerlog nach `/tmp/meinmediplan-ios-internal-build.log`.
+- [x] `npm run deploy:devices` installiert vorhandene interne Artefakte auf sichtbare Android-Geräte und verfügbare gekoppelte iPhones.
+- [x] React-Native-Config-Hänger über den Doctor prüfbar machen, bevor Android/iOS produktiv gebaut werden.
+- [x] Lokalen doppelten Git-Ref `codex/medication-e2e-premium-dosing 2` prüfen und bereinigen, bevor der nächste Push erfolgt.
 
 ## Nicht in Git speichern
 
