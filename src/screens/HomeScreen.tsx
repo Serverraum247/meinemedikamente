@@ -37,7 +37,7 @@ import {
   setzteLetzteErinnerung,
   type OffeneEinnahme,
 } from '../services/EinnahmeErinnerungService';
-import { einnahmeVerbuchen } from '../database/MedikamentController';
+import { DuplicateEinnahmeError, einnahmeVerbuchen } from '../database/MedikamentController';
 import EinnahmeErinnerungModal from '../components/EinnahmeErinnerungModal';
 import { logger } from '../utils/Logger';
 import { showPremiumRequiredAlert } from '../utils/PremiumAlerts';
@@ -716,16 +716,40 @@ export default function HomeScreen({ navigation }: Props) {
       {/* Einnahme-Erinnerung Modal */}
       <EinnahmeErinnerungModal
         visible={erinnerungOffen}
-        offeneEinnahmen={offeneEinnahmen}
+        offeneEinnahmen={offeneEinnahmenFuerPerson}
         onBestaetigen={async (medikamentId, dosis, slot) => {
           await einnahmeVerbuchen(medikamentId, dosis, slot);
           await refresh();
           const { offene } = await ladeEinnahmeStatus();
           setOffeneEinnahmen(offene);
-          if (offene.length === 0) {
+          const offeneIds = new Set(gefilterteMedikamente.map(medikament => medikament.id));
+          if (offene.filter(einnahme => offeneIds.has(einnahme.medikamentId)).length === 0) {
             setErinnerungOffen(false);
           }
           await setzteLetzteErinnerung();
+        }}
+        onAlleBestaetigen={async (einnahmen) => {
+          let fehlgeschlagen = false;
+          for (const einnahme of einnahmen) {
+            try {
+              await einnahmeVerbuchen(einnahme.medikamentId, einnahme.dosis, einnahme.slot);
+            } catch (error) {
+              if (!(error instanceof DuplicateEinnahmeError)) {
+                fehlgeschlagen = true;
+              }
+            }
+          }
+          await refresh();
+          const { offene } = await ladeEinnahmeStatus();
+          setOffeneEinnahmen(offene);
+          const offeneIds = new Set(gefilterteMedikamente.map(medikament => medikament.id));
+          if (offene.filter(einnahme => offeneIds.has(einnahme.medikamentId)).length === 0) {
+            setErinnerungOffen(false);
+          }
+          await setzteLetzteErinnerung();
+          if (fehlgeschlagen) {
+            throw new Error('Mindestens eine Einnahme konnte nicht bestätigt werden.');
+          }
         }}
         onSpaeter={async () => {
           setErinnerungOffen(false);

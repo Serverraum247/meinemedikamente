@@ -7,6 +7,13 @@
 
 import { database, getDatabase, MedikamentRow } from './Database';
 
+export class DuplicateEinnahmeError extends Error {
+  constructor() {
+    super('Einnahme fuer diesen Tag und diese Tageszeit ist bereits eingetragen.');
+    this.name = 'DuplicateEinnahmeError';
+  }
+}
+
 /**
  * Neues Medikament anlegen
  * aktueller_bestand und einzeldosis sind Float-Werte
@@ -111,6 +118,13 @@ export async function einnahmeVerbuchen(
   const med = await getMedikamentById(medikamentId);
   if (!med) throw new Error(`Medikament ${medikamentId} nicht gefunden`);
 
+  const db = await getDatabase();
+  const personId = med.person_id || 'person-default-001';
+  if (slot) {
+    const exists = await hasEinnahmeForLocalDate(db, medikamentId, personId, slot, "datetime('now', 'localtime')");
+    if (exists) throw new DuplicateEinnahmeError();
+  }
+
   const dosis = dosisOverride !== undefined ? dosisOverride : med.einzeldosis;
   const neuerBestand = med.aktueller_bestand - dosis;
   // Verhindere negative Bestände
@@ -137,17 +151,45 @@ export async function einnahmeNachtragen(
   const med = await getMedikamentById(medikamentId);
   if (!med) throw new Error(`Medikament ${medikamentId} nicht gefunden`);
 
+  const db = await getDatabase();
+  const personId = med.person_id || 'person-default-001';
+  if (await hasEinnahmeForLocalDate(db, medikamentId, personId, slot || '', '?', timestamp)) {
+    throw new DuplicateEinnahmeError();
+  }
+
   const finalBestand = Math.max(0, med.aktueller_bestand - menge);
   await updateBestand(medikamentId, finalBestand);
 
-  const db = await getDatabase();
   await db.executeSql(
     `INSERT INTO einnahmen (id, medikament_id, person_id, menge, timestamp, slot)
      VALUES (?, ?, ?, ?, ?, ?)`,
-    [generateUUID(), medikamentId, med.person_id || 'person-default-001', menge, timestamp, slot || ''],
+    [generateUUID(), medikamentId, personId, menge, timestamp, slot || ''],
   );
 
   return finalBestand;
+}
+
+async function hasEinnahmeForLocalDate(
+  db: Awaited<ReturnType<typeof getDatabase>>,
+  medikamentId: string,
+  personId: string,
+  slot: string,
+  dateExpression: string,
+  dateValue?: string,
+): Promise<boolean> {
+  const params = [medikamentId, personId, slot];
+  if (dateValue !== undefined) params.push(dateValue);
+
+  const existing = await db.executeSql(
+    `SELECT id FROM einnahmen
+     WHERE medikament_id = ?
+       AND person_id = ?
+       AND slot = ?
+       AND date(timestamp) = date(${dateExpression})
+     LIMIT 1`,
+    params,
+  );
+  return existing.some(result => result.rows.length > 0);
 }
 
 /**

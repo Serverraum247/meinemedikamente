@@ -21,6 +21,7 @@ import {
   StyleSheet,
   ScrollView,
   Vibration,
+  Alert,
 } from 'react-native';
 import type { OffeneEinnahme } from '../services/EinnahmeErinnerungService';
 import { announceChange } from '../utils/AccessibilityHelpers';
@@ -30,6 +31,7 @@ interface Props {
   visible: boolean;
   offeneEinnahmen: OffeneEinnahme[];
   onBestaetigen: (medikamentId: string, dosis: number, slot: OffeneEinnahme['slot']) => Promise<void>;
+  onAlleBestaetigen: (einnahmen: OffeneEinnahme[]) => Promise<void>;
   onSpaeter: () => void;
   onSchliessen: () => void;
 }
@@ -38,10 +40,12 @@ export default function EinnahmeErinnerungModal({
   visible,
   offeneEinnahmen,
   onBestaetigen,
+  onAlleBestaetigen,
   onSpaeter,
   onSchliessen,
 }: Props) {
   const [bearbeiteId, setBearbeiteId] = useState<string | null>(null);
+  const [bestaetigeAlle, setBestaetigeAlle] = useState(false);
 
   const handleJa = async (einnahme: OffeneEinnahme) => {
     setBearbeiteId(einnahme.medikamentId);
@@ -51,8 +55,23 @@ export default function EinnahmeErinnerungModal({
 
       await onBestaetigen(einnahme.medikamentId, einnahme.dosis, einnahme.slot);
       announceChange(`${einnahme.medikamentName} wurde als eingenommen markiert`);
+    } catch (error) {
+      Alert.alert('Schon gespeichert', 'Diese Einnahme wurde bereits protokolliert. Es wurde nichts doppelt abgezogen.');
     } finally {
       setBearbeiteId(null);
+    }
+  };
+
+  const handleAlle = async () => {
+    setBestaetigeAlle(true);
+    try {
+      Vibration.vibrate(50);
+      await onAlleBestaetigen(offeneEinnahmen);
+      announceChange('Alle offenen Einnahmen wurden als eingenommen markiert');
+    } catch (error) {
+      Alert.alert('Bitte prüfen', 'Nicht alle Einnahmen konnten bestätigt werden. Bereits gespeicherte Einnahmen wurden nicht doppelt abgezogen.');
+    } finally {
+      setBestaetigeAlle(false);
     }
   };
 
@@ -91,6 +110,25 @@ export default function EinnahmeErinnerungModal({
           style={styles.scrollArea}
           contentContainerStyle={styles.scrollContent}
         >
+          {offeneEinnahmen.length > 1 ? (
+            <TouchableOpacity
+              style={[styles.alleButton, bestaetigeAlle && styles.buttonDisabled]}
+              onPress={handleAlle}
+              disabled={bestaetigeAlle}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel="Alle offenen Einnahmen bestätigen"
+              accessibilityHint="Bestätigt alle sichtbaren offenen Medikamente auf einmal"
+            >
+              <Text style={styles.alleButtonText}>
+                {bestaetigeAlle ? 'Wird gespeichert ...' : 'Alle offenen bestätigen'}
+              </Text>
+              <Text style={styles.alleButtonSub}>
+                {offeneEinnahmen.length} Einnahmen auf einmal protokollieren
+              </Text>
+            </TouchableOpacity>
+          ) : null}
+
           {offeneEinnahmen.map((einnahme) => (
             <View
               key={`${einnahme.medikamentId}-${einnahme.slot}`}
@@ -204,6 +242,28 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 16,
     paddingBottom: 32,
+  },
+  alleButton: {
+    backgroundColor: '#1F6F8B',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    minHeight: 84,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  alleButtonText: {
+    fontSize: 24,
+    color: '#FFFFFF',
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  alleButtonSub: {
+    fontSize: 16,
+    color: '#E9F7FB',
+    fontWeight: '600',
+    marginTop: 4,
+    textAlign: 'center',
   },
   karte: {
     backgroundColor: '#FFFFFF',

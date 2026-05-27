@@ -28,7 +28,7 @@ import type { RootStackParamList } from '../navigation/AppNavigator';
 import { useMedikamente } from '../context/MedikamentContext';
 import { MedikamentRow, PackungRow } from '../database/Database';
 import { getEinnahmenByMedikament, EinnahmeWithDate, storniereEinnahme } from '../database/EinnahmeController';
-import { einnahmeNachtragen } from '../database/MedikamentController';
+import { DuplicateEinnahmeError, einnahmeNachtragen } from '../database/MedikamentController';
 import { getLetztePackung, getOffenePackungenCount, getPackungenByMedikament } from '../database/PackungController';
 import { getRezeptTerminUrlaubsKonflikt } from '../database/UrlaubController';
 import {
@@ -135,8 +135,12 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
   const [rezeptTermin, setRezeptTermin] = useState<RezeptTerminInfo | null>(null);
   const [offenerSlotHeute, setOffenerSlotHeute] = useState<TageszeitSlot | null>(null);
   const [zeigeEinnahmeHistorie, setZeigeEinnahmeHistorie] = useState(false);
+  const [zeigeEinnahmeplan, setZeigeEinnahmeplan] = useState(false);
+  const [zeigeDetails, setZeigeDetails] = useState(false);
+  const [zeigePackung, setZeigePackung] = useState(false);
   const [nachtragModal, setNachtragModal] = useState(false);
   const [nachtragTageZurueck, setNachtragTageZurueck] = useState(1);
+  const [nachtragTageText, setNachtragTageText] = useState('1');
   const [nachtragSlot, setNachtragSlot] = useState<TageszeitSlot>('morgens');
 
   // Medikament + Historie laden
@@ -466,9 +470,15 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
   const handleEinnahmeNachtragen = useCallback(async () => {
     if (!medikament) return;
 
+    const tageZurueck = parseNachtragTage(nachtragTageText);
+    if (tageZurueck === null) {
+      Alert.alert('Ungültiger Zeitraum', 'Bitte gib eine ganze Zahl ab 0 ein, zum Beispiel 0 für heute oder 7 für vor einer Woche.');
+      return;
+    }
+
     const plan = parseEinnahmeplan(medikament.einnahme_uhrzeiten || '[]');
     const dosis = getDosisFuerSlot(plan, nachtragSlot, medikament.einzeldosis);
-    const timestamp = buildNachtragTimestamp(nachtragTageZurueck, plan.find(item => item.slot === nachtragSlot)?.uhrzeit, nachtragSlot);
+    const timestamp = buildNachtragTimestamp(tageZurueck, plan.find(item => item.slot === nachtragSlot)?.uhrzeit, nachtragSlot);
 
     try {
       const neuerBestand = await einnahmeNachtragen(medikament.id, dosis, timestamp, nachtragSlot);
@@ -477,10 +487,17 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
       await loadData();
       zeigeEinnahmeNachtragErgebnis(medikament.aktueller_bestand, neuerBestand, medikament.einheit, syncResult);
     } catch (error) {
+      if (error instanceof DuplicateEinnahmeError) {
+        Alert.alert(
+          'Bereits eingetragen',
+          'Für diesen Tag und diese Tageszeit ist bereits eine Einnahme gespeichert. Es wurde nichts doppelt nachgetragen.',
+        );
+        return;
+      }
       logger.error('Einnahme konnte nicht nachgetragen werden:', error);
       Alert.alert('Fehler', 'Die Einnahme konnte nicht nachgetragen werden.');
     }
-  }, [loadData, medikament, nachtragSlot, nachtragTageZurueck]);
+  }, [loadData, medikament, nachtragSlot, nachtragTageText]);
 
   if (!medikament) {
     return (
@@ -655,28 +672,41 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
             const aktuelle = getAktuelleTageszeit();
             return (
               <View style={styles.einnahmeplanCard}>
-                <Text style={styles.sectionTitle} accessibilityRole="header">Einnahmeplan</Text>
-                <View style={styles.einnahmeplanRow}>
-                  {SLOT_REIHENFOLGE.map(slot => {
-                    const meta = SLOT_META[slot];
-                    const eintrag = plan.find((s: EinnahmeSlot) => s.slot === slot);
-                    if (!eintrag) return null;
-                    const dosis = eintrag.dosis !== undefined ? eintrag.dosis : medikament.einzeldosis;
-                    const isAktuell = aktuelle === slot;
-                    return (
-                      <View
-                        key={slot}
-                        style={[styles.einnahmeSlot, isAktuell && styles.einnahmeSlotAktuell]}
-                      >
-                        <Text style={styles.einnahmeSlotEmoji} accessibilityElementsHidden>{meta.emoji}</Text>
-                        <Text style={[styles.einnahmeSlotLabel, isAktuell && styles.einnahmeSlotLabelAktuell]}>
-                          {meta.label}
-                        </Text>
-                        <Text style={styles.einnahmeSlotDosis}>{dosis} {medikament.einheit}</Text>
-                      </View>
-                    );
-                  })}
-                </View>
+                <TouchableOpacity
+                  style={styles.collapsibleHeader}
+                  onPress={() => setZeigeEinnahmeplan(prev => !prev)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Einnahmeplan ${zeigeEinnahmeplan ? 'ausblenden' : 'anzeigen'}`}
+                >
+                  <View>
+                    <Text style={styles.sectionTitleCompact} accessibilityRole="header">Einnahmeplan</Text>
+                    <Text style={styles.collapsibleSubline}>{plan.length} Zeit{plan.length === 1 ? '' : 'en'} gepflegt</Text>
+                  </View>
+                  <Text style={styles.collapsibleAction}>{zeigeEinnahmeplan ? 'Ausblenden' : 'Anzeigen'}</Text>
+                </TouchableOpacity>
+                {zeigeEinnahmeplan ? (
+                  <View style={styles.einnahmeplanRow}>
+                    {SLOT_REIHENFOLGE.map(slot => {
+                      const meta = SLOT_META[slot];
+                      const eintrag = plan.find((s: EinnahmeSlot) => s.slot === slot);
+                      if (!eintrag) return null;
+                      const dosis = eintrag.dosis !== undefined ? eintrag.dosis : medikament.einzeldosis;
+                      const isAktuell = aktuelle === slot;
+                      return (
+                        <View
+                          key={slot}
+                          style={[styles.einnahmeSlot, isAktuell && styles.einnahmeSlotAktuell]}
+                        >
+                          <Text style={styles.einnahmeSlotEmoji} accessibilityElementsHidden>{meta.emoji}</Text>
+                          <Text style={[styles.einnahmeSlotLabel, isAktuell && styles.einnahmeSlotLabelAktuell]}>
+                            {meta.label}
+                          </Text>
+                          <Text style={styles.einnahmeSlotDosis}>{dosis} {medikament.einheit}</Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                ) : null}
               </View>
             );
           } catch { return null; }
@@ -684,113 +714,148 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
 
         {/* Details */}
         <View style={styles.detailCard}>
-          <Text style={styles.sectionTitle}>Details</Text>
-          <DetailRow label="Einzeldosis" value={`${medikament.einzeldosis} ${medikament.einheit}`} />
-          <DetailRow label="Packungsgröße" value={`${medikament.packungsgroesse} ${medikament.einheit}`} />
-          <DetailRow label="Warnung ab" value={`${medikament.warnung_ab_bestand} ${medikament.einheit}`} />
-          {medikament.pzn ? <DetailRow label="PZN" value={medikament.pzn} /> : null}
-          {arztName ? <DetailRow label="Verschrieben von" value={arztName} /> : null}
+          <TouchableOpacity
+            style={styles.collapsibleHeader}
+            onPress={() => setZeigeDetails(prev => !prev)}
+            accessibilityRole="button"
+            accessibilityLabel={`Details ${zeigeDetails ? 'ausblenden' : 'anzeigen'}`}
+          >
+            <View>
+              <Text style={styles.sectionTitleCompact}>Details</Text>
+              <Text style={styles.collapsibleSubline}>Dosis, Packung, PZN und Arzt</Text>
+            </View>
+            <Text style={styles.collapsibleAction}>{zeigeDetails ? 'Ausblenden' : 'Anzeigen'}</Text>
+          </TouchableOpacity>
+          {zeigeDetails ? (
+            <View style={styles.collapsibleBody}>
+              <DetailRow label="Einzeldosis" value={`${medikament.einzeldosis} ${medikament.einheit}`} />
+              <DetailRow label="Packungsgröße" value={`${medikament.packungsgroesse} ${medikament.einheit}`} />
+              <DetailRow label="Warnung ab" value={`${medikament.warnung_ab_bestand} ${medikament.einheit}`} />
+              {medikament.pzn ? <DetailRow label="PZN" value={medikament.pzn} /> : null}
+              {arztName ? <DetailRow label="Verschrieben von" value={arztName} /> : null}
+            </View>
+          ) : null}
         </View>
 
         {/* Letzte Packung (Option B) */}
         {letztePackung && (
           <View style={styles.packungCard}>
-            <View style={styles.packungHeader}>
-              <Text style={styles.sectionTitle} accessibilityRole="header">Letzte Packung</Text>
+            <TouchableOpacity
+              style={styles.collapsibleHeader}
+              onPress={() => setZeigePackung(prev => !prev)}
+              accessibilityRole="button"
+              accessibilityLabel={`Letzte Packung ${zeigePackung ? 'ausblenden' : 'anzeigen'}`}
+            >
+              <View>
+                <Text style={styles.sectionTitleCompact} accessibilityRole="header">Letzte Packung</Text>
+                <Text style={styles.collapsibleSubline}>
+                  {letztePackung.groesse} {medikament.einheit}{offenePackungen > 1 ? `, ${offenePackungen} offen` : ''}
+                </Text>
+              </View>
+              <Text style={styles.collapsibleAction}>{zeigePackung ? 'Ausblenden' : 'Anzeigen'}</Text>
+            </TouchableOpacity>
+            {zeigePackung ? (
+              <View style={styles.collapsibleBody}>
+                <View style={styles.packungHeader}>
+                  <Text style={styles.sectionTitle} accessibilityRole="header">Packungsdaten</Text>
               {offenePackungen > 1 && (
                 <Text style={styles.packungCount}>
                   {offenePackungen} Packungen offen
                 </Text>
               )}
-            </View>
-            <View style={styles.packungRow}>
-              <Text style={styles.packungLabel}>Größe</Text>
-              <Text style={styles.packungValue}>{letztePackung.groesse} {medikament.einheit}</Text>
-            </View>
-            {letztePackung.ist_ersatzprodukt === 1 && (
-              <View style={styles.ersatzBadge}>
-                <Text style={styles.ersatzBadgeText}>
-                  Ersatzprodukt: {letztePackung.ersatz_name || 'Ja'}
-                </Text>
-              </View>
-            )}
-            {letztePackung.pzn ? (
-              <View style={styles.packungRow}>
-                <Text style={styles.packungLabel}>PZN</Text>
-                <Text style={styles.packungValue}>{letztePackung.pzn}</Text>
-              </View>
-            ) : null}
+                </View>
+                <View style={styles.packungRow}>
+                  <Text style={styles.packungLabel}>Größe</Text>
+                  <Text style={styles.packungValue}>{letztePackung.groesse} {medikament.einheit}</Text>
+                </View>
+                {letztePackung.ist_ersatzprodukt === 1 && (
+                  <View style={styles.ersatzBadge}>
+                    <Text style={styles.ersatzBadgeText}>
+                      Ersatzprodukt: {letztePackung.ersatz_name || 'Ja'}
+                    </Text>
+                  </View>
+                )}
+                {letztePackung.pzn ? (
+                  <View style={styles.packungRow}>
+                    <Text style={styles.packungLabel}>PZN</Text>
+                    <Text style={styles.packungValue}>{letztePackung.pzn}</Text>
+                  </View>
+                ) : null}
 
             {/* Packungshistorie einklappbar */}
-            {packungsHistorie.length > 1 && (
-              <TouchableOpacity
-                onPress={() => setZeigeHistorie(!zeigeHistorie)}
-                activeOpacity={0.7}
-                style={styles.historieToggle}
-                accessibilityRole="button"
-                accessibilityLabel={`${packungsHistorie.length} Käufe insgesamt, ${zeigeHistorie ? 'ausblenden' : 'einblenden'}`}
-              >
-                <Text style={styles.historieToggleText}>
-                  {zeigeHistorie ? '▲' : '▼'} {packungsHistorie.length} Käufe insgesamt
-                </Text>
-              </TouchableOpacity>
-            )}
-            {zeigeHistorie && packungsHistorie.map(p => (
-              <View key={p.id} style={styles.packungHistRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.packungHistDate}>
-                    {p.gekauft_am ? new Date(p.gekauft_am).toLocaleDateString('de-DE') : '?'}
-                  </Text>
-                  {p.ist_ersatzprodukt === 1 && (
-                    <Text style={styles.packungHistErsatz}>
-                      Ersatz: {p.ersatz_name || 'Ja'}
+                {packungsHistorie.length > 1 && (
+                  <TouchableOpacity
+                    onPress={() => setZeigeHistorie(!zeigeHistorie)}
+                    activeOpacity={0.7}
+                    style={styles.historieToggle}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${packungsHistorie.length} Käufe insgesamt, ${zeigeHistorie ? 'ausblenden' : 'einblenden'}`}
+                  >
+                    <Text style={styles.historieToggleText}>
+                      {zeigeHistorie ? '▲' : '▼'} {packungsHistorie.length} Käufe insgesamt
                     </Text>
-                  )}
-                </View>
-                <Text style={styles.packungHistGroesse}>
-                  {p.groesse} {medikament.einheit}
-                </Text>
+                  </TouchableOpacity>
+                )}
+                {zeigeHistorie && packungsHistorie.map(p => (
+                  <View key={p.id} style={styles.packungHistRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.packungHistDate}>
+                        {p.gekauft_am ? new Date(p.gekauft_am).toLocaleDateString('de-DE') : '?'}
+                      </Text>
+                      {p.ist_ersatzprodukt === 1 && (
+                        <Text style={styles.packungHistErsatz}>
+                          Ersatz: {p.ersatz_name || 'Ja'}
+                        </Text>
+                      )}
+                    </View>
+                    <Text style={styles.packungHistGroesse}>
+                      {p.groesse} {medikament.einheit}
+                    </Text>
+                  </View>
+                ))}
               </View>
-            ))}
+            ) : null}
           </View>
         )}
 
-        {/* Nachkauf-Button -> NachkaufScreen */}
-        <TouchableOpacity
-          style={styles.primaryButton}
-          onPress={() => navigation.navigate('Nachkauf', { medikamentId: medikament.id })}
-          activeOpacity={0.7}
-          accessibilityRole="button"
-          accessibilityLabel="Nachkauf erfassen"
-        >
-          <Text style={styles.primaryButtonText}>
-            Nachkauf erfassen
-          </Text>
-        </TouchableOpacity>
-
-        {/* Einnahme-Historie */}
-        <View style={styles.historieSection}>
-          <TouchableOpacity
-            style={styles.sectionToggle}
-            onPress={() => setZeigeEinnahmeHistorie(prev => !prev)}
-            accessibilityRole="button"
-            accessibilityLabel={`Einnahme-Historie ${zeigeEinnahmeHistorie ? 'ausblenden' : 'anzeigen'}`}
-          >
-            <Text style={styles.sectionTitle}>Einnahme-Historie</Text>
-            <Text style={styles.sectionToggleText}>{zeigeEinnahmeHistorie ? 'Ausblenden' : 'Anzeigen'}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.secondaryButton}
+        <View style={styles.actionsCard}>
+          <Text style={styles.sectionTitle}>Aktionen</Text>
+          <ActionRow
+            label="Nachkauf erfassen"
+            value="Packung hinzufügen"
+            onPress={() => navigation.navigate('Nachkauf', { medikamentId: medikament.id })}
+          />
+          <ActionRow
+            label="Einnahme nachtragen"
+            value="Vergessenes Datum"
             onPress={() => {
               setNachtragSlot(getNachtragSlots(medikament)[0]);
+              setNachtragTageZurueck(1);
+              setNachtragTageText('1');
               setNachtragModal(true);
             }}
-            accessibilityRole="button"
-            accessibilityLabel="Vergessene Einnahme nachtragen"
-            accessibilityHint="Reduziert den Bestand und ergänzt die Einnahme-Historie"
-          >
-            <Text style={styles.secondaryButtonText}>Einnahme nachtragen</Text>
-          </TouchableOpacity>
+          />
+          <ActionRow
+            label="Einnahme-Historie"
+            value={zeigeEinnahmeHistorie ? 'Ausblenden' : 'Anzeigen'}
+            onPress={() => setZeigeEinnahmeHistorie(prev => !prev)}
+          />
+          <ActionRow
+            label="Medikament bearbeiten"
+            value="Ändern"
+            onPress={() => navigation.navigate('EditMedikament', { medikamentId: medikament.id })}
+          />
+          <ActionRow
+            label="Medikament löschen"
+            value="Löschen"
+            danger
+            onPress={handleDelete}
+          />
+        </View>
+
+        {zeigeEinnahmeHistorie ? (
+          <View style={styles.historieSection}>
+            <Text style={styles.sectionTitle}>Einnahme-Historie</Text>
           {zeigeEinnahmeHistorie && historie.length === 0 ? (
             <Text style={styles.historieEmpty}>Noch keine Einnahmen erfasst.</Text>
           ) : null}
@@ -821,31 +886,8 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
               </View>
             ))
           ) : null}
-        </View>
-
-        {/* Loeschen */}
-
-        {/* Bearbeiten – kleiner Link, weiter unten */}
-        <TouchableOpacity
-          onPress={() => navigation.navigate('EditMedikament', { medikamentId: medikament.id })}
-          activeOpacity={0.7}
-          accessibilityRole="button"
-          accessibilityLabel="Medikament bearbeiten"
-          style={styles.editLinkContainer}
-        >
-          <Text style={styles.editLinkText}>Medikament bearbeiten</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.deleteButton}
-          onPress={handleDelete}
-          activeOpacity={0.7}
-          accessibilityRole="button"
-          accessibilityLabel="Medikament löschen"
-          accessibilityHint="Alle Daten werden entfernt"
-        >
-          <Text style={styles.deleteButtonText}>Medikament löschen</Text>
-        </TouchableOpacity>
+          </View>
+        ) : null}
       </ScrollView>
 
       {/* Android Bestandskorrektur Modal */}
@@ -921,23 +963,41 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
               {[
                 { label: 'Heute', value: 0 },
                 { label: 'Gestern', value: 1 },
-                { label: 'Vorgestern', value: 2 },
-              ].map(option => (
-                <TouchableOpacity
-                  key={option.value}
-                  style={[styles.choiceButton, nachtragTageZurueck === option.value && styles.choiceButtonActive]}
-                  onPress={() => setNachtragTageZurueck(option.value)}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: nachtragTageZurueck === option.value }}
+	                { label: 'Vorgestern', value: 2 },
+	              ].map(option => (
+	                <TouchableOpacity
+	                  key={option.value}
+	                  style={[styles.choiceButton, nachtragTageZurueck === option.value && styles.choiceButtonActive]}
+	                  onPress={() => {
+	                    setNachtragTageZurueck(option.value);
+	                    setNachtragTageText(String(option.value));
+	                  }}
+	                  accessibilityRole="button"
+	                  accessibilityState={{ selected: nachtragTageZurueck === option.value }}
                 >
                   <Text style={[styles.choiceButtonText, nachtragTageZurueck === option.value && styles.choiceButtonTextActive]}>
                     {option.label}
                   </Text>
                 </TouchableOpacity>
-              ))}
-            </View>
+	              ))}
+	            </View>
+	            <Text style={styles.modalLabel}>Anderer Zeitraum</Text>
+	            <TextInput
+	              style={styles.modalSmallInput}
+	              value={nachtragTageText}
+	              onChangeText={(value: string) => {
+	                const sanitized = value.replace(/[^0-9]/g, '');
+	                setNachtragTageText(sanitized);
+	                const parsed = parseNachtragTage(sanitized);
+	                if (parsed !== null) setNachtragTageZurueck(parsed);
+	              }}
+	              placeholder="Tage zurück, z.B. 7"
+	              placeholderTextColor="#999"
+	              keyboardType="number-pad"
+	              accessibilityLabel="Tage zurück eingeben"
+	            />
 
-            <Text style={styles.modalLabel}>Welche Einnahme?</Text>
+	            <Text style={styles.modalLabel}>Welche Einnahme?</Text>
             <View style={styles.choiceRow}>
               {getNachtragSlots(medikament).map(slot => {
                 const meta = SLOT_META[slot];
@@ -1026,6 +1086,13 @@ function stundeZuTageszeitSlot(stunde: number): TageszeitSlot {
   if (stunde >= 11 && stunde < 15) return 'mittags';
   if (stunde >= 15 && stunde < 21) return 'abends';
   return 'nachts';
+}
+
+function parseNachtragTage(value: string): number | null {
+  if (!/^\d+$/.test(value.trim())) return null;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 0 || parsed > 3650) return null;
+  return parsed;
 }
 
 function buildNachtragTimestamp(tageZurueck: number, uhrzeit: string | undefined, slot: TageszeitSlot): string {
@@ -1126,6 +1193,34 @@ function DetailRow({ label, value }: { label: string; value: string }) {
       <Text style={detailStyles.label}>{label}</Text>
       <Text style={detailStyles.value}>{value}</Text>
     </View>
+  );
+}
+
+function ActionRow({
+  label,
+  value,
+  onPress,
+  danger = false,
+}: {
+  label: string;
+  value: string;
+  onPress: () => void;
+  danger?: boolean;
+}) {
+  return (
+    <TouchableOpacity
+      style={styles.actionRow}
+      onPress={onPress}
+      activeOpacity={0.75}
+      accessibilityRole="button"
+      accessibilityLabel={`${label}: ${value}`}
+    >
+      <Text style={[styles.actionRowLabel, danger && styles.actionRowDangerText]}>{label}</Text>
+      <View style={styles.actionRowRight}>
+        <Text style={[styles.actionRowValue, danger && styles.actionRowDangerText]}>{value}</Text>
+        <Text style={[styles.actionRowChevron, danger && styles.actionRowDangerText]}>›</Text>
+      </View>
+    </TouchableOpacity>
   );
 }
 
@@ -1330,6 +1425,32 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
+  },
+  collapsibleHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    minHeight: 56,
+  },
+  sectionTitleCompact: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1F2933',
+  },
+  collapsibleSubline: {
+    fontSize: 15,
+    color: '#6B7280',
+    marginTop: 3,
+    fontWeight: '500',
+  },
+  collapsibleAction: {
+    fontSize: 16,
+    color: '#243B53',
+    fontWeight: '800',
+  },
+  collapsibleBody: {
+    marginTop: 12,
   },
   sectionTitle: {
     fontSize: 20,
@@ -1578,6 +1699,50 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 20,
   },
+  actionsCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#D8DEE6',
+  },
+  actionRow: {
+    minHeight: 56,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderTopWidth: 1,
+    borderTopColor: '#E6EAF0',
+    paddingVertical: 12,
+    gap: 12,
+  },
+  actionRowLabel: {
+    flex: 1,
+    fontSize: 17,
+    color: '#1F2933',
+    fontWeight: '700',
+  },
+  actionRowRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexShrink: 0,
+  },
+  actionRowValue: {
+    fontSize: 15,
+    color: '#5F6B7A',
+    fontWeight: '700',
+  },
+  actionRowChevron: {
+    fontSize: 24,
+    color: '#9AA5B1',
+    fontWeight: '700',
+    lineHeight: 26,
+  },
+  actionRowDangerText: {
+    color: '#B42318',
+  },
   sectionToggle: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1795,6 +1960,17 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#1a1a2e',
     marginBottom: 20,
+  },
+  modalSmallInput: {
+    borderWidth: 1,
+    borderColor: '#C9D2DC',
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 18,
+    color: '#1F2933',
+    marginBottom: 16,
   },
   modalButtonRow: {
     flexDirection: 'row',
