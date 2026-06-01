@@ -146,6 +146,24 @@ export default function HomeScreen({ navigation }: Props) {
     return { eingenommenIds, offene };
   }, [aktivePerson?.id]);
 
+  const ladeNachtrag = useCallback(async (
+    mode: NachtragRangeMode,
+    customDate?: Date,
+  ) => {
+    setNachtragLoading(true);
+    try {
+      const groups = await getOffeneEinnahmeNachtraege(aktivePerson?.id, mode, customDate);
+      setNachtragGroups(groups);
+      setNachtragMode(mode);
+      setNachtragCustomDate(customDate);
+    } catch (error) {
+      logger.error('Einnahme-Nachtrag konnte nicht geladen werden:', error);
+      Alert.alert('Fehler', 'Die offenen Einnahmen konnten nicht geladen werden.');
+    } finally {
+      setNachtragLoading(false);
+    }
+  }, [aktivePerson?.id]);
+
   // Hamburger-Menü im Header links
   useEffect(() => {
     navigation.setOptions({
@@ -405,24 +423,6 @@ export default function HomeScreen({ navigation }: Props) {
     setOffeneEinnahmen(offeneEinnahmenFuerPerson);
     setErinnerungOffen(true);
   };
-
-  const ladeNachtrag = useCallback(async (
-    mode: NachtragRangeMode,
-    customDate?: Date,
-  ) => {
-    setNachtragLoading(true);
-    try {
-      const groups = await getOffeneEinnahmeNachtraege(aktivePerson?.id, mode, customDate);
-      setNachtragGroups(groups);
-      setNachtragMode(mode);
-      setNachtragCustomDate(customDate);
-    } catch (error) {
-      logger.error('Einnahme-Nachtrag konnte nicht geladen werden:', error);
-      Alert.alert('Fehler', 'Die offenen Einnahmen konnten nicht geladen werden.');
-    } finally {
-      setNachtragLoading(false);
-    }
-  }, [aktivePerson?.id]);
 
   const openNachtragModal = async () => {
     setNachtragPhase('past');
