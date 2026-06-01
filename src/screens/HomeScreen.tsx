@@ -39,6 +39,7 @@ import {
 } from '../services/EinnahmeErinnerungService';
 import { DuplicateEinnahmeError, einnahmeVerbuchen } from '../database/MedikamentController';
 import EinnahmeErinnerungModal from '../components/EinnahmeErinnerungModal';
+import EinnahmeNachtragModal from '../components/EinnahmeNachtragModal';
 import { logger } from '../utils/Logger';
 import { showPremiumRequiredAlert } from '../utils/PremiumAlerts';
 import {
@@ -61,6 +62,13 @@ import {
   type TagesEinnahmeWithMedikament,
 } from '../database/EinnahmeController';
 import { parseEinnahmeplan, istSlotAnDatumAktiv } from '../utils/Einnahmeplan';
+import {
+  getOffeneEinnahmeNachtraege,
+  speichereEinnahmeNachtraege,
+  type NachtragRangeMode,
+  type OffeneEinnahmeNachtragGroup,
+  type OffeneEinnahmeNachtragItem,
+} from '../services/EinnahmeNachtragService';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
 
@@ -76,6 +84,13 @@ export default function HomeScreen({ navigation }: Props) {
   const [ueberfaelligeEinnahmeMedikamentIds, setUeberfaelligeEinnahmeMedikamentIds] = useState<Set<string>>(new Set());
   const [rezeptTermine, setRezeptTermine] = useState<Record<string, RezeptTerminInfo>>({});
   const [heutigeProtokolle, setHeutigeProtokolle] = useState<TagesEinnahmeWithMedikament[]>([]);
+  const [nachtragOffen, setNachtragOffen] = useState(false);
+  const [nachtragLoading, setNachtragLoading] = useState(false);
+  const [nachtragSaving, setNachtragSaving] = useState(false);
+  const [nachtragMode, setNachtragMode] = useState<NachtragRangeMode>('sevenDays');
+  const [nachtragCustomDate, setNachtragCustomDate] = useState<Date | undefined>();
+  const [nachtragGroups, setNachtragGroups] = useState<OffeneEinnahmeNachtragGroup[]>([]);
+  const [nachtragPhase, setNachtragPhase] = useState<'past' | 'today'>('past');
 
   // Medikamente nach aktiver Person filtern
   const gefilterteMedikamente = useMemo(() => {
@@ -380,7 +395,7 @@ export default function HomeScreen({ navigation }: Props) {
   const openProtokollHilfe = () => {
     Alert.alert(
       'Protokollieren',
-      'Hier bestätigst du die Einnahmen für den ausgewählten Tag. Wenn du eine Einnahme vergessen hast, kannst du sie im Medikament nachtragen.',
+      'Hier bestätigst du heutige Einnahmen. Wenn du etwas vergessen hast, kannst du mehrere offene Einnahmen gesammelt nachtragen.',
       [{ text: 'OK' }],
     );
   };
@@ -389,6 +404,77 @@ export default function HomeScreen({ navigation }: Props) {
     if (offeneEinnahmenFuerPerson.length === 0) return;
     setOffeneEinnahmen(offeneEinnahmenFuerPerson);
     setErinnerungOffen(true);
+  };
+
+  const ladeNachtrag = useCallback(async (
+    mode: NachtragRangeMode,
+    customDate?: Date,
+  ) => {
+    setNachtragLoading(true);
+    try {
+      const groups = await getOffeneEinnahmeNachtraege(aktivePerson?.id, mode, customDate);
+      setNachtragGroups(groups);
+      setNachtragMode(mode);
+      setNachtragCustomDate(customDate);
+    } catch (error) {
+      logger.error('Einnahme-Nachtrag konnte nicht geladen werden:', error);
+      Alert.alert('Fehler', 'Die offenen Einnahmen konnten nicht geladen werden.');
+    } finally {
+      setNachtragLoading(false);
+    }
+  }, [aktivePerson?.id]);
+
+  const openNachtragModal = async () => {
+    setNachtragPhase('past');
+    setNachtragOffen(true);
+    await ladeNachtrag('sevenDays');
+  };
+
+  const handleNachtragSpeichern = async (items: OffeneEinnahmeNachtragItem[]) => {
+    setNachtragSaving(true);
+    try {
+      const result = await speichereEinnahmeNachtraege(items);
+      await refresh();
+      await ladeEinnahmeStatus();
+
+      if (nachtragPhase === 'past') {
+        const todayGroups = await getOffeneEinnahmeNachtraege(aktivePerson?.id, 'today');
+        if (todayGroups.length > 0) {
+          Alert.alert(
+            'Nachtrag gespeichert',
+            `${result.gespeichert} Einnahme${result.gespeichert === 1 ? '' : 'n'} nachgetragen. Heute sind noch Einnahmen offen.`,
+            [
+              { text: 'Fertig', style: 'cancel', onPress: () => setNachtragOffen(false) },
+              {
+                text: 'Heute bestätigen',
+                onPress: () => {
+                  setNachtragPhase('today');
+                  setNachtragMode('today');
+                  setNachtragGroups(todayGroups);
+                },
+              },
+            ],
+          );
+        } else {
+          setNachtragOffen(false);
+          Alert.alert(
+            'Nachtrag gespeichert',
+            `${result.gespeichert} Einnahme${result.gespeichert === 1 ? '' : 'n'} nachgetragen.`,
+          );
+        }
+      } else {
+        setNachtragOffen(false);
+        Alert.alert(
+          'Heute gespeichert',
+          `${result.gespeichert} Einnahme${result.gespeichert === 1 ? '' : 'n'} für heute protokolliert.`,
+        );
+      }
+    } catch (error) {
+      logger.error('Einnahme-Nachtrag konnte nicht gespeichert werden:', error);
+      Alert.alert('Fehler', 'Der Nachtrag konnte nicht gespeichert werden.');
+    } finally {
+      setNachtragSaving(false);
+    }
   };
 
   const renderTagesHeader = () => {
@@ -470,6 +556,21 @@ export default function HomeScreen({ navigation }: Props) {
             </Text>
           </View>
         )}
+
+        <TouchableOpacity
+          style={styles.nachtragActionCard}
+          onPress={openNachtragModal}
+          activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel="Vergessene Einnahmen nachtragen"
+          accessibilityHint="Prüft gestern oder die letzten sieben Tage und speichert ausgewählte Einnahmen gesammelt"
+        >
+          <View style={styles.nachtragActionTextWrap}>
+            <Text style={styles.nachtragActionTitle}>Einnahmen nachtragen</Text>
+            <Text style={styles.nachtragActionSub}>Gestern oder letzte 7 Tage gesammelt prüfen</Text>
+          </View>
+          <Text style={styles.nachtragActionChevron}>›</Text>
+        </TouchableOpacity>
 
         {bedarfsMedikamente.length > 0 ? (
           <TouchableOpacity
@@ -712,6 +813,28 @@ export default function HomeScreen({ navigation }: Props) {
           </Pressable>
         </Pressable>
       </Modal>
+
+      <EinnahmeNachtragModal
+        visible={nachtragOffen}
+        title={nachtragPhase === 'today' ? 'Heute auch bestätigen?' : 'Offene Einnahmen nachtragen'}
+        subtitle={
+          nachtragPhase === 'today'
+            ? 'Diese Einnahmen sind heute noch offen oder dürfen schon bestätigt werden.'
+            : 'Wähle die offenen Einnahmen aus, die du wirklich genommen hast.'
+        }
+        groups={nachtragGroups}
+        loading={nachtragLoading}
+        mode={nachtragMode}
+        customDate={nachtragCustomDate}
+        showRangeSelector={nachtragPhase === 'past'}
+        saving={nachtragSaving}
+        onModeChange={(mode, customDate) => {
+          setNachtragPhase('past');
+          ladeNachtrag(mode, customDate).catch(logger.error);
+        }}
+        onSave={handleNachtragSpeichern}
+        onClose={() => setNachtragOffen(false)}
+      />
 
       {/* Einnahme-Erinnerung Modal */}
       <EinnahmeErinnerungModal
@@ -1042,6 +1165,38 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#376B49',
     marginTop: 6,
+    fontWeight: '600',
+  },
+  nachtragActionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginBottom: 12,
+    minHeight: 72,
+    borderWidth: 1,
+    borderColor: '#D8DEE8',
+  },
+  nachtragActionTextWrap: {
+    flex: 1,
+    paddingRight: 12,
+  },
+  nachtragActionTitle: {
+    fontSize: 19,
+    color: '#111827',
+    fontWeight: '800',
+  },
+  nachtragActionSub: {
+    fontSize: 15,
+    color: '#4B5563',
+    marginTop: 4,
+    fontWeight: '600',
+  },
+  nachtragActionChevron: {
+    fontSize: 34,
+    color: '#6B7280',
     fontWeight: '600',
   },
   bedarfCard: {
