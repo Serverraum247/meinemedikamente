@@ -618,7 +618,7 @@ export default function HomeScreen({ navigation }: Props) {
           disabled={!actionStatus.actionLabel}
           activeOpacity={0.84}
           accessibilityRole={actionStatus.actionLabel ? 'button' : 'text'}
-          accessibilityLabel={`${actionStatus.title}. ${actionStatus.message}${actionStatus.actionLabel ? `. ${actionStatus.actionLabel}` : ''}`}
+          accessibilityLabel={`${actionStatus.title}. ${actionStatus.message}${actionStatus.actionLabel ? ` ${actionStatus.actionLabel}` : ''}`}
         >
           <View style={styles.homeActionTextWrap}>
             <Text style={[
