@@ -18,6 +18,7 @@ import {
   type EinnahmeSlot,
   type TageszeitSlot,
 } from '../utils/Einnahmeplan';
+import { getLocalDateKey } from '../utils/LocalDate';
 
 /** Eine offene Einnahme-Erinnerung */
 export interface OffeneEinnahme {
@@ -239,7 +240,7 @@ function toLocalIsoDate(datum: Date): string {
  */
 export async function setzteLetzteErinnerung(): Promise<void> {
   const { setSetting } = require('./SettingsService');
-  const heute = new Date().toISOString().slice(0, 10);
+  const heute = getLocalDateKey();
   await setSetting(`einnahme_erinnerung_letzter_${heute}`, new Date().toISOString());
 }
 
@@ -251,7 +252,7 @@ export async function sollErinnerungZeigen(
   minAbstandMinuten: number = 60
 ): Promise<boolean> {
   const { getSetting } = require('./SettingsService');
-  const heute = new Date().toISOString().slice(0, 10);
+  const heute = getLocalDateKey();
   const letzte = await getSetting(`einnahme_erinnerung_letzter_${heute}`);
 
   if (!letzte) return true;

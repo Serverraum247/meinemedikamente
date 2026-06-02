@@ -18,6 +18,7 @@ import {
   Modal,
   Animated,
   Pressable,
+  AppState,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -69,6 +70,11 @@ import {
   type OffeneEinnahmeNachtragGroup,
   type OffeneEinnahmeNachtragItem,
 } from '../services/EinnahmeNachtragService';
+import {
+  dateFromLocalDateKey,
+  getLocalDateKey,
+  msUntilNextLocalDay,
+} from '../utils/LocalDate';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
 
@@ -91,6 +97,8 @@ export default function HomeScreen({ navigation }: Props) {
   const [nachtragCustomDate, setNachtragCustomDate] = useState<Date | undefined>();
   const [nachtragGroups, setNachtragGroups] = useState<OffeneEinnahmeNachtragGroup[]>([]);
   const [nachtragPhase, setNachtragPhase] = useState<'past' | 'today'>('past');
+  const [heuteKey, setHeuteKey] = useState(() => getLocalDateKey());
+  const heuteDatum = useMemo(() => dateFromLocalDateKey(heuteKey), [heuteKey]);
 
   // Medikamente nach aktiver Person filtern
   const gefilterteMedikamente = useMemo(() => {
@@ -115,12 +123,11 @@ export default function HomeScreen({ navigation }: Props) {
   }, [gefilterteMedikamente]);
 
   const heutigePlanMedikamente = useMemo(() => {
-    const heute = new Date();
     return gefilterteMedikamente.filter(m => {
       const plan = parseEinnahmeplan(m.einnahme_uhrzeiten || '[]');
-      return plan.some(slot => istSlotAnDatumAktiv(slot, heute));
+      return plan.some(slot => istSlotAnDatumAktiv(slot, heuteDatum));
     });
-  }, [gefilterteMedikamente]);
+  }, [gefilterteMedikamente, heuteDatum]);
 
   const offeneEinnahmenFuerPerson = useMemo(() => {
     const erlaubteIds = new Set(gefilterteMedikamente.map(m => m.id));
@@ -131,12 +138,12 @@ export default function HomeScreen({ navigation }: Props) {
   const [premiumStatus, setPremiumStatus] = useState(false);
   useEffect(() => { isPremium().then(setPremiumStatus); }, []);
 
-  const ladeEinnahmeStatus = useCallback(async () => {
+  const ladeEinnahmeStatus = useCallback(async (datum: Date = heuteDatum) => {
     const [eingenommenIds, offene, ueberfaelligeIds, heutigeEinnahmen] = await Promise.all([
       getHeutigeEinnahmeMedikamentIds(),
       getOffeneEinnahmen(0),
       getUeberfaelligeEinnahmeMedikamentIds(),
-      getEinnahmenForLocalDay(new Date(), aktivePerson?.id),
+      getEinnahmenForLocalDay(datum, aktivePerson?.id),
     ]);
     setHeuteEingenommenIds(eingenommenIds);
     setOffeneEinnahmen(offene);
@@ -144,7 +151,7 @@ export default function HomeScreen({ navigation }: Props) {
     setUeberfaelligeEinnahmeMedikamentIds(ueberfaelligeIds);
     setHeutigeProtokolle(heutigeEinnahmen);
     return { eingenommenIds, offene };
-  }, [aktivePerson?.id]);
+  }, [aktivePerson?.id, heuteDatum]);
 
   const ladeNachtrag = useCallback(async (
     mode: NachtragRangeMode,
@@ -182,30 +189,73 @@ export default function HomeScreen({ navigation }: Props) {
     });
   }, [navigation]);
 
-  // Urlaub-Kollisionen als Tagesaufgabe laden
-  useEffect(() => {
-    ladeUrlaubsReminder().catch(logger.error);
-  }, []);
-
-  const ladeUrlaubsReminder = async () => {
+  const ladeUrlaubsReminder = useCallback(async () => {
     const warnungen = await calculateUrlaubsWarnungen();
     const tasks = await getUrlaubsReminderTasks(warnungen);
     setUrlaubsReminderTasks(tasks);
-  };
+  }, []);
 
-  useFocusEffect(
-    useCallback(() => {
-      if (loading) return;
-      ladeEinnahmeStatus().catch(error => {
-        logger.error('Einnahme-Status konnte nicht geladen werden:', error);
-      });
+  const refreshTagesstand = useCallback(async () => {
+    const nextHeuteKey = getLocalDateKey();
+    const nextHeuteDatum = dateFromLocalDateKey(nextHeuteKey);
+    setHeuteKey(nextHeuteKey);
+    await Promise.all([
+      refresh(),
+      ladeEinnahmeStatus(nextHeuteDatum),
+      ladeUrlaubsReminder(),
       getVerifiedAllRezeptTermine()
         .then(setRezeptTermine)
         .catch(error => {
           logger.error('Rezepttermine konnten nicht geladen werden:', error);
-        });
-    }, [ladeEinnahmeStatus, loading])
+        }),
+    ]);
+  }, [ladeEinnahmeStatus, ladeUrlaubsReminder, refresh]);
+
+  // Urlaub-Kollisionen als Tagesaufgabe laden
+  useEffect(() => {
+    ladeUrlaubsReminder().catch(logger.error);
+  }, [ladeUrlaubsReminder]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (loading) return;
+      refreshTagesstand().catch(error => {
+        logger.error('Tagesstand konnte nicht aktualisiert werden:', error);
+      });
+    }, [loading, refreshTagesstand])
   );
+
+  useEffect(() => {
+    if (loading) return;
+
+    let midnightTimer: ReturnType<typeof setTimeout> | undefined;
+
+    const scheduleMidnightRefresh = () => {
+      if (midnightTimer) clearTimeout(midnightTimer);
+      midnightTimer = setTimeout(() => {
+        refreshTagesstand().catch(error => {
+          logger.error('Tageswechsel konnte nicht aktualisiert werden:', error);
+        });
+        scheduleMidnightRefresh();
+      }, msUntilNextLocalDay());
+    };
+
+    const appStateSubscription = AppState.addEventListener('change', state => {
+      if (state !== 'active') return;
+      refreshTagesstand()
+        .then(scheduleMidnightRefresh)
+        .catch(error => {
+          logger.error('Tagesstand nach App-Aktivierung konnte nicht aktualisiert werden:', error);
+        });
+    });
+
+    scheduleMidnightRefresh();
+
+    return () => {
+      if (midnightTimer) clearTimeout(midnightTimer);
+      appStateSubscription.remove();
+    };
+  }, [loading, refreshTagesstand]);
 
   // Einnahme-Erinnerung prüfen beim Öffnen
   useEffect(() => {
@@ -478,7 +528,7 @@ export default function HomeScreen({ navigation }: Props) {
   };
 
   const renderTagesHeader = () => {
-    const tage = buildDayStrip();
+    const tage = buildDayStrip(heuteDatum);
     const offeneCount = offeneEinnahmenFuerPerson.length;
     const geplantCount = heutigePlanMedikamente.length;
     const erledigtCount = heutigeProtokolle.length;
@@ -490,7 +540,7 @@ export default function HomeScreen({ navigation }: Props) {
         {renderUrlaubsReminderTask()}
 
         <View style={styles.dayHeader}>
-          <Text style={styles.dayTitle}>{formatTodayTitle(new Date())}</Text>
+          <Text style={styles.dayTitle}>{formatTodayTitle(heuteDatum)}</Text>
           <View style={styles.dayStrip} accessibilityLabel="Tagesübersicht">
             {tage.map(tag => (
               <View
@@ -931,13 +981,12 @@ function formatTodayTitle(date: Date): string {
   })}`;
 }
 
-function buildDayStrip(): Array<{
+function buildDayStrip(today: Date): Array<{
   key: string;
   weekday: string;
   day: string;
   isToday: boolean;
 }> {
-  const today = new Date();
   const start = new Date(today);
   start.setDate(today.getDate() - 3);
 

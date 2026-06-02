@@ -7,9 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		00E356EF1AD99517003FC87E /* MeineMedikamenteUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00E356EE1AD99517003FC87E /* MeineMedikamenteUITests.swift */; };
 		0AC13735C1F45C0384A38A97 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 5B6095033B2357A0B0163CEE /* main.m */; };
 		0E16DF23C3A5D37058698AD5 /* CloudKitBackupBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = 1C5311F6A50EF5606339BACC /* CloudKitBackupBridge.m */; };
-		00E356EF1AD99517003FC87E /* MeineMedikamenteUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00E356EE1AD99517003FC87E /* MeineMedikamenteUITests.swift */; };
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
 		1DA2B149FA9092006F3B2B58 /* libPods-MeineMedikamente.a in Frameworks */ = {isa = PBXBuildFile; fileRef = CAFB2A1832FBAFE2E3285BBB /* libPods-MeineMedikamente.a */; };
 		404659E1240B9ED5D9E39F47 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */; };
@@ -19,6 +19,16 @@
 		D184D57945D49B6634988D02 /* CloudKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8280DE7B1AEA7FA12D95F590 /* CloudKit.framework */; };
 		D5BAF002B65B7347A5AEAEBC /* MeineMedikamente-Bridging-Header.h in Sources */ = {isa = PBXBuildFile; fileRef = 4F386D304B178E4DD765026D /* MeineMedikamente-Bridging-Header.h */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		00E356F41AD99517003FC87E /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 83CBB9F71A601CBA00E9B192 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 13B07F861A680F5B00A75B9A;
+			remoteInfo = MeineMedikamente;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		00E356EC1AD99517003FC87E /* MeineMedikamenteTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MeineMedikamenteTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -262,60 +272,13 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-MeineMedikamente/Pods-MeineMedikamente-frameworks-${CONFIGURATION}-input-files.xcfilelist",
 			);
-			inputPaths = (
-			);
 			name = "[CP] Embed Pods Frameworks";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-MeineMedikamente/Pods-MeineMedikamente-frameworks-${CONFIGURATION}-output-files.xcfilelist",
 			);
-			outputPaths = (
-			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-MeineMedikamente/Pods-MeineMedikamente-frameworks.sh\"\n";
-			showEnvVarsInLog = 0;
-		};
-		C38B50BA6285516D6DCD4F65 /* [CP] Check Pods Manifest.lock */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
-				"${PODS_ROOT}/Manifest.lock",
-			);
-			name = "[CP] Check Pods Manifest.lock";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-				"$(DERIVED_FILE_DIR)/Pods-MeineMedikamente-checkManifestLockResult.txt",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
-			showEnvVarsInLog = 0;
-		};
-		E235C05ADACE081382539298 /* [CP] Copy Pods Resources */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-MeineMedikamente/Pods-MeineMedikamente-resources-${CONFIGURATION}-input-files.xcfilelist",
-			);
-			inputPaths = (
-			);
-			name = "[CP] Copy Pods Resources";
-			outputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-MeineMedikamente/Pods-MeineMedikamente-resources-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-MeineMedikamente/Pods-MeineMedikamente-resources.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
 		7D4B8C6A2F3E4D5C9A1B0E7F /* Strip extended attributes before signing */ = {
@@ -356,6 +319,45 @@
 			shellScript = "set -e\nfor APP_PATH in \"${TARGET_BUILD_DIR}/${FULL_PRODUCT_NAME}\" \"${TARGET_BUILD_DIR}/${PRODUCT_NAME}-Runner.app\"; do\n  if [ -d \"$APP_PATH\" ]; then\n    /usr/bin/xattr -c \"$APP_PATH\" 2>/dev/null || true\n    /usr/bin/xattr -r -c \"$APP_PATH\" 2>/dev/null || true\n  fi\ndone\n";
 			showEnvVarsInLog = 0;
 		};
+		C38B50BA6285516D6DCD4F65 /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-MeineMedikamente-checkManifestLockResult.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
+		E235C05ADACE081382539298 /* [CP] Copy Pods Resources */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-MeineMedikamente/Pods-MeineMedikamente-resources-${CONFIGURATION}-input-files.xcfilelist",
+			);
+			name = "[CP] Copy Pods Resources";
+			outputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-MeineMedikamente/Pods-MeineMedikamente-resources-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-MeineMedikamente/Pods-MeineMedikamente-resources.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -380,16 +382,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
-
-/* Begin PBXContainerItemProxy section */
-		00E356F41AD99517003FC87E /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 83CBB9F71A601CBA00E9B192 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 13B07F861A680F5B00A75B9A;
-			remoteInfo = MeineMedikamente;
-		};
-/* End PBXContainerItemProxy section */
 
 /* Begin PBXTargetDependency section */
 		00E356F11AD99517003FC87E /* PBXTargetDependency */ = {
@@ -453,7 +445,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = MeineMedikamente/MeineMedikamente.entitlements;
-				CURRENT_PROJECT_VERSION = 56;
+				CURRENT_PROJECT_VERSION = 57;
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = MeineMedikamente/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Mein MediPlan";
@@ -463,7 +455,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.1.55;
+				MARKETING_VERSION = 0.1.56;
 				MM_INTERNAL_PREMIUM_TEST_MODE = YES;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
@@ -487,7 +479,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = MeineMedikamente/MeineMedikamente.entitlements;
-				CURRENT_PROJECT_VERSION = 56;
+				CURRENT_PROJECT_VERSION = 57;
 				INFOPLIST_FILE = MeineMedikamente/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Mein MediPlan";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.medical";
@@ -496,7 +488,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.1.55;
+				MARKETING_VERSION = 0.1.56;
 				MM_INTERNAL_PREMIUM_TEST_MODE = NO;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
