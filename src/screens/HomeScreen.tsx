@@ -75,7 +75,11 @@ import {
   getLocalDateKey,
   msUntilNextLocalDay,
 } from '../utils/LocalDate';
-import type { HomeMissedGroup } from '../utils/HomeActionStatus';
+import {
+  buildHomeActionStatus,
+  formatProtocolEntryCount,
+  type HomeMissedGroup,
+} from '../utils/HomeActionStatus';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
 
@@ -476,14 +480,6 @@ export default function HomeScreen({ navigation }: Props) {
     );
   };
 
-  const openProtokollHilfe = () => {
-    Alert.alert(
-      'Protokollieren',
-      'Hier bestätigst du heutige Einnahmen. Wenn du etwas vergessen hast, kannst du mehrere offene Einnahmen gesammelt nachtragen.',
-      [{ text: 'OK' }],
-    );
-  };
-
   const openEinnahmeModal = () => {
     if (offeneEinnahmenFuerPerson.length === 0) return;
     setOffeneEinnahmen(offeneEinnahmenFuerPerson);
@@ -549,8 +545,23 @@ export default function HomeScreen({ navigation }: Props) {
     const offeneCount = offeneEinnahmenFuerPerson.length;
     const geplantCount = heutigePlanMedikamente.length;
     const erledigtCount = heutigeProtokolle.length;
-    const ersteOffene = offeneEinnahmenFuerPerson[0];
     const protokolliert = groupHeutigeProtokolle(heutigeProtokolle);
+    const actionStatus = buildHomeActionStatus({
+      missedGroups: missedNachtragGroups,
+      todayOpenCount: offeneCount,
+      plannedTodayCount: geplantCount,
+      loggedTodayCount: erledigtCount,
+    });
+
+    const handleActionPress = () => {
+      if (actionStatus.kind === 'missed') {
+        openNachtragModal().catch(logger.error);
+        return;
+      }
+      if (actionStatus.kind === 'todayOpen') {
+        openEinnahmeModal();
+      }
+    };
 
     return (
       <View>
@@ -578,66 +589,67 @@ export default function HomeScreen({ navigation }: Props) {
         </View>
 
         <View style={styles.sectionTitleRow}>
-          <Text style={styles.sectionTitle}>Protokollieren</Text>
-          <TouchableOpacity
-            style={styles.helpButton}
-            onPress={openProtokollHilfe}
-            accessibilityRole="button"
-            accessibilityLabel="Erklärung zur Protokollierung"
-          >
-            <Text style={styles.helpButtonText}>?</Text>
-          </TouchableOpacity>
+          <Text style={styles.sectionTitle}>Aktionen</Text>
         </View>
 
-        {offeneCount > 0 ? (
+        <TouchableOpacity
+          style={[
+            styles.homeActionCard,
+            actionStatus.severity === 'critical' && styles.homeActionCardCritical,
+            actionStatus.severity === 'warning' && styles.homeActionCardWarning,
+            actionStatus.severity === 'attention' && styles.homeActionCardAttention,
+            actionStatus.severity === 'success' && styles.homeActionCardSuccess,
+          ]}
+          onPress={actionStatus.actionLabel ? handleActionPress : undefined}
+          disabled={!actionStatus.actionLabel}
+          activeOpacity={0.84}
+          accessibilityRole={actionStatus.actionLabel ? 'button' : 'text'}
+          accessibilityLabel={`${actionStatus.title}. ${actionStatus.message}${actionStatus.actionLabel ? `. ${actionStatus.actionLabel}` : ''}`}
+        >
+          <View style={styles.homeActionTextWrap}>
+            <Text style={[
+              styles.homeActionTitle,
+              actionStatus.severity === 'critical' && styles.homeActionTextCritical,
+              actionStatus.severity === 'warning' && styles.homeActionTextWarning,
+              actionStatus.severity === 'attention' && styles.homeActionTextAttention,
+              actionStatus.severity === 'success' && styles.homeActionTextSuccess,
+            ]}>
+              {actionStatus.title}
+            </Text>
+            <Text style={[
+              styles.homeActionSub,
+              actionStatus.severity === 'critical' && styles.homeActionTextCritical,
+              actionStatus.severity === 'warning' && styles.homeActionTextWarning,
+              actionStatus.severity === 'attention' && styles.homeActionTextAttention,
+              actionStatus.severity === 'success' && styles.homeActionTextSuccess,
+            ]}>
+              {actionStatus.message}
+            </Text>
+          </View>
+          {actionStatus.actionLabel ? (
+            <Text style={[
+              styles.homeActionButton,
+              actionStatus.severity === 'critical' && styles.homeActionTextCritical,
+              actionStatus.severity === 'warning' && styles.homeActionTextWarning,
+              actionStatus.severity === 'attention' && styles.homeActionTextAttention,
+            ]}>
+              {actionStatus.actionLabel}
+            </Text>
+          ) : null}
+        </TouchableOpacity>
+
+        {actionStatus.kind !== 'missed' ? (
           <TouchableOpacity
-            style={styles.logActionCard}
-            onPress={openEinnahmeModal}
+            style={styles.nachtragSecondaryAction}
+            onPress={openNachtragModal}
             activeOpacity={0.8}
             accessibilityRole="button"
-            accessibilityLabel={`${offeneCount} Einnahme(n) heute offen. Antippen zum Bestätigen.`}
+            accessibilityLabel="Vergessene Einnahmen nachtragen"
           >
-            <View style={styles.logActionTextWrap}>
-              <Text style={styles.logActionTitle}>
-                {offeneCount === 1 ? 'Eine Einnahme heute offen' : `${offeneCount} Einnahmen heute offen`}
-              </Text>
-              <Text style={styles.logActionSub}>
-                {ersteOffene
-                  ? `${ersteOffene.slotUhrzeit} · ${ersteOffene.medikamentName}`
-                  : 'Jetzt bestätigen'}
-              </Text>
-            </View>
-            <Text style={styles.logActionButton}>Bestätigen</Text>
+            <Text style={styles.nachtragSecondaryText}>Einnahmen nachtragen</Text>
+            <Text style={styles.nachtragSecondaryChevron}>›</Text>
           </TouchableOpacity>
-        ) : (
-          <View style={styles.logDoneCard} accessibilityLiveRegion="polite">
-            <Text style={styles.logDoneTitle}>
-              {geplantCount > 0
-                ? 'Alle geplanten Einnahmen heute protokolliert'
-                : 'Heute keine feste Einnahme geplant'}
-            </Text>
-            <Text style={styles.logDoneSub}>
-              {geplantCount > 0
-                ? `${erledigtCount} Eintrag${erledigtCount === 1 ? '' : 'e'} im heutigen Protokoll`
-                : 'Bedarfsmedikamente kannst du unten erfassen.'}
-            </Text>
-          </View>
-        )}
-
-        <TouchableOpacity
-          style={styles.nachtragActionCard}
-          onPress={openNachtragModal}
-          activeOpacity={0.8}
-          accessibilityRole="button"
-          accessibilityLabel="Vergessene Einnahmen nachtragen"
-          accessibilityHint="Prüft gestern oder die letzten sieben Tage und speichert ausgewählte Einnahmen gesammelt"
-        >
-          <View style={styles.nachtragActionTextWrap}>
-            <Text style={styles.nachtragActionTitle}>Einnahmen nachtragen</Text>
-            <Text style={styles.nachtragActionSub}>Gestern oder letzte 7 Tage gesammelt prüfen</Text>
-          </View>
-          <Text style={styles.nachtragActionChevron}>›</Text>
-        </TouchableOpacity>
+        ) : null}
 
         {bedarfsMedikamente.length > 0 ? (
           <TouchableOpacity
@@ -655,7 +667,7 @@ export default function HomeScreen({ navigation }: Props) {
           <View style={styles.protocolCard}>
             <View style={styles.protocolHeaderRow}>
               <Text style={styles.protocolTitle}>Protokolliert</Text>
-              <Text style={styles.protocolTime}>{protokolliert[0].time}</Text>
+            <Text style={styles.protocolTime}>{protokolliert[0].time}</Text>
             </View>
             {protokolliert.slice(0, 5).map(item => (
               <View key={`${item.name}-${item.time}`} style={styles.protocolItem}>
@@ -1170,102 +1182,85 @@ const styles = StyleSheet.create({
     color: '#111827',
     fontWeight: '800',
   },
-  helpButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#E8F3FF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#B7D8F5',
-  },
-  helpButtonText: {
-    fontSize: 20,
-    color: '#155C96',
-    fontWeight: '800',
-  },
-  logActionCard: {
+  homeActionCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1F6F8B',
     borderRadius: 12,
     padding: 16,
-    marginBottom: 12,
-    minHeight: 92,
+    marginBottom: 10,
+    minHeight: 104,
+    borderWidth: 1,
   },
-  logActionTextWrap: {
+  homeActionCardCritical: {
+    backgroundColor: '#FEECEC',
+    borderColor: '#F3B3B3',
+  },
+  homeActionCardWarning: {
+    backgroundColor: '#FFF7E0',
+    borderColor: '#E8C96A',
+  },
+  homeActionCardAttention: {
+    backgroundColor: '#EAF3FF',
+    borderColor: '#B8D4F8',
+  },
+  homeActionCardSuccess: {
+    backgroundColor: '#EAF7F0',
+    borderColor: '#BFE6CE',
+  },
+  homeActionTextWrap: {
     flex: 1,
     paddingRight: 12,
   },
-  logActionTitle: {
-    color: '#FFFFFF',
+  homeActionTitle: {
     fontSize: 22,
     lineHeight: 28,
     fontWeight: '800',
   },
-  logActionSub: {
-    color: '#E9F7FB',
+  homeActionSub: {
     fontSize: 16,
+    lineHeight: 22,
     marginTop: 6,
     fontWeight: '600',
   },
-  logActionButton: {
-    color: '#FFFFFF',
+  homeActionButton: {
     fontSize: 17,
     fontWeight: '800',
+    textAlign: 'right',
+    maxWidth: 128,
   },
-  logDoneCard: {
-    backgroundColor: '#EAF7F0',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#BFE6CE',
+  homeActionTextCritical: {
+    color: '#8A1F1F',
   },
-  logDoneTitle: {
-    fontSize: 21,
-    lineHeight: 27,
+  homeActionTextWarning: {
+    color: '#6D4A00',
+  },
+  homeActionTextAttention: {
+    color: '#155C96',
+  },
+  homeActionTextSuccess: {
     color: '#14532D',
-    fontWeight: '800',
   },
-  logDoneSub: {
-    fontSize: 16,
-    color: '#376B49',
-    marginTop: 6,
-    fontWeight: '600',
-  },
-  nachtragActionCard: {
+  nachtragSecondaryAction: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    marginBottom: 12,
-    minHeight: 72,
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: 14,
     borderWidth: 1,
-    borderColor: '#D8DEE8',
+    borderColor: '#E5E7EB',
   },
-  nachtragActionTextWrap: {
-    flex: 1,
-    paddingRight: 12,
+  nachtragSecondaryText: {
+    fontSize: 17,
+    color: '#374151',
+    fontWeight: '700',
   },
-  nachtragActionTitle: {
-    fontSize: 19,
-    color: '#111827',
-    fontWeight: '800',
-  },
-  nachtragActionSub: {
-    fontSize: 15,
-    color: '#4B5563',
-    marginTop: 4,
-    fontWeight: '600',
-  },
-  nachtragActionChevron: {
-    fontSize: 34,
+  nachtragSecondaryChevron: {
+    fontSize: 26,
     color: '#6B7280',
-    fontWeight: '600',
+    fontWeight: '700',
   },
   bedarfCard: {
     flexDirection: 'row',
