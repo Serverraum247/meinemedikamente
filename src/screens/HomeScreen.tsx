@@ -103,6 +103,7 @@ export default function HomeScreen({ navigation }: Props) {
   const [nachtragGroups, setNachtragGroups] = useState<OffeneEinnahmeNachtragGroup[]>([]);
   const [nachtragPhase, setNachtragPhase] = useState<'past' | 'today'>('past');
   const [missedNachtragGroups, setMissedNachtragGroups] = useState<HomeMissedGroup[]>([]);
+  const [todayNachtragGroups, setTodayNachtragGroups] = useState<OffeneEinnahmeNachtragGroup[]>([]);
   const [heuteKey, setHeuteKey] = useState(() => getLocalDateKey());
   const heuteDatum = useMemo(() => dateFromLocalDateKey(heuteKey), [heuteKey]);
 
@@ -179,14 +180,19 @@ export default function HomeScreen({ navigation }: Props) {
 
   const ladeMissedNachtragSummary = useCallback(async () => {
     try {
-      const groups = await getOffeneEinnahmeNachtraege(aktivePerson?.id, 'sevenDays');
-      setMissedNachtragGroups(groups.map(group => ({
+      const [missedGroups, todayGroups] = await Promise.all([
+        getOffeneEinnahmeNachtraege(aktivePerson?.id, 'sevenDays'),
+        getOffeneEinnahmeNachtraege(aktivePerson?.id, 'today'),
+      ]);
+      setMissedNachtragGroups(missedGroups.map(group => ({
         datumIso: group.datumIso,
         itemCount: group.items.length,
       })));
+      setTodayNachtragGroups(todayGroups);
     } catch (error) {
       logger.error('Nachtrags-Zusammenfassung konnte nicht geladen werden:', error);
       setMissedNachtragGroups([]);
+      setTodayNachtragGroups([]);
     }
   }, [aktivePerson?.id]);
 
@@ -546,9 +552,10 @@ export default function HomeScreen({ navigation }: Props) {
     const geplantCount = heutigePlanMedikamente.length;
     const erledigtCount = heutigeProtokolle.length;
     const protokolliert = groupHeutigeProtokolle(heutigeProtokolle);
+    const todayConfirmableCount = todayNachtragGroups.reduce((sum, group) => sum + group.items.length, 0);
     const actionStatus = buildHomeActionStatus({
       missedGroups: missedNachtragGroups,
-      todayOpenCount: offeneCount,
+      todayOpenCount: Math.max(offeneCount, todayConfirmableCount),
       plannedTodayCount: geplantCount,
       loggedTodayCount: erledigtCount,
     });
@@ -559,6 +566,13 @@ export default function HomeScreen({ navigation }: Props) {
         return;
       }
       if (actionStatus.kind === 'todayOpen') {
+        if (todayNachtragGroups.length > 0) {
+          setNachtragPhase('today');
+          setNachtragMode('today');
+          setNachtragGroups(todayNachtragGroups);
+          setNachtragOffen(true);
+          return;
+        }
         openEinnahmeModal();
       }
     };
@@ -895,7 +909,7 @@ export default function HomeScreen({ navigation }: Props) {
 
       <EinnahmeNachtragModal
         visible={nachtragOffen}
-        title={nachtragPhase === 'today' ? 'Heute auch bestätigen?' : 'Offene Einnahmen nachtragen'}
+        title={nachtragPhase === 'today' ? 'Heute bestätigen' : 'Offene Einnahmen nachtragen'}
         subtitle={
           nachtragPhase === 'today'
             ? 'Diese Einnahmen sind heute noch offen oder dürfen schon bestätigt werden.'
