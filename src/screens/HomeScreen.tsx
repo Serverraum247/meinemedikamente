@@ -75,6 +75,7 @@ import {
   getLocalDateKey,
   msUntilNextLocalDay,
 } from '../utils/LocalDate';
+import type { HomeMissedGroup } from '../utils/HomeActionStatus';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
 
@@ -97,6 +98,7 @@ export default function HomeScreen({ navigation }: Props) {
   const [nachtragCustomDate, setNachtragCustomDate] = useState<Date | undefined>();
   const [nachtragGroups, setNachtragGroups] = useState<OffeneEinnahmeNachtragGroup[]>([]);
   const [nachtragPhase, setNachtragPhase] = useState<'past' | 'today'>('past');
+  const [missedNachtragGroups, setMissedNachtragGroups] = useState<HomeMissedGroup[]>([]);
   const [heuteKey, setHeuteKey] = useState(() => getLocalDateKey());
   const heuteDatum = useMemo(() => dateFromLocalDateKey(heuteKey), [heuteKey]);
 
@@ -171,6 +173,19 @@ export default function HomeScreen({ navigation }: Props) {
     }
   }, [aktivePerson?.id]);
 
+  const ladeMissedNachtragSummary = useCallback(async () => {
+    try {
+      const groups = await getOffeneEinnahmeNachtraege(aktivePerson?.id, 'sevenDays');
+      setMissedNachtragGroups(groups.map(group => ({
+        datumIso: group.datumIso,
+        itemCount: group.items.length,
+      })));
+    } catch (error) {
+      logger.error('Nachtrags-Zusammenfassung konnte nicht geladen werden:', error);
+      setMissedNachtragGroups([]);
+    }
+  }, [aktivePerson?.id]);
+
   // Hamburger-Menü im Header links
   useEffect(() => {
     navigation.setOptions({
@@ -203,13 +218,14 @@ export default function HomeScreen({ navigation }: Props) {
       refresh(),
       ladeEinnahmeStatus(nextHeuteDatum),
       ladeUrlaubsReminder(),
+      ladeMissedNachtragSummary(),
       getVerifiedAllRezeptTermine()
         .then(setRezeptTermine)
         .catch(error => {
           logger.error('Rezepttermine konnten nicht geladen werden:', error);
         }),
     ]);
-  }, [ladeEinnahmeStatus, ladeUrlaubsReminder, refresh]);
+  }, [ladeEinnahmeStatus, ladeMissedNachtragSummary, ladeUrlaubsReminder, refresh]);
 
   // Urlaub-Kollisionen als Tagesaufgabe laden
   useEffect(() => {
@@ -486,6 +502,7 @@ export default function HomeScreen({ navigation }: Props) {
       const result = await speichereEinnahmeNachtraege(items);
       await refresh();
       await ladeEinnahmeStatus();
+      await ladeMissedNachtragSummary();
 
       if (nachtragPhase === 'past') {
         const todayGroups = await getOffeneEinnahmeNachtraege(aktivePerson?.id, 'today');
@@ -894,6 +911,7 @@ export default function HomeScreen({ navigation }: Props) {
           await einnahmeVerbuchen(medikamentId, dosis, slot);
           await refresh();
           const { offene } = await ladeEinnahmeStatus();
+          await ladeMissedNachtragSummary();
           setOffeneEinnahmen(offene);
           const offeneIds = new Set(gefilterteMedikamente.map(medikament => medikament.id));
           if (offene.filter(einnahme => offeneIds.has(einnahme.medikamentId)).length === 0) {
@@ -914,6 +932,7 @@ export default function HomeScreen({ navigation }: Props) {
           }
           await refresh();
           const { offene } = await ladeEinnahmeStatus();
+          await ladeMissedNachtragSummary();
           setOffeneEinnahmen(offene);
           const offeneIds = new Set(gefilterteMedikamente.map(medikament => medikament.id));
           if (offene.filter(einnahme => offeneIds.has(einnahme.medikamentId)).length === 0) {
