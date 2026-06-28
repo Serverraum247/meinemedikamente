@@ -1,0 +1,96 @@
+#!/usr/bin/env node
+
+const { spawnSync } = require('child_process');
+
+const rawArgs = process.argv.slice(2);
+const roots = [];
+let expressionStart = rawArgs.length;
+
+for (let index = 0; index < rawArgs.length; index += 1) {
+  const arg = rawArgs[index];
+  if (
+    arg === '(' ||
+    arg === ')' ||
+    arg === '!' ||
+    arg === '-o' ||
+    arg === '-a' ||
+    arg.startsWith('-')
+  ) {
+    expressionStart = index;
+    break;
+  }
+  roots.push(arg);
+}
+
+const expressionArgs = rawArgs.slice(expressionStart);
+const repoRoot = process.env.MM_FIND_PRUNE_ROOT;
+const pruneArgs = [
+  '(',
+  '-path',
+  '* [0-9]',
+  '-o',
+  '-path',
+  '* [0-9]/*',
+  '-o',
+  '-path',
+  '*/node_modules/*/android',
+  '-o',
+  '-path',
+  '*/node_modules/*/android/*',
+  '-o',
+  '-path',
+  '*/node_modules/*/ios',
+  '-o',
+  '-path',
+  '*/node_modules/*/ios/*',
+  '-o',
+  '-path',
+  '*/node_modules/*/build',
+  '-o',
+  '-path',
+  '*/node_modules/*/build/*',
+  '-o',
+  '-path',
+  '*/node_modules/*/.cxx',
+  '-o',
+  '-path',
+  '*/node_modules/*/.cxx/*',
+  '-o',
+  '-path',
+  '*/node_modules/react-native/ReactAndroid',
+  '-o',
+  '-path',
+  '*/node_modules/react-native/ReactAndroid/*',
+  '-o',
+  '-path',
+  '*/node_modules/react-native/ReactCommon',
+  '-o',
+  '-path',
+  '*/node_modules/react-native/ReactCommon/*',
+  '-o',
+  '-path',
+  '*/node_modules/react-native/sdks',
+  '-o',
+  '-path',
+  '*/node_modules/react-native/sdks/*',
+  '-o',
+  '-path',
+  '*/node_modules/react-native/third-party',
+  '-o',
+  '-path',
+  '*/node_modules/react-native/third-party/*',
+];
+
+if (repoRoot) {
+  for (const relativePath of ['android', 'ios', 'docs', 'vendor', 'store-assets']) {
+    pruneArgs.push('-o', '-path', `${repoRoot}/${relativePath}`, '-o', '-path', `${repoRoot}/${relativePath}/*`);
+  }
+}
+
+pruneArgs.push(')', '-prune', '-o');
+
+const result = spawnSync('/usr/bin/find', [...roots, ...pruneArgs, '(', ...expressionArgs, ')', '-print'], {
+  stdio: 'inherit',
+});
+
+process.exit(result.status ?? 1);

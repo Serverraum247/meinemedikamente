@@ -16,6 +16,7 @@ import SettingsScreen from '../screens/SettingsScreen';
 import ArztUrlaubScreen from '../screens/ArztUrlaubScreen';
 import PremiumScreen from '../screens/PremiumScreen';
 import BackupScreen from '../screens/BackupScreen';
+import DeviceTransferScreen from '../screens/DeviceTransferScreen';
 import MedicationPlanExportScreen from '../screens/MedicationPlanExportScreen';
 import ErsteSchritteScreen from '../screens/ErsteSchritteScreen';
 import DatenschutzRechtScreen from '../screens/DatenschutzRechtScreen';
@@ -37,6 +38,7 @@ export type RootStackParamList = {
   ArztUrlaub: undefined;
   Premium: undefined;
   Backup: undefined;
+  DeviceTransfer: undefined;
   MedicationPlanExport: undefined;
   ErsteSchritte: undefined;
   DatenschutzRecht: undefined;
@@ -98,6 +100,7 @@ export default function AppNavigator() {
         <Stack.Screen name="ArztUrlaub" component={ArztUrlaubScreen} options={{ title: 'Arzt-Urlaub' }} />
         <Stack.Screen name="Premium" component={PremiumScreen} options={{ title: 'Premium' }} />
         <Stack.Screen name="Backup" component={BackupScreen} options={{ title: 'Cloud-Backup' }} />
+        <Stack.Screen name="DeviceTransfer" component={DeviceTransferScreen} options={{ title: 'Handy wechseln' }} />
         <Stack.Screen name="MedicationPlanExport" component={MedicationPlanExportScreen} options={{ title: 'Plan teilen' }} />
         <Stack.Screen name="ErsteSchritte" component={ErsteSchritteScreen} options={{ title: 'Erste Schritte' }} />
         <Stack.Screen name="DatenschutzRecht" component={DatenschutzRechtScreen} options={{ title: 'Datenschutz & Rechtliches' }} />

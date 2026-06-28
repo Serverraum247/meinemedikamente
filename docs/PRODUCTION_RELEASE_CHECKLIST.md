@@ -134,6 +134,7 @@ Offizielle Referenz: https://support.google.com/googleplay/android-developer/ans
 
 - [ ] Firebase-Projekt fuer Android final konfigurieren.
 - [ ] `google-services.json` nur als clientseitige Firebase-Konfiguration verwenden; keine Admin-Keys ins Repo.
+- [ ] `npm run doctor:build` muss fuer Android auch die Firebase-Verdrahtung grün melden: `google-services`-Classpath, App-Plugin und passende Clients fuer `dev.serverraum247.meinmediplan` sowie `dev.serverraum247.meinmediplan.internal`.
 - [ ] Firestore-Regeln setzen: Nutzer duerfen nur unter ihrer eigenen `uid` lesen/schreiben.
 - [ ] Cloud-Backup nur fuer Premium aktiv halten.
 - [ ] In Datenschutzerklaerung klar beschreiben, welche Medikamentendaten lokal und optional in der Cloud gespeichert werden.
@@ -178,6 +179,7 @@ Ziel: Lange Android-/iOS-Arbeit darf nicht mehr blind in Gradle oder Xcode haeng
 - [x] `npm run android:internal:build` startet erst nach erfolgreichem Doctor und schreibt ein kompaktes Fehlerlog nach `/tmp/meinmediplan-android-internal-build.log`.
 - [x] `npm run ios:internal:build` startet erst nach erfolgreichem Doctor und schreibt ein kompaktes Fehlerlog nach `/tmp/meinmediplan-ios-internal-build.log`.
 - [x] `npm run deploy:devices` installiert vorhandene interne Artefakte auf sichtbare Android-Geräte und verfügbare gekoppelte iPhones.
+- [x] `npm run deploy:devices` startet standardmäßig nur noch nach erfolgreichem `doctor:build`; Ausnahme nur bewusst mit `SKIP_DOCTOR_BUILD=1`.
 - [x] React-Native-Config-Hänger über den Doctor prüfbar machen, bevor Android/iOS produktiv gebaut werden.
 - [x] Lokalen doppelten Git-Ref `codex/medication-e2e-premium-dosing 2` prüfen und bereinigen, bevor der nächste Push erfolgt.
 

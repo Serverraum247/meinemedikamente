@@ -224,6 +224,29 @@ const BackupScreen: React.FC<BackupScreenProps> = ({ navigation }) => {
     </View>
   );
 
+  const renderTransferHint = () => {
+    if (Platform.OS !== 'android') {
+      return null;
+    }
+
+    return (
+      <View style={styles.transferHintContainer}>
+        <Text style={styles.transferHintTitle}>Von iPhone oder altem Handy übernehmen</Text>
+        <Text style={styles.transferHintText}>
+          Wenn deine Daten noch auf einem anderen Gerät liegen, nutze „Handy wechseln“. Dort kannst du ein sicheres Paket vom alten iPhone, Android-Handy oder aus einer wiedergefundenen Sicherung importieren.
+        </Text>
+        <TouchableOpacity
+          style={styles.transferHintButton}
+          onPress={() => navigation.navigate('DeviceTransfer')}
+          accessibilityLabel="Handy wechseln öffnen"
+          accessibilityRole="button"
+        >
+          <Text style={styles.transferHintButtonText}>Handy wechseln öffnen</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.header}>
@@ -241,6 +264,8 @@ const BackupScreen: React.FC<BackupScreenProps> = ({ navigation }) => {
             Ihre App-Daten liegen zuerst lokal auf diesem Handy. Ein Cloud-Backup ist eine zusätzliche Premium-Sicherung.
           </Text>
         </View>
+
+        {renderTransferHint()}
 
         {!isPremium && !loadingInfo ? (
           <PremiumGate
@@ -319,6 +344,42 @@ const styles = StyleSheet.create({
     fontSize: 17,
     lineHeight: 24,
     color: '#444444',
+    textAlign: 'center',
+  },
+  transferHintContainer: {
+    backgroundColor: '#eef6ff',
+    borderRadius: 16,
+    padding: 22,
+    marginBottom: 18,
+    borderWidth: 1,
+    borderColor: '#c6dcff',
+  },
+  transferHintTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#13335f',
+    textAlign: 'left',
+    marginBottom: 8,
+  },
+  transferHintText: {
+    fontSize: 17,
+    lineHeight: 24,
+    color: '#24456f',
+    textAlign: 'left',
+    marginBottom: 16,
+  },
+  transferHintButton: {
+    minHeight: 54,
+    borderRadius: 14,
+    backgroundColor: '#2d6cdf',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 18,
+  },
+  transferHintButtonText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#ffffff',
     textAlign: 'center',
   },
   statusIcon: {

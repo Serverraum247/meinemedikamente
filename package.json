@@ -1,6 +1,6 @@
 {
   "name": "MeineMedikamente",
-  "version": "0.1.57",
+  "version": "0.1.60",
   "private": true,
   "scripts": {
     "android": "react-native run-android",
@@ -24,7 +24,13 @@
     "verify": "npm run lint && npm run typecheck && npm test -- --runInBand --forceExit",
     "verify:prod": "npm run e2e:doctor && npm run typecheck && npm test -- --runInBand --forceExit",
     "doctor:build": "bash scripts/doctor-build-env.sh",
+    "ios:pods": "bash scripts/pod-install-ios.sh",
     "rn:config:check": "bash scripts/doctor-build-env.sh",
+    "device-transfer:from-db": "node scripts/create-device-transfer-package-from-db.js",
+    "device-transfer:from-db:test": "bash scripts/create-device-transfer-package-from-db.test.sh",
+    "android:variants:check": "bash scripts/check-android-installed-variants.sh --mode check",
+    "android:variants:clean": "bash scripts/check-android-installed-variants.sh --mode clean-internal --allow-missing-keep",
+    "android:variants:test": "bash scripts/check-android-installed-variants.test.sh",
     "android:internal:build": "bash scripts/build-android-internal.sh",
     "ios:internal:build": "bash scripts/build-ios-internal.sh",
     "deploy:devices": "bash scripts/deploy-connected-devices.sh"
@@ -38,6 +44,8 @@
     "@react-native/new-app-screen": "0.85.2",
     "@react-navigation/native": "^7.2.2",
     "@react-navigation/native-stack": "^7.14.12",
+    "@types/crypto-js": "^4.2.2",
+    "crypto-js": "^4.2.0",
     "react": "19.2.3",
     "react-native": "0.85.2",
     "react-native-calendar-events": "^2.2.0",

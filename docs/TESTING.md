@@ -16,12 +16,21 @@ npm test -- --runInBand --forceExit
 
 `doctor:build` is the fail-fast gate for native deploy work. It checks the local toolchain, attached Android/iOS device visibility, React Native config/autolinking health, and duplicate Git branch ref files before Gradle or Xcode are allowed to spend minutes in a build.
 
+Wenn Android-Cloud-Backup-Code im Projekt aktiv ist, prüft `doctor:build` zusätzlich hart die Firebase-Verdrahtung: `google-services`-Classpath, App-Plugin und `android/app/google-services.json` inklusive der erwarteten Package-Clients für `dev.serverraum247.meinmediplan` und `dev.serverraum247.meinmediplan.internal`. Fehlt davon etwas, darf weder Build noch Geräte-Deploy als gesund gelten.
+
 For native build confidence and device installation, use the project harness:
 
 ```bash
 npm run android:internal:build
 npm run ios:internal:build
 npm run deploy:devices
+```
+
+Before Android deployment, `npm run deploy:devices` removes duplicate local Android launcher variants and keeps the internal test package `dev.serverraum247.meinmediplan.internal`. The same guard can be run directly:
+
+```bash
+npm run android:variants:check
+npm run android:variants:clean
 ```
 
 The internal build scripts write full logs to `/tmp/meinmediplan-android-internal-build.log` and `/tmp/meinmediplan-ios-internal-build.log`. On failure they print the last relevant lines, so the next action is visible without scrolling through a full native build.
@@ -129,6 +138,32 @@ Unit tests cover scanner normalization and PZN check digits, including common sc
 The dosage-form matrix is documented in [MEDICATION_TEST_MATRIX.md](MEDICATION_TEST_MATRIX.md). At minimum, E2E must cover a solid medication and a liquid medication (`ml`).
 
 The Freemium split is documented in [PREMIUM_MODEL.md](PREMIUM_MODEL.md).
+
+## Datenwiederherstellung
+
+Die aktuelle Android-App bietet unter `Einstellungen` → `Speicherung` → `Handy wechseln` den Import eines sicheren Transferpakets (`.mmptransfer`) an. Dieser Pfad ist nicht nur für ein altes Handy gedacht, sondern auch für wiedergefundene Alt-Daten.
+
+Für einen Gerätewechsel vom iPhone gilt derselbe Pfad: Auf dem alten iPhone in `Handy wechseln` ein sicheres Paket erzeugen und teilen, auf dem Android-Zielgerät dasselbe Paket auswählen und mit dem separat notierten Sicherheitscode importieren.
+
+Wenn eine alte SQLite-Datei `meine_medikamente.db` vorliegt, kann daraus lokal ein importierbares Paket erzeugt werden:
+
+```bash
+npm run device-transfer:from-db -- --db /pfad/zur/meine_medikamente.db --out /tmp/mein-transfer.mmptransfer --verify
+```
+
+Optional kann ein fester Sicherheitscode gesetzt werden:
+
+```bash
+npm run device-transfer:from-db -- --db /pfad/zur/meine_medikamente.db --out /tmp/mein-transfer.mmptransfer --code 1111-2222-3333-4444-5555-6666-7777-8888 --verify
+```
+
+Der Konverter entfernt nicht portable Einstellungen wie lokale Premium-Overrides und erzeugt genau das Paketformat, das `Handy wechseln` in der App importiert.
+
+Der Konverter selbst hat einen reproduzierbaren Smoke-Test:
+
+```bash
+npm run device-transfer:from-db:test
+```
 
 ## Senior UI Check
 

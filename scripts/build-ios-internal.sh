@@ -24,11 +24,19 @@ RN_CONFIG_TIMEOUT_SECONDS="${RN_CONFIG_TIMEOUT_SECONDS:-30}" \
 FULL_RN_CONFIG_TIMEOUT_SECONDS="${FULL_RN_CONFIG_TIMEOUT_SECONDS:-45}" \
   bash scripts/doctor-build-env.sh
 
+printf 'Installing iOS Pods through the stable CocoaPods path...\n'
+POD_INSTALL_TIMEOUT_SECONDS="${POD_INSTALL_TIMEOUT_SECONDS:-180}" \
+NODE_BINARY="${NODE_BINARY:-/Users/danielbrussig/.local/bin/node}" \
+  bash scripts/pod-install-ios.sh
+
 printf 'Building iOS internal device app. Log: %s\n' "$LOG_FILE"
 mkdir -p "$(dirname "$LOG_FILE")"
 rm -rf "$DERIVED_DATA_PATH"
 
-if run_with_timeout "$BUILD_TIMEOUT_SECONDS" xcodebuild \
+if run_with_timeout "$BUILD_TIMEOUT_SECONDS" env \
+  NODE_BINARY="${NODE_BINARY:-/Users/danielbrussig/.local/bin/node}" \
+  PATH="$(dirname "${NODE_BINARY:-/Users/danielbrussig/.local/bin/node}"):/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin" \
+  xcodebuild \
   -workspace ios/MeineMedikamente.xcworkspace \
   -scheme MeineMedikamente \
   -configuration Release \

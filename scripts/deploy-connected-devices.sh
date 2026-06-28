@@ -2,12 +2,17 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ANDROID_PACKAGE="${ANDROID_PACKAGE:-dev.serverraum247.meinmediplan}"
+ANDROID_PACKAGE="${ANDROID_PACKAGE:-dev.serverraum247.meinmediplan.internal}"
 ANDROID_APK="${ANDROID_APK:-android/app/build/outputs/apk/internal/app-internal.apk}"
 IOS_APP="${IOS_APP:-ios/build/InternalDeviceDeploy/Build/Products/Release-iphoneos/MeineMedikamente.app}"
 IOS_BUNDLE_ID="${IOS_BUNDLE_ID:-com.meinemedikamente}"
 
 cd "$ROOT_DIR"
+
+if [[ "${SKIP_DOCTOR_BUILD:-0}" != "1" ]]; then
+  printf 'running build doctor before device deploy...\n'
+  bash scripts/doctor-build-env.sh
+fi
 
 deploy_android() {
   if ! command -v adb >/dev/null 2>&1; then
@@ -29,8 +34,18 @@ deploy_android() {
 
   while read -r device; do
     [[ -z "$device" ]] && continue
+    printf 'checking Android installed variants on %s...\n' "$device"
+    bash scripts/check-android-installed-variants.sh \
+      --mode clean \
+      --serial "$device" \
+      --keep-package "$ANDROID_PACKAGE" \
+      --allow-missing-keep
     printf 'installing Android APK on %s...\n' "$device"
     adb -s "$device" install -r "$ANDROID_APK"
+    bash scripts/check-android-installed-variants.sh \
+      --mode check \
+      --serial "$device" \
+      --keep-package "$ANDROID_PACKAGE"
     adb -s "$device" shell monkey -p "$ANDROID_PACKAGE" -c android.intent.category.LAUNCHER 1 >/dev/null
     printf 'ok: Android launched on %s\n' "$device"
   done <<<"$devices"

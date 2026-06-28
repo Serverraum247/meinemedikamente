@@ -16,12 +16,15 @@ react {
     // codegenDir = file("../../node_modules/@react-native/codegen")
     //   The cli.js file which is the React Native CLI entrypoint. Default is ../../node_modules/react-native/cli.js
     // cliFile = file("../../node_modules/react-native/cli.js")
+    if (project.findProperty("offlineRescueBundle")?.toString()?.toBoolean()) {
+        cliFile = file("../../scripts/react-native-bundle-shim.js")
+    }
 
     /* Variants */
     //   The list of variants to that are debuggable. For those we're going to
     //   skip the bundling of the JS bundle and the assets. Default is "debug", "debugOptimized".
     //   If you add flavors like lite, prod, etc. you'll have to list your debuggableVariants.
-    // debuggableVariants = ["liteDebug", "liteDebugOptimized", "prodDebug", "prodDebugOptimized"]
+    debuggableVariants = ["debug", "debugOptimized", "internal"]
 
     /* Bundling */
     //   A list containing the node command and its flags. Default is just 'node'.
@@ -71,6 +74,8 @@ def enableProguardInReleaseBuilds = false
  * this variant is about 6MiB larger per architecture than default.
  */
 def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
+def baseApplicationId = "dev.serverraum247.meinmediplan"
+def applicationIdOverride = project.findProperty("appIdOverride")?.toString()?.trim()
 def releaseSigningConfigured = [
     'MYAPP_UPLOAD_STORE_FILE',
     'MYAPP_UPLOAD_STORE_PASSWORD',
@@ -85,11 +90,11 @@ android {
 
     namespace "dev.serverraum247.meinmediplan"
     defaultConfig {
-        applicationId "dev.serverraum247.meinmediplan"
+        applicationId applicationIdOverride ?: baseApplicationId
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 58
-        versionName "0.1.57"
+        versionCode 61
+        versionName "0.1.60"
         manifestPlaceholders = [usesCleartextTraffic: "false"]
     }
     signingConfigs {
@@ -111,12 +116,24 @@ android {
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
+            applicationIdSuffix ".debug"
             buildConfigField "boolean", "INTERNAL_PREMIUM_TEST_MODE", "true"
             manifestPlaceholders = [usesCleartextTraffic: "true"]
         }
         internal {
+            initWith debug
+            signingConfig signingConfigs.debug
+            applicationIdSuffix ".internal"
+            versionNameSuffix "-internal"
+            buildConfigField "boolean", "INTERNAL_PREMIUM_TEST_MODE", "true"
+            matchingFallbacks = ["debug"]
+            manifestPlaceholders = [usesCleartextTraffic: "false"]
+        }
+        rescue {
             initWith release
             signingConfig signingConfigs.debug
+            debuggable true
+            versionNameSuffix "-rescue"
             buildConfigField "boolean", "INTERNAL_PREMIUM_TEST_MODE", "true"
             matchingFallbacks = ["release"]
             manifestPlaceholders = [usesCleartextTraffic: "false"]
@@ -145,6 +162,13 @@ tasks.matching { it.name in ["assembleRelease", "bundleRelease"] }.configureEach
     if (project.hasProperty("requireReleaseSigning")) {
         dependsOn("validateReleaseSigning")
     }
+}
+
+tasks.matching { it.name.startsWith("configureCMake") }.configureEach {
+    // Gradle 9 can race on Android's transient CMake log outputs and then fail
+    // while snapshotting task state, although the native configure step itself
+    // is fine. Rescue/debug builds only need the task result, not state tracking.
+    doNotTrackState("Work around transient CMake output snapshot failures on Gradle 9")
 }
 
 dependencies {

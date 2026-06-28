@@ -1,0 +1,94 @@
+{
+  "reactNativePath": "../node_modules/react-native",
+  "project": {
+    "ios": {
+      "sourceDir": "."
+    }
+  },
+  "dependencies": {
+    "@notifee/react-native": {
+      "root": "../node_modules/@notifee/react-native",
+      "name": "@notifee/react-native",
+      "platforms": {
+        "ios": {
+          "podspecPath": "../node_modules/@notifee/react-native/RNNotifee.podspec",
+          "version": "9.1.8",
+          "configurations": [],
+          "scriptPhases": []
+        }
+      }
+    },
+    "@react-native-async-storage/async-storage": {
+      "root": "../node_modules/@react-native-async-storage/async-storage",
+      "name": "@react-native-async-storage/async-storage",
+      "platforms": {
+        "ios": {
+          "podspecPath": "../node_modules/@react-native-async-storage/async-storage/RNCAsyncStorage.podspec",
+          "version": "2.2.0",
+          "configurations": [],
+          "scriptPhases": []
+        }
+      }
+    },
+    "react-native-calendar-events": {
+      "root": "../node_modules/react-native-calendar-events",
+      "name": "react-native-calendar-events",
+      "platforms": {
+        "ios": {
+          "podspecPath": "../node_modules/react-native-calendar-events/RNCalendarEvents.podspec",
+          "version": "2.2.0",
+          "configurations": [],
+          "scriptPhases": []
+        }
+      }
+    },
+    "react-native-camera-kit": {
+      "root": "../node_modules/react-native-camera-kit",
+      "name": "react-native-camera-kit",
+      "platforms": {
+        "ios": {
+          "podspecPath": "../node_modules/react-native-camera-kit/ReactNativeCameraKit.podspec",
+          "version": "17.0.1",
+          "configurations": [],
+          "scriptPhases": []
+        }
+      }
+    },
+    "react-native-safe-area-context": {
+      "root": "../node_modules/react-native-safe-area-context",
+      "name": "react-native-safe-area-context",
+      "platforms": {
+        "ios": {
+          "podspecPath": "../node_modules/react-native-safe-area-context/react-native-safe-area-context.podspec",
+          "version": "5.7.0",
+          "configurations": [],
+          "scriptPhases": []
+        }
+      }
+    },
+    "react-native-screens": {
+      "root": "../node_modules/react-native-screens",
+      "name": "react-native-screens",
+      "platforms": {
+        "ios": {
+          "podspecPath": "../node_modules/react-native-screens/RNScreens.podspec",
+          "version": "4.24.0",
+          "configurations": [],
+          "scriptPhases": []
+        }
+      }
+    },
+    "react-native-sqlite-storage": {
+      "root": "../node_modules/react-native-sqlite-storage",
+      "name": "react-native-sqlite-storage",
+      "platforms": {
+        "ios": {
+          "podspecPath": "../node_modules/react-native-sqlite-storage/react-native-sqlite-storage.podspec",
+          "version": "6.0.1",
+          "configurations": [],
+          "scriptPhases": []
+        }
+      }
+    }
+  }
+}

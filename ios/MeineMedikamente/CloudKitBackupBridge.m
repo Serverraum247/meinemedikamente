@@ -43,3 +43,19 @@ RCT_EXTERN_METHOD(sharePdf:(NSString *)title
                   rejecter:(RCTPromiseRejectBlock)reject)
 
 @end
+
+@interface RCT_EXTERN_MODULE(DeviceTransferFile, NSObject)
+
+RCT_EXTERN_METHOD(shareTransferFile:(NSString *)fileName
+                  content:(NSString *)content
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(pickTransferFile:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(randomBytes:(nonnull NSNumber *)byteCount
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
+@end

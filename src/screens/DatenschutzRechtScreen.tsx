@@ -66,6 +66,12 @@ export default function DatenschutzRechtScreen() {
           <Text style={styles.body}>
             Bei Nutzung von Cloud-Backup können diese Daten zusätzlich in der jeweiligen Cloud des Geräts gesichert werden. E-Mail-Anfragen werden nur geöffnet, wenn du den Kontakt aktiv auswählst.
           </Text>
+          <Text style={styles.body}>
+            Beim Gerätewechsel kann die App ein geschütztes Paket erstellen. Wenn du dieses Paket über Mail, Dateien, AirDrop, Drive oder andere Apps teilst, gelten für diese Übertragung die Datenschutzbedingungen der ausgewählten App.
+          </Text>
+          <Text style={styles.body}>
+            Bitte sende keine Gerätewechsel-Pakete, Sicherheitscodes oder Screenshots mit Medikamentennamen an den Support.
+          </Text>
         </InfoBlock>
 
         <InfoBlock title="Berechtigungen">

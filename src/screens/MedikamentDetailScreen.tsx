@@ -596,16 +596,6 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
           <Text style={[styles.tageInfo, reichweite.istKritisch && styles.tageInfoCritical]}>
             {reichweite.textLang}
           </Text>
-          {premium && (
-            <TouchableOpacity
-              style={styles.korrekturButton}
-              onPress={handleBestandskorrektur}
-              accessibilityLabel="Bestand korrigieren"
-              accessibilityHint="Bestand manuell anpassen, z.B. bei Verlust"
-            >
-              <Text style={styles.korrekturButtonText}>Bestand korrigieren</Text>
-            </TouchableOpacity>
-          )}
         </View>
 
         {/* Rezept-Erinnerung */}
@@ -635,18 +625,6 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
                 </Text>
               </TouchableOpacity>
             ) : null}
-            <TouchableOpacity
-              style={styles.primaryButton}
-              onPress={handleRezeptTerminErstellen}
-              activeOpacity={0.7}
-              accessibilityRole="button"
-              accessibilityLabel="Kalendereintrag als Rezept-Erinnerung erstellen"
-              accessibilityHint="Prüft zuerst Arzturlaub und erstellt dann einen Kalendertermin"
-            >
-              <Text style={styles.primaryButtonText}>
-                Rezept-Erinnerung erstellen
-              </Text>
-            </TouchableOpacity>
             {rezeptTermin ? (
               <TouchableOpacity
                 style={styles.doneButton}
@@ -825,6 +803,22 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
             value="Packung hinzufügen"
             onPress={() => navigation.navigate('Nachkauf', { medikamentId: medikament.id })}
           />
+          {premium ? (
+            <ActionRow
+              label="Bestand korrigieren"
+              value="Manuell"
+              onPress={handleBestandskorrektur}
+              accessibilityHint="Bestand manuell anpassen, z.B. bei Verlust"
+            />
+          ) : null}
+          {medikament.aktueller_bestand > 0 ? (
+            <ActionRow
+              label="Rezept-Erinnerung erstellen"
+              value={rezeptTermin ? 'Aktualisieren' : 'Kalender'}
+              onPress={handleRezeptTerminErstellen}
+              accessibilityHint="Prüft zuerst Arzturlaub und erstellt dann einen Kalendertermin"
+            />
+          ) : null}
           <ActionRow
             label="Einnahme nachtragen"
             value="Vergessenes Datum"
@@ -1201,11 +1195,13 @@ function ActionRow({
   value,
   onPress,
   danger = false,
+  accessibilityHint,
 }: {
   label: string;
   value: string;
   onPress: () => void;
   danger?: boolean;
+  accessibilityHint?: string;
 }) {
   return (
     <TouchableOpacity
@@ -1214,10 +1210,21 @@ function ActionRow({
       activeOpacity={0.75}
       accessibilityRole="button"
       accessibilityLabel={`${label}: ${value}`}
+      accessibilityHint={accessibilityHint}
     >
-      <Text style={[styles.actionRowLabel, danger && styles.actionRowDangerText]}>{label}</Text>
+      <Text
+        style={[styles.actionRowLabel, danger && styles.actionRowDangerText]}
+        numberOfLines={2}
+      >
+        {label}
+      </Text>
       <View style={styles.actionRowRight}>
-        <Text style={[styles.actionRowValue, danger && styles.actionRowDangerText]}>{value}</Text>
+        <Text
+          style={[styles.actionRowValue, danger && styles.actionRowDangerText]}
+          numberOfLines={1}
+        >
+          {value}
+        </Text>
         <Text style={[styles.actionRowChevron, danger && styles.actionRowDangerText]}>›</Text>
       </View>
     </TouchableOpacity>
@@ -1407,19 +1414,6 @@ const styles = StyleSheet.create({
     borderLeftWidth: 4,
     borderLeftColor: '#B45309',
   },
-  korrekturButton: {
-    marginTop: 12,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    backgroundColor: '#EEF2F7',
-    borderRadius: 8,
-    alignSelf: 'flex-start',
-  },
-  korrekturButtonText: {
-    fontSize: 16,
-    color: '#374151',
-    fontWeight: '500',
-  },
   detailCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
@@ -1470,21 +1464,6 @@ const styles = StyleSheet.create({
     color: '#5F6B7A',
     marginBottom: 10,
     lineHeight: 24,
-  },
-  primaryButton: {
-    backgroundColor: '#243B53',
-    borderRadius: 12,
-    paddingVertical: 16,
-    paddingHorizontal: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 56,
-    marginBottom: 12,
-  },
-  primaryButtonText: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#FFFFFF',
   },
   secondaryButton: {
     backgroundColor: '#FFFFFF',
@@ -1702,37 +1681,45 @@ const styles = StyleSheet.create({
   actionsCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
-    padding: 16,
+    padding: 14,
     marginBottom: 12,
     borderWidth: 1,
     borderColor: '#D8DEE6',
   },
   actionRow: {
-    minHeight: 56,
+    minHeight: 58,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderTopWidth: 1,
-    borderTopColor: '#E6EAF0',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E6EAF0',
     paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginTop: 8,
     gap: 12,
   },
   actionRowLabel: {
     flex: 1,
+    flexShrink: 1,
     fontSize: 17,
     color: '#1F2933',
     fontWeight: '700',
+    lineHeight: 22,
   },
   actionRowRight: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    flexShrink: 0,
+    flexShrink: 1,
+    maxWidth: '46%',
   },
   actionRowValue: {
     fontSize: 15,
     color: '#5F6B7A',
     fontWeight: '700',
+    flexShrink: 1,
   },
   actionRowChevron: {
     fontSize: 24,

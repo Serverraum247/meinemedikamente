@@ -2,7 +2,7 @@
  * PersonenContext.tsx – Verwaltet die aktive Person (Patient)
  *
  * - Laedt alle Personen aus DB
- * - Merkt sich aktive Person (async storage)
+ * - Merkt sich aktive Person in den SQLite-Einstellungen
  * - Stellt Umschalt-Funktion bereit
  * - Premium-Gate: Free=1, Premium=unbegrenzt
  */
@@ -18,8 +18,10 @@ import {
   PersonRow,
 } from '../database/PersonenController';
 import { isPremium } from '../services/PremiumService';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getSetting, setSetting } from '../services/SettingsService';
 import { logger } from '../utils/Logger';
+
+const AKTIVE_PERSON_SETTING_KEY = 'aktivePersonId';
 
 // ---------- Context Typ ----------
 
@@ -60,10 +62,10 @@ export const PersonenProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setPremium(isPrem);
       setMaxPersonen(max);
 
-      // Aktive Person laden (aus AsyncStorage oder Default)
+      // Aktive Person laden (aus SQLite-Einstellungen oder Default)
       let savedId: string | null = null;
       try {
-        savedId = await AsyncStorage.getItem('aktivePersonId');
+        savedId = await getSetting(AKTIVE_PERSON_SETTING_KEY);
       } catch { /* fallback */ }
 
       const found = savedId
@@ -89,7 +91,7 @@ export const PersonenProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const setAktivePerson = useCallback(async (person: PersonRow) => {
     setAktivePersonState(person);
     try {
-      await AsyncStorage.setItem('aktivePersonId', person.id);
+      await setSetting(AKTIVE_PERSON_SETTING_KEY, person.id);
     } catch { /* non-critical */ }
   }, []);
 

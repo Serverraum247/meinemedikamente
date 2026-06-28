@@ -30,7 +30,15 @@ if run_with_timeout "$BUILD_TIMEOUT_SECONDS" bash -lc '
   cd android
   export ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
   export JAVA_HOME="${JAVA_HOME:-$(/usr/libexec/java_home -v 17)}"
-  ./gradlew app:assembleInternal -PreactNativeArchitectures=arm64-v8a --console=plain --no-daemon
+  export NODE_BINARY="${NODE_BINARY:-/Users/danielbrussig/.local/bin/node}"
+  export PATH="$(dirname "$NODE_BINARY"):$PATH"
+  ./gradlew app:assembleInternal \
+    -PreactNativeArchitectures=arm64-v8a \
+    -Pkotlin.compiler.execution.strategy=in-process \
+    -Dkotlin.daemon.enabled=false \
+    --console=plain \
+    --no-daemon \
+    --max-workers=6
 ' >"$LOG_FILE" 2>&1; then
   printf 'ok: Android internal APK built\n'
   ls -lh android/app/build/outputs/apk/internal/app-internal.apk

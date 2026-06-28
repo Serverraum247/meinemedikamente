@@ -16,7 +16,9 @@
 
 import CloudKit
 import Foundation
+import Security
 import UIKit
+import UniformTypeIdentifiers
 import VisionKit
 
 @objc(AppRuntimeConfig)
@@ -479,5 +481,126 @@ class MedicationPlanShare: NSObject {
 
   @objc static func requiresMainQueueSetup() -> Bool {
     return false
+  }
+}
+
+@objc(DeviceTransferFile)
+class DeviceTransferFile: NSObject, UIDocumentPickerDelegate {
+
+  private var pickResolve: RCTPromiseResolveBlock?
+  private var pickReject: RCTPromiseRejectBlock?
+
+  @objc static func requiresMainQueueSetup() -> Bool {
+    return true
+  }
+
+  @objc func shareTransferFile(_ fileName: String,
+                               content: String,
+                               resolver resolve: @escaping RCTPromiseResolveBlock,
+                               rejecter reject: @escaping RCTPromiseRejectBlock) {
+    DispatchQueue.main.async {
+      do {
+        let url = try self.writeTransferFile(fileName: fileName, content: content)
+        guard let presenter = RCTPresentedViewController() else {
+          reject("TRANSFER_SHARE_ERROR", "Kein aktives Fenster zum Teilen gefunden.", nil)
+          return
+        }
+
+        let controller = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+        controller.popoverPresentationController?.sourceView = presenter.view
+        controller.completionWithItemsHandler = { _, _, _, _ in
+          resolve(true)
+        }
+        presenter.present(controller, animated: true)
+      } catch {
+        reject("TRANSFER_SHARE_ERROR", "Sicheres Paket konnte nicht geteilt werden: \(error.localizedDescription)", error)
+      }
+    }
+  }
+
+  @objc func pickTransferFile(_ resolve: @escaping RCTPromiseResolveBlock,
+                              rejecter reject: @escaping RCTPromiseRejectBlock) {
+    DispatchQueue.main.async {
+      guard self.pickResolve == nil else {
+        reject("TRANSFER_PICK_ERROR", "Es läuft bereits eine Dateiauswahl.", nil)
+        return
+      }
+      guard let presenter = RCTPresentedViewController() else {
+        reject("TRANSFER_PICK_ERROR", "Kein aktives Fenster zum Auswählen gefunden.", nil)
+        return
+      }
+
+      self.pickResolve = resolve
+      self.pickReject = reject
+
+      let supportedTypes: [UTType] = [
+        UTType(filenameExtension: "mmptransfer") ?? .data,
+        .data,
+        .plainText
+      ]
+      let picker = UIDocumentPickerViewController(forOpeningContentTypes: supportedTypes, asCopy: true)
+      picker.delegate = self
+      picker.allowsMultipleSelection = false
+      presenter.present(picker, animated: true)
+    }
+  }
+
+  @objc func randomBytes(_ byteCount: NSNumber,
+                         resolver resolve: @escaping RCTPromiseResolveBlock,
+                         rejecter reject: @escaping RCTPromiseRejectBlock) {
+    let count = byteCount.intValue
+    guard count > 0 && count <= 1024 else {
+      reject("TRANSFER_RANDOM_ERROR", "Ungültige Anzahl Zufallsbytes.", nil)
+      return
+    }
+    var bytes = [UInt8](repeating: 0, count: count)
+    let status = SecRandomCopyBytes(kSecRandomDefault, count, &bytes)
+    guard status == errSecSuccess else {
+      reject("TRANSFER_RANDOM_ERROR", "Zufallsbytes konnten nicht erzeugt werden.", nil)
+      return
+    }
+    resolve(Data(bytes).base64EncodedString())
+  }
+
+  func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+    pickResolve?(nil)
+    clearPickPromise()
+  }
+
+  func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+    guard let url = urls.first else {
+      pickReject?("TRANSFER_PICK_ERROR", "Keine Datei ausgewählt.", nil)
+      clearPickPromise()
+      return
+    }
+
+    do {
+      let content = try String(contentsOf: url, encoding: .utf8)
+      pickResolve?(content)
+    } catch {
+      pickReject?("TRANSFER_PICK_ERROR", "Sicheres Paket konnte nicht gelesen werden: \(error.localizedDescription)", error)
+    }
+    clearPickPromise()
+  }
+
+  private func clearPickPromise() {
+    pickResolve = nil
+    pickReject = nil
+  }
+
+  private func writeTransferFile(fileName: String, content: String) throws -> URL {
+    let safeName = sanitizeTransferFileName(fileName)
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent(safeName)
+    try content.write(to: url, atomically: true, encoding: .utf8)
+    return url
+  }
+
+  private func sanitizeTransferFileName(_ value: String) -> String {
+    let allowed = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-")
+    let scalars = value.unicodeScalars.map { allowed.contains($0) ? Character($0) : "-" }
+    let sanitized = String(scalars).replacingOccurrences(of: "-+", with: "-", options: .regularExpression)
+      .trimmingCharacters(in: CharacterSet(charactersIn: "-"))
+    let base = sanitized.isEmpty ? "mein-mediplan-transfer.mmptransfer" : sanitized
+    return base.hasSuffix(".mmptransfer") ? base : "\(base).mmptransfer"
   }
 }

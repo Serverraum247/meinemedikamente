@@ -608,8 +608,9 @@ export default function SettingsScreen({ navigation }: Props) {
         <>
           <SettingsCard title="Speicherung">
             <SettingsRow icon="⌂" title="Lokale Daten" value="Auf diesem Gerät" subtitle="Deine Medikamentendaten werden zuerst lokal gespeichert." />
+            <SettingsRow icon="⇄" title="Handy wechseln" value={premiumActive ? 'Premium' : 'Premium'} subtitle="Daten geschützt auf ein neues Handy übertragen." onPress={() => navigation.navigate('DeviceTransfer')} />
             <SettingsRow icon="☁" title="Cloud-Backup" value={premiumActive ? 'Verfügbar' : 'Premium'} subtitle="Zusätzliche Sicherung, wenn du sie aktiv nutzt." onPress={() => navigation.navigate('Backup')} />
-            <SettingsRow icon="⇄" title="Live-Sync" value="Nicht aktiv" subtitle="Android und iOS haben keine automatische gemeinsame Datenbank." />
+            <SettingsRow icon="⇆" title="Live-Sync" value="Nicht aktiv" subtitle="Android und iOS haben keine automatische gemeinsame Datenbank." />
           </SettingsCard>
           <View style={styles.privacyNotice}>
             <Text style={styles.privacyNoticeTitle}>Datenschutz-Hinweis</Text>

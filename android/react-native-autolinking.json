@@ -1,0 +1,158 @@
+{
+  "reactNativeVersion": "0.85",
+  "project": {
+    "android": {
+      "sourceDir": "./app",
+      "packageName": "dev.serverraum247.meinmediplan"
+    }
+  },
+  "dependencies": {
+    "@notifee/react-native": {
+      "root": "../node_modules/@notifee/react-native",
+      "name": "@notifee/react-native",
+      "platforms": {
+        "android": {
+          "sourceDir": "../node_modules/@notifee/react-native/android",
+          "packageImportPath": "import io.invertase.notifee.NotifeePackage;",
+          "packageInstance": "new NotifeePackage()",
+          "isPureCxxDependency": false
+        }
+      }
+    },
+    "@react-native-async-storage/async-storage": {
+      "root": "../node_modules/@react-native-async-storage/async-storage",
+      "name": "@react-native-async-storage/async-storage",
+      "platforms": {
+        "android": {
+          "sourceDir": "../node_modules/@react-native-async-storage/async-storage/android",
+          "packageImportPath": "import com.reactnativecommunity.asyncstorage.AsyncStoragePackage;",
+          "packageInstance": "new AsyncStoragePackage()",
+          "isPureCxxDependency": false
+        }
+      }
+    },
+    "@react-native-firebase/app": {
+      "root": "../node_modules/@react-native-firebase/app",
+      "name": "@react-native-firebase/app",
+      "platforms": {
+        "android": {
+          "sourceDir": "../node_modules/@react-native-firebase/app/android",
+          "packageImportPath": "import io.invertase.firebase.app.ReactNativeFirebaseAppPackage;",
+          "packageInstance": "new ReactNativeFirebaseAppPackage()",
+          "isPureCxxDependency": false
+        }
+      }
+    },
+    "@react-native-firebase/auth": {
+      "root": "../node_modules/@react-native-firebase/auth",
+      "name": "@react-native-firebase/auth",
+      "platforms": {
+        "android": {
+          "sourceDir": "../node_modules/@react-native-firebase/auth/android",
+          "packageImportPath": "import io.invertase.firebase.auth.ReactNativeFirebaseAuthPackage;",
+          "packageInstance": "new ReactNativeFirebaseAuthPackage()",
+          "isPureCxxDependency": false
+        }
+      }
+    },
+    "@react-native-firebase/firestore": {
+      "root": "../node_modules/@react-native-firebase/firestore",
+      "name": "@react-native-firebase/firestore",
+      "platforms": {
+        "android": {
+          "sourceDir": "../node_modules/@react-native-firebase/firestore/android",
+          "packageImportPath": "import io.invertase.firebase.firestore.ReactNativeFirebaseFirestorePackage;",
+          "packageInstance": "new ReactNativeFirebaseFirestorePackage()",
+          "isPureCxxDependency": false
+        }
+      }
+    },
+    "react-native-calendar-events": {
+      "root": "../node_modules/react-native-calendar-events",
+      "name": "react-native-calendar-events",
+      "platforms": {
+        "android": {
+          "sourceDir": "../node_modules/react-native-calendar-events/android",
+          "packageImportPath": "import com.calendarevents.RNCalendarEventsPackage;",
+          "packageInstance": "new RNCalendarEventsPackage()",
+          "isPureCxxDependency": false
+        }
+      }
+    },
+    "react-native-camera-kit": {
+      "root": "../node_modules/react-native-camera-kit",
+      "name": "react-native-camera-kit",
+      "platforms": {
+        "android": {
+          "sourceDir": "../node_modules/react-native-camera-kit/android",
+          "packageImportPath": "import com.rncamerakit.RNCameraKitPackage;",
+          "packageInstance": "new RNCameraKitPackage()",
+          "libraryName": null,
+          "componentDescriptors": [],
+          "cmakeListsPath": null,
+          "isPureCxxDependency": false
+        }
+      }
+    },
+    "react-native-safe-area-context": {
+      "root": "../node_modules/react-native-safe-area-context",
+      "name": "react-native-safe-area-context",
+      "platforms": {
+        "android": {
+          "sourceDir": "../node_modules/react-native-safe-area-context/android",
+          "packageImportPath": "import com.th3rdwave.safeareacontext.SafeAreaContextPackage;",
+          "packageInstance": "new SafeAreaContextPackage()",
+          "isPureCxxDependency": false
+        }
+      }
+    },
+    "react-native-screens": {
+      "root": "../node_modules/react-native-screens",
+      "name": "react-native-screens",
+      "platforms": {
+        "android": {
+          "sourceDir": "../node_modules/react-native-screens/android",
+          "packageImportPath": "import com.swmansion.rnscreens.RNScreensPackage;",
+          "packageInstance": "new RNScreensPackage()",
+          "isPureCxxDependency": false
+        }
+      }
+    },
+    "react-native-sqlite-storage": {
+      "root": "../node_modules/react-native-sqlite-storage",
+      "name": "react-native-sqlite-storage",
+      "platforms": {
+        "android": {
+          "sourceDir": "../node_modules/react-native-sqlite-storage/platforms/android",
+          "packageImportPath": "import org.pgsqlite.SQLitePluginPackage;",
+          "packageInstance": "new SQLitePluginPackage()",
+          "isPureCxxDependency": false
+        }
+      }
+    },
+    "react-native-nitro-modules": {
+      "root": "../node_modules/react-native-nitro-modules",
+      "name": "react-native-nitro-modules",
+      "platforms": {
+        "android": {
+          "sourceDir": "../node_modules/react-native-nitro-modules/android",
+          "packageImportPath": "import com.margelo.nitro.NitroModulesPackage;",
+          "packageInstance": "new NitroModulesPackage()",
+          "isPureCxxDependency": false
+        }
+      }
+    },
+    "react-native-iap": {
+      "root": "../node_modules/react-native-iap",
+      "name": "react-native-iap",
+      "platforms": {
+        "android": {
+          "sourceDir": "../node_modules/react-native-iap/android",
+          "packageImportPath": "import com.margelo.nitro.iap.NitroIapPackage;",
+          "packageInstance": "new NitroIapPackage()",
+          "isPureCxxDependency": false
+        }
+      }
+    }
+  }
+}

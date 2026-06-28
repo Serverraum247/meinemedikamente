@@ -9,7 +9,7 @@
 import { Platform } from 'react-native';
 import { getSetting, setSetting } from './SettingsService';
 import { logger } from '../utils/Logger';
-import { canUsePremiumTestOverride } from './AppRuntimeConfigService';
+import { canUsePremiumTestOverride, isInternalPremiumTestModeEnabled } from './AppRuntimeConfigService';
 
 // ─── Lazy IAP Loading (Android only) ───────────────────────────────
 
@@ -101,6 +101,7 @@ export async function isPremium(): Promise<boolean> {
     const override = await getSetting(KEY_DEV_PREMIUM_OVERRIDE);
     if (override === 'premium') return true;
     if (override === 'free') return false;
+    if (isInternalPremiumTestModeEnabled()) return true;
   }
   const val = await getSetting(KEY_PREMIUM);
   return val === 'true' || val === '1';
