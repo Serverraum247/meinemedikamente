@@ -65,6 +65,7 @@ yarn-error.log
 
 # Local planning / automation artifacts
 .superpowers/
+.worktrees/
 .maestro/artifacts/
 maestro-report.*
 
