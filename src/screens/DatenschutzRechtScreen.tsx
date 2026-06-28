@@ -64,13 +64,13 @@ export default function DatenschutzRechtScreen() {
             Die App speichert Medikamentendaten, Personen, Ärzte, Einnahmen, Erinnerungen, Rezepttermine und Einstellungen lokal auf dem Gerät.
           </Text>
           <Text style={styles.body}>
-            Bei Nutzung von Cloud-Backup können diese Daten zusätzlich in der jeweiligen Cloud des Geräts gesichert werden. E-Mail-Anfragen werden nur geöffnet, wenn du den Kontakt aktiv auswählst.
+            Bei Nutzung von Cloud-Backup können diese Daten zusätzlich gesichert werden: auf iPhone in iCloud und auf Android verschlüsselt in einer App-Cloud, die über deinen persönlichen Sicherungscode wiedergefunden wird. E-Mail-Anfragen werden nur geöffnet, wenn du den Kontakt aktiv auswählst.
           </Text>
           <Text style={styles.body}>
             Beim Gerätewechsel kann die App ein geschütztes Paket erstellen. Wenn du dieses Paket über Mail, Dateien, AirDrop, Drive oder andere Apps teilst, gelten für diese Übertragung die Datenschutzbedingungen der ausgewählten App.
           </Text>
           <Text style={styles.body}>
-            Bitte sende keine Gerätewechsel-Pakete, Sicherheitscodes oder Screenshots mit Medikamentennamen an den Support.
+            Bitte sende keine Gerätewechsel-Pakete, Sicherungscodes, Sicherheitscodes oder Screenshots mit Medikamentennamen an den Support.
           </Text>
         </InfoBlock>
 

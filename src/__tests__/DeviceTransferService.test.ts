@@ -161,7 +161,7 @@ function makeArchive(): DeviceTransferArchive {
     },
     data: {
       personen: [{ ...tableRows.personen[0], avatar_uri: '' }],
-      medikamente: tableRows.medikamente,
+      medikamente: tableRows.medikamente.map(row => ({ ...row })),
       packungen: [],
       einnahmen: [],
       arzt_urlaub: [],

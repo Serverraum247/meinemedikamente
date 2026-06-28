@@ -133,9 +133,10 @@ Offizielle Referenz: https://support.google.com/googleplay/android-developer/ans
 ## Datenschutz und Cloud Backup
 
 - [ ] Firebase-Projekt fuer Android final konfigurieren.
+- [ ] Firebase Authentication in der Console einmal manuell initialisieren (`Authentication` -> `Get started`) und dabei mit dem Google-Konto arbeiten, das das Projekt besitzt.
 - [ ] `google-services.json` nur als clientseitige Firebase-Konfiguration verwenden; keine Admin-Keys ins Repo.
 - [ ] `npm run doctor:build` muss fuer Android auch die Firebase-Verdrahtung grün melden: `google-services`-Classpath, App-Plugin und passende Clients fuer `dev.serverraum247.meinmediplan` sowie `dev.serverraum247.meinmediplan.internal`.
-- [ ] Firestore-Regeln setzen: Nutzer duerfen nur unter ihrer eigenen `uid` lesen/schreiben.
+- [ ] Firestore-Regeln auf den Sicherungscode-Tresor anpassen. Android-Cloud-Backup darf ohne Nutzerkonto funktionieren, aber nur mit gültiger Firebase-Session und verschlüsseltem Paket im Tresor-Dokument.
 - [ ] Cloud-Backup nur fuer Premium aktiv halten.
 - [ ] In Datenschutzerklaerung klar beschreiben, welche Medikamentendaten lokal und optional in der Cloud gespeichert werden.
 - [ ] Veröffentliche Datenschutzerklärungs-URL bereitstellen, bevor die App zur Prüfung geht.
@@ -166,6 +167,8 @@ Offizielle Referenz: https://support.google.com/googleplay/android-developer/ans
 - [ ] Free/Premium-Grenzen pruefen.
 - [ ] PZN-/Barcode-Scan pruefen.
 - [ ] Cloud-Backup erstellen, App neu öffnen und Backup-Status prüfen.
+- [ ] Android: Sicherungscode nach erstem Backup notieren und auf zweitem Gerät testen.
+- [ ] Android: Restore nur mit Sicherungscode und ohne altes Gerät testen.
 - [ ] Premium-Export pruefen: Plan der aktiven Person als Text und PDF teilen.
 - [ ] Medikamentenvarianten testen: Tabletten, Flüssigkeit/ml, Hübe, Mo/Mi/Fr, nur 3 Einnahmetage.
 - [ ] Senioren-UI-Check auf echtem Android-Geraet.

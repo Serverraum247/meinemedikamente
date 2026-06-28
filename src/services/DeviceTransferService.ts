@@ -165,7 +165,7 @@ export interface DeviceTransferPreview {
   activeReminderCount: number;
 }
 
-interface CryptoOptions {
+export interface CryptoOptions {
   iterations?: number;
   now?: Date;
   saltBase64?: string;
@@ -175,21 +175,25 @@ interface CryptoOptions {
 export async function createDeviceTransferExport(options: CryptoOptions = {}): Promise<DeviceTransferExport> {
   const archive = await collectPortableData(options.now ?? new Date());
   const securityCode = await generateSecurityCode();
-  const [saltBase64, ivBase64] = await Promise.all([
-    getSecureRandomBase64(16),
-    getSecureRandomBase64(16),
-  ]);
-  const packageText = encryptArchive(archive, securityCode, {
-    ...options,
-    saltBase64,
-    ivBase64,
-  });
+  const packageText = encryptArchive(archive, securityCode, await createArchiveCryptoOptions(options));
   const preview = buildPreview(archive);
   return {
     fileName: buildTransferFileName(options.now ?? new Date()),
     packageText,
     securityCode,
     preview,
+  };
+}
+
+export async function createArchiveCryptoOptions(options: CryptoOptions = {}): Promise<CryptoOptions> {
+  const [saltBase64, ivBase64] = await Promise.all([
+    options.saltBase64 ? Promise.resolve(options.saltBase64) : getSecureRandomBase64(16),
+    options.ivBase64 ? Promise.resolve(options.ivBase64) : getSecureRandomBase64(16),
+  ]);
+  return {
+    ...options,
+    saltBase64,
+    ivBase64,
   };
 }
 
@@ -500,7 +504,7 @@ function buildPreview(archive: DeviceTransferArchive): DeviceTransferPreview {
   };
 }
 
-async function generateSecurityCode(): Promise<string> {
+export async function generateSecurityCode(): Promise<string> {
   const bytes = await getSecureRandomBytes(16);
   return Array.from(bytes)
     .map(byte => byte.toString(16).padStart(2, '0').toUpperCase())

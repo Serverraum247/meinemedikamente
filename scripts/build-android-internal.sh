@@ -38,7 +38,7 @@ if run_with_timeout "$BUILD_TIMEOUT_SECONDS" bash -lc '
     -Dkotlin.daemon.enabled=false \
     --console=plain \
     --no-daemon \
-    --max-workers=6
+    --max-workers=1
 ' >"$LOG_FILE" 2>&1; then
   printf 'ok: Android internal APK built\n'
   ls -lh android/app/build/outputs/apk/internal/app-internal.apk

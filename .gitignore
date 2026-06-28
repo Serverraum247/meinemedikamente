@@ -73,6 +73,7 @@ maestro-report.*
 *service-account*.json
 *play-api*.json
 google-play*.json
+android/app/google-services.json
 
 # testing
 /coverage

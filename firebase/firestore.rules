@@ -1,0 +1,28 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /cloud_backup_vaults/{vaultId} {
+      allow get: if request.auth != null;
+      allow list: if false;
+
+      allow create, update: if request.auth != null
+        && request.resource.data.format == 'MEIN_MEDIPLAN_CLOUD_BACKUP'
+        && request.resource.data.version == 1
+        && request.resource.data.packageText is string
+        && request.resource.data.packageText.size() > 0
+        && request.resource.data.packageText.size() <= 900000
+        && request.resource.data.manifestCreatedAt is string
+        && request.resource.data.medicationCount is int
+        && request.resource.data.personCount is int
+        && request.resource.data.doctorCount is int
+        && request.resource.data.intakeCount is int
+        && request.resource.data.packageCount is int
+        && request.resource.data.lastWriterUid is string
+        && request.resource.data.lastWriterUid == request.auth.uid
+        && request.resource.data.updatedAt == request.time;
+
+      allow delete: if request.auth != null;
+    }
+  }
+}

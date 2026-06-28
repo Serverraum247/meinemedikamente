@@ -1,37 +1,48 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  Alert,
   ActivityIndicator,
-  ScrollView,
+  Alert,
   Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 
-import { uploadBackup, getBackupInfo, restoreBackup, BackupInfo as ServiceBackupInfo } from '../services/BackupService';
-import { isPremium as checkIsPremium } from '../services/PremiumService';
-import { RootStackParamList } from '../navigation/AppNavigator';
 import PremiumGate from '../components/PremiumGate';
+import { RootStackParamList } from '../navigation/AppNavigator';
+import {
+  connectBackupWithRecoveryCode,
+  getBackupInfo,
+  getBackupRecoveryCode,
+  restoreBackup,
+  uploadBackup,
+  type BackupInfo as ServiceBackupInfo,
+} from '../services/BackupService';
+import { isPremium as checkIsPremium } from '../services/PremiumService';
 import { logger } from '../utils/Logger';
 
-// Plattform-spezifische Labels
 const isIOS = Platform.OS === 'ios';
+const isAndroid = Platform.OS === 'android';
 const cloudName = isIOS ? 'iCloud' : 'Cloud';
 
 type BackupScreenProps = NativeStackScreenProps<RootStackParamList, 'Backup'>;
 
-const BackupScreen: React.FC<BackupScreenProps> = ({ navigation }) => {
-  const [isPremium, setIsPremium] = useState<boolean>(false);
+export default function BackupScreen({ navigation }: BackupScreenProps) {
+  const [isPremium, setIsPremium] = useState(false);
   const [backupInfo, setBackupInfo] = useState<ServiceBackupInfo | null>(null);
-  const [loadingInfo, setLoadingInfo] = useState<boolean>(true);
-  const [uploading, setUploading] = useState<boolean>(false);
-  const [restoring, setRestoring] = useState<boolean>(false);
+  const [loadingInfo, setLoadingInfo] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+  const [recoveryCode, setRecoveryCode] = useState<string | null>(null);
+  const [recoveryCodeInput, setRecoveryCodeInput] = useState('');
+  const [connectingRecoveryCode, setConnectingRecoveryCode] = useState(false);
+  const [revealRecoveryCode, setRevealRecoveryCode] = useState(false);
 
-  // Format date to German locale: DD.MM.YYYY, HH:MM
   const formatDate = (dateString: string): string => {
     try {
       const date = new Date(dateString);
@@ -46,14 +57,19 @@ const BackupScreen: React.FC<BackupScreenProps> = ({ navigation }) => {
     }
   };
 
-  const loadBackupInfo = useCallback(async () => {
+  const loadBackupState = useCallback(async () => {
     try {
       setLoadingInfo(true);
-      const info = await getBackupInfo();
+      const [info, storedRecoveryCode] = await Promise.all([
+        getBackupInfo(),
+        getBackupRecoveryCode(),
+      ]);
       setBackupInfo(info);
+      setRecoveryCode(storedRecoveryCode);
     } catch (error) {
-      logger.error('Fehler beim Laden der Backup-Info:', error);
+      logger.error('Fehler beim Laden des Cloud-Backups:', error);
       setBackupInfo(null);
+      setRecoveryCode(null);
     } finally {
       setLoadingInfo(false);
     }
@@ -65,7 +81,7 @@ const BackupScreen: React.FC<BackupScreenProps> = ({ navigation }) => {
         const premium = await checkIsPremium();
         setIsPremium(premium);
         if (premium) {
-          await loadBackupInfo();
+          await loadBackupState();
         }
       } catch (error) {
         logger.error('Fehler beim Prüfen des Premium-Status:', error);
@@ -75,13 +91,13 @@ const BackupScreen: React.FC<BackupScreenProps> = ({ navigation }) => {
       }
     };
 
-    checkPremiumAndLoadInfo();
-  }, [loadBackupInfo]);
+    checkPremiumAndLoadInfo().catch(logger.error);
+  }, [loadBackupState]);
 
   const handleCreateBackup = async () => {
     Alert.alert(
       `${cloudName}-Backup erstellen`,
-      `Möchten Sie ein neues ${cloudName}-Backup erstellen? Die aktuellen Medikamentendaten werden ${isIOS ? 'in iCloud gespeichert' : 'hochgeladen'}.`,
+      `Möchten Sie ein neues ${cloudName}-Backup erstellen? Die aktuellen Medikamentendaten werden ${isIOS ? 'in iCloud gespeichert' : 'verschlüsselt hochgeladen'}.`,
       [
         { text: 'Abbrechen', style: 'cancel' },
         {
@@ -94,32 +110,49 @@ const BackupScreen: React.FC<BackupScreenProps> = ({ navigation }) => {
               if (!result.success) {
                 throw new Error(result.error || 'Das Backup konnte nicht erstellt werden.');
               }
-              Alert.alert(
-                'Backup erfolgreich',
-                `Ihre Medikamentendaten wurden erfolgreich ${isIOS ? 'in iCloud' : 'in der Cloud'} gespeichert.`
-              );
-              await loadBackupInfo();
+
+              await loadBackupState();
+              if (isAndroid && result.generatedRecoveryCode && result.recoveryCode) {
+                setRevealRecoveryCode(true);
+                Alert.alert(
+                  'Backup erfolgreich',
+                  `Ihre Medikamentendaten wurden erfolgreich in der Cloud gespeichert.\n\nIhr Sicherungscode lautet:\n\n${result.recoveryCode}\n\nOhne diesen Code kann ein neues Android-Gerät das Backup nicht wiederherstellen.`,
+                );
+              } else {
+                Alert.alert(
+                  'Backup erfolgreich',
+                  `Ihre Medikamentendaten wurden erfolgreich ${isIOS ? 'in iCloud' : 'in der Cloud'} gespeichert.`,
+                );
+              }
             } catch (error) {
               logger.error('Fehler beim Backup:', error);
               Alert.alert(
                 'Fehler',
                 error instanceof Error
                   ? error.message
-                  : 'Das Backup konnte nicht erstellt werden. Bitte prüfen Sie Ihre Internetverbindung und versuchen Sie es erneut.'
+                  : 'Das Backup konnte nicht erstellt werden. Bitte prüfen Sie Ihre Internetverbindung und versuchen Sie es erneut.',
               );
             } finally {
               setUploading(false);
             }
           },
         },
-      ]
+      ],
     );
   };
 
   const handleRestoreBackup = async () => {
+    if (isAndroid && !recoveryCode) {
+      Alert.alert(
+        'Sicherungscode fehlt',
+        'Geben Sie zuerst den Sicherungscode Ihres Android-Backups ein. Danach kann dieses Gerät das Cloud-Backup wiederherstellen.',
+      );
+      return;
+    }
+
     Alert.alert(
       'Backup wiederherstellen',
-      'Achtung: Aktuelle Daten werden ersetzt!\n\nDie gespeicherten Medikamentendaten aus der Cloud werden geladen und ersetzen Ihre aktuellen Daten.',
+      'Achtung: Aktuelle Daten werden ersetzt.\n\nDie gespeicherten Medikamentendaten aus der Cloud werden geladen und ersetzen Ihre aktuellen Daten.',
       [
         { text: 'Abbrechen', style: 'cancel' },
         {
@@ -134,24 +167,56 @@ const BackupScreen: React.FC<BackupScreenProps> = ({ navigation }) => {
               }
               Alert.alert(
                 'Wiederherstellung erfolgreich',
-                'Ihre Medikamentendaten wurden erfolgreich aus der Cloud wiederhergestellt.'
+                'Ihre Medikamentendaten wurden erfolgreich aus der Cloud wiederhergestellt.',
               );
-              await loadBackupInfo();
+              await loadBackupState();
             } catch (error) {
               logger.error('Fehler bei der Wiederherstellung:', error);
               Alert.alert(
                 'Fehler',
                 error instanceof Error
                   ? error.message
-                  : 'Die Wiederherstellung ist fehlgeschlagen. Bitte prüfen Sie Ihre Internetverbindung und versuchen Sie es erneut.'
+                  : 'Die Wiederherstellung ist fehlgeschlagen. Bitte prüfen Sie Ihre Internetverbindung und versuchen Sie es erneut.',
               );
             } finally {
               setRestoring(false);
             }
           },
         },
-      ]
+      ],
     );
+  };
+
+  const handleConnectRecoveryCode = async () => {
+    if (!recoveryCodeInput.trim()) {
+      Alert.alert('Sicherungscode fehlt', 'Geben Sie zuerst den Sicherungscode vom alten Android-Gerät ein.');
+      return;
+    }
+
+    try {
+      setConnectingRecoveryCode(true);
+      const result = await connectBackupWithRecoveryCode(recoveryCodeInput);
+      if (!result.success) {
+        throw new Error(result.error || 'Der Sicherungscode konnte nicht geprüft werden.');
+      }
+
+      setRecoveryCode(result.recoveryCode ?? null);
+      setBackupInfo(result.info ?? null);
+      setRecoveryCodeInput('');
+      setRevealRecoveryCode(false);
+      Alert.alert(
+        'Gerät verbunden',
+        'Dieses Android-Gerät kennt jetzt Ihr Cloud-Backup. Sie können es jetzt wiederherstellen oder später mit demselben Sicherungscode aktualisieren.',
+      );
+    } catch (error) {
+      logger.error('Fehler beim Verbinden des Sicherungscodes:', error);
+      Alert.alert(
+        'Fehler',
+        error instanceof Error ? error.message : 'Der Sicherungscode konnte nicht geprüft werden.',
+      );
+    } finally {
+      setConnectingRecoveryCode(false);
+    }
   };
 
   const renderBackupStatus = () => {
@@ -164,23 +229,91 @@ const BackupScreen: React.FC<BackupScreenProps> = ({ navigation }) => {
       );
     }
 
-    const hasBackup = backupInfo?.timestamp !== null && backupInfo?.timestamp !== undefined && backupInfo.timestamp !== '';
+    const hasBackup = Boolean(backupInfo?.timestamp);
+    let emptyStateText = 'Noch kein Backup vorhanden';
+
+    if (isAndroid && recoveryCode) {
+      emptyStateText = 'Sicherungscode verbunden, aber noch kein Cloud-Backup gespeichert';
+    } else if (isAndroid) {
+      emptyStateText = 'Auf diesem Android-Gerät ist noch kein Sicherungscode verbunden';
+    }
 
     return (
       <View style={styles.statusContainer}>
-        <Text style={styles.statusIcon}>📋</Text>
+        <Text style={styles.statusIcon}>☁️</Text>
         <Text style={styles.statusLabel}>Backup-Status</Text>
         {hasBackup ? (
           <>
-            <Text style={styles.statusText}>
-              Letztes Backup: {formatDate(backupInfo!.timestamp)}
-            </Text>
-            <Text style={styles.statusDetail}>
-              {backupInfo!.medikamentCount} Medikamente gesichert
-            </Text>
+            <Text style={styles.statusText}>Letztes Backup: {formatDate(backupInfo!.timestamp)}</Text>
+            <Text style={styles.statusDetail}>{backupInfo!.medikamentCount} Medikamente gesichert</Text>
           </>
         ) : (
-          <Text style={styles.noBackupText}>Noch kein Backup vorhanden</Text>
+          <Text style={styles.noBackupText}>{emptyStateText}</Text>
+        )}
+      </View>
+    );
+  };
+
+  const renderRecoveryCodeCard = () => {
+    if (!isAndroid) {
+      return null;
+    }
+
+    return (
+      <View style={styles.recoveryContainer}>
+        <Text style={styles.recoveryTitle}>Sicherungscode</Text>
+        {recoveryCode ? (
+          <>
+            <Text style={styles.recoveryText}>
+              Mit diesem Code kann ein neues Android-Gerät Ihr Cloud-Backup finden und entschlüsseln. Bewahren Sie ihn getrennt vom Handy auf.
+            </Text>
+            <View style={styles.codeBox}>
+              <Text style={styles.codeValue}>{revealRecoveryCode ? recoveryCode : maskRecoveryCode(recoveryCode)}</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.codeActionButton}
+              onPress={() => setRevealRecoveryCode(current => !current)}
+              accessibilityRole="button"
+              accessibilityLabel={revealRecoveryCode ? 'Sicherungscode ausblenden' : 'Sicherungscode anzeigen'}
+            >
+              <Text style={styles.codeActionButtonText}>
+                {revealRecoveryCode ? 'Code ausblenden' : 'Code anzeigen'}
+              </Text>
+            </TouchableOpacity>
+            {!backupInfo ? (
+              <Text style={styles.recoveryHint}>
+                Erstellen Sie jetzt das erste Cloud-Backup auf diesem Gerät oder geben Sie denselben Code auf dem neuen Gerät ein.
+              </Text>
+            ) : null}
+          </>
+        ) : (
+          <>
+            <Text style={styles.recoveryText}>
+              Wenn Sie schon ein Cloud-Backup auf einem anderen Android-Gerät haben, geben Sie hier denselben Sicherungscode ein. Falls nicht, erzeugt die App Ihren ersten Code automatisch beim ersten Backup.
+            </Text>
+            <Text style={styles.inputLabel}>Sicherungscode</Text>
+            <TextInput
+              style={styles.codeInput}
+              value={recoveryCodeInput}
+              onChangeText={setRecoveryCodeInput}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              placeholder="ABCD-EF12-3456-7890-ABCD-EF12-3456-7890"
+              placeholderTextColor="#8a94a6"
+              accessibilityLabel="Sicherungscode"
+            />
+            <TouchableOpacity
+              style={[styles.codeActionButton, connectingRecoveryCode && styles.buttonDisabled]}
+              onPress={handleConnectRecoveryCode}
+              disabled={connectingRecoveryCode}
+              accessibilityRole="button"
+              accessibilityLabel="Mit Sicherungscode verbinden"
+            >
+              <Text style={styles.codeActionButtonText}>
+                {connectingRecoveryCode ? 'Wird geprüft...' : 'Mit Sicherungscode verbinden'}
+              </Text>
+            </TouchableOpacity>
+          </>
         )}
       </View>
     );
@@ -191,7 +324,7 @@ const BackupScreen: React.FC<BackupScreenProps> = ({ navigation }) => {
       <TouchableOpacity
         style={[styles.actionButton, styles.backupButton, uploading && styles.buttonDisabled]}
         onPress={handleCreateBackup}
-        disabled={uploading || restoring}
+        disabled={uploading || restoring || connectingRecoveryCode}
         accessibilityLabel="Cloud-Backup erstellen"
         accessibilityRole="button"
       >
@@ -208,7 +341,7 @@ const BackupScreen: React.FC<BackupScreenProps> = ({ navigation }) => {
       <TouchableOpacity
         style={[styles.actionButton, styles.restoreButton, restoring && styles.buttonDisabled]}
         onPress={handleRestoreBackup}
-        disabled={uploading || restoring}
+        disabled={uploading || restoring || connectingRecoveryCode}
         accessibilityLabel="Backup wiederherstellen"
         accessibilityRole="button"
       >
@@ -225,7 +358,7 @@ const BackupScreen: React.FC<BackupScreenProps> = ({ navigation }) => {
   );
 
   const renderTransferHint = () => {
-    if (Platform.OS !== 'android') {
+    if (!isAndroid) {
       return null;
     }
 
@@ -233,7 +366,7 @@ const BackupScreen: React.FC<BackupScreenProps> = ({ navigation }) => {
       <View style={styles.transferHintContainer}>
         <Text style={styles.transferHintTitle}>Von iPhone oder altem Handy übernehmen</Text>
         <Text style={styles.transferHintText}>
-          Wenn deine Daten noch auf einem anderen Gerät liegen, nutze „Handy wechseln“. Dort kannst du ein sicheres Paket vom alten iPhone, Android-Handy oder aus einer wiedergefundenen Sicherung importieren.
+          Wenn Ihre Daten noch auf einem anderen Gerät liegen und dort noch kein Cloud-Backup mit Sicherungscode eingerichtet war, nutzen Sie „Handy wechseln“. Dort können Sie ein sicheres Paket vom alten iPhone, Android-Handy oder aus einer wiedergefundenen Sicherung importieren.
         </Text>
         <TouchableOpacity
           style={styles.transferHintButton}
@@ -253,10 +386,7 @@ const BackupScreen: React.FC<BackupScreenProps> = ({ navigation }) => {
         <Text style={styles.headerTitle}>☁️ {cloudName}-Backup</Text>
       </View>
 
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-      >
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         <View style={styles.localInfoContainer}>
           <Text style={styles.localInfoIcon}>📱</Text>
           <Text style={styles.localInfoTitle}>Lokale Daten auf diesem Gerät</Text>
@@ -276,13 +406,25 @@ const BackupScreen: React.FC<BackupScreenProps> = ({ navigation }) => {
         ) : (
           <>
             {renderBackupStatus()}
+            {renderRecoveryCodeCard()}
             {renderActionButtons()}
           </>
         )}
       </ScrollView>
     </SafeAreaView>
   );
-};
+}
+
+function maskRecoveryCode(value: string): string {
+  const parts = value.split('-');
+  if (parts.length <= 2) {
+    return value;
+  }
+
+  return parts
+    .map((part, index) => (index === 0 || index === parts.length - 1 ? part : '****'))
+    .join('-');
+}
 
 const styles = StyleSheet.create({
   safeArea: {
@@ -313,7 +455,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 24,
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 18,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -382,6 +524,85 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     textAlign: 'center',
   },
+  recoveryContainer: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 22,
+    marginBottom: 18,
+    borderWidth: 1,
+    borderColor: '#dfe6f2',
+  },
+  recoveryTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#1a1a2e',
+    marginBottom: 8,
+    textAlign: 'left',
+  },
+  recoveryText: {
+    fontSize: 17,
+    lineHeight: 24,
+    color: '#364152',
+    marginBottom: 14,
+    textAlign: 'left',
+  },
+  recoveryHint: {
+    marginTop: 12,
+    fontSize: 16,
+    lineHeight: 22,
+    color: '#566275',
+    textAlign: 'left',
+  },
+  codeBox: {
+    minHeight: 62,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#cfd7e3',
+    backgroundColor: '#f7f9fc',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    marginBottom: 12,
+  },
+  codeValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#17335d',
+    letterSpacing: 0.6,
+    textAlign: 'center',
+  },
+  inputLabel: {
+    fontSize: 17,
+    fontWeight: 'bold',
+    color: '#1a1a2e',
+    marginBottom: 8,
+    textAlign: 'left',
+  },
+  codeInput: {
+    minHeight: 58,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#cfd7e3',
+    backgroundColor: '#fbfcfe',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 18,
+    color: '#1a1a2e',
+    marginBottom: 12,
+  },
+  codeActionButton: {
+    minHeight: 52,
+    borderRadius: 14,
+    backgroundColor: '#e8eef8',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 18,
+  },
+  codeActionButtonText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#17407a',
+    textAlign: 'center',
+  },
   statusIcon: {
     fontSize: 40,
     marginBottom: 8,
@@ -404,10 +625,9 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   noBackupText: {
-    fontSize: 20,
-    color: '#999999',
+    fontSize: 19,
+    color: '#707070',
     textAlign: 'center',
-    fontStyle: 'italic',
   },
   loadingText: {
     fontSize: 18,
@@ -452,5 +672,3 @@ const styles = StyleSheet.create({
     gap: 10,
   },
 });
-
-export default BackupScreen;

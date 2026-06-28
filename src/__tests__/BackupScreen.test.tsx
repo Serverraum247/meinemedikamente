@@ -2,7 +2,13 @@ import React from 'react';
 import ReactTestRenderer from 'react-test-renderer';
 import { Alert } from 'react-native';
 import BackupScreen from '../screens/BackupScreen';
-import { uploadBackup, getBackupInfo, restoreBackup } from '../services/BackupService';
+import {
+  connectBackupWithRecoveryCode,
+  getBackupInfo,
+  getBackupRecoveryCode,
+  restoreBackup,
+  uploadBackup,
+} from '../services/BackupService';
 
 jest.mock('../services/PremiumService', () => ({
   isPremium: jest.fn().mockResolvedValue(true),
@@ -11,6 +17,8 @@ jest.mock('../services/PremiumService', () => ({
 jest.mock('../services/BackupService', () => ({
   uploadBackup: jest.fn(),
   getBackupInfo: jest.fn(),
+  getBackupRecoveryCode: jest.fn(),
+  connectBackupWithRecoveryCode: jest.fn(),
   restoreBackup: jest.fn(),
 }));
 
@@ -55,6 +63,8 @@ describe('BackupScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     (getBackupInfo as jest.Mock).mockResolvedValue(null);
+    (getBackupRecoveryCode as jest.Mock).mockResolvedValue(null);
+    (connectBackupWithRecoveryCode as jest.Mock).mockResolvedValue({ success: true, info: null, recoveryCode: null });
     (uploadBackup as jest.Mock).mockResolvedValue({ success: true });
     (restoreBackup as jest.Mock).mockResolvedValue({ success: true });
   });

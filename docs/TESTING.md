@@ -18,6 +18,12 @@ npm test -- --runInBand --forceExit
 
 Wenn Android-Cloud-Backup-Code im Projekt aktiv ist, prüft `doctor:build` zusätzlich hart die Firebase-Verdrahtung: `google-services`-Classpath, App-Plugin und `android/app/google-services.json` inklusive der erwarteten Package-Clients für `dev.serverraum247.meinmediplan` und `dev.serverraum247.meinmediplan.internal`. Fehlt davon etwas, darf weder Build noch Geräte-Deploy als gesund gelten.
 
+Android-Cloud-Backup ist fachlich erst dann gesund, wenn der Ablauf mit Sicherungscode geprüft wurde:
+
+- Erstes Backup auf Gerät A erstellt automatisch einen Sicherungscode.
+- Gerät B kann mit genau diesem Sicherungscode das Backup finden.
+- Restore auf Gerät B funktioniert ohne altes Gerät und ohne Nutzerkonto.
+
 For native build confidence and device installation, use the project harness:
 
 ```bash
