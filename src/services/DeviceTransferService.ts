@@ -25,6 +25,8 @@ type TransferRows = Record<TableName, Array<Record<string, unknown>>>;
 interface NativeDeviceTransferFileModule {
   shareTransferFile?: (fileName: string, content: string) => Promise<boolean>;
   pickTransferFile?: () => Promise<string | null>;
+  getPendingTransferFile?: () => Promise<string | null>;
+  clearPendingTransferFile?: () => Promise<void>;
   randomBytes?: (byteCount: number) => Promise<string>;
 }
 
@@ -209,6 +211,20 @@ export async function pickDeviceTransferFile(): Promise<string | null> {
     throw new Error('Dateiauswahl ist auf diesem Gerät noch nicht verfügbar.');
   }
   return DeviceTransferFile.pickTransferFile();
+}
+
+export async function getPendingDeviceTransferFile(): Promise<string | null> {
+  if (!DeviceTransferFile?.getPendingTransferFile) {
+    return null;
+  }
+  return DeviceTransferFile.getPendingTransferFile();
+}
+
+export async function clearPendingDeviceTransferFile(): Promise<void> {
+  if (!DeviceTransferFile?.clearPendingTransferFile) {
+    return;
+  }
+  await DeviceTransferFile.clearPendingTransferFile();
 }
 
 export function previewDeviceTransferPackage(packageText: string, securityCode: string): DeviceTransferPreview {

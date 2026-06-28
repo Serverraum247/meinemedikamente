@@ -1,7 +1,10 @@
 import {
   collectPortableData,
+  clearPendingDeviceTransferFile,
   decryptArchive,
   encryptArchive,
+  getPendingDeviceTransferFile,
+  previewDeviceTransferPackage,
   restoreDeviceTransferPackage,
   type DeviceTransferArchive,
 } from '../services/DeviceTransferService';
@@ -17,15 +20,27 @@ jest.mock('../services/ErinnerungsService', () => ({
 }));
 
 jest.mock('react-native', () => {
+  const pendingTransfer = {
+    content: null as string | null,
+  };
   return {
     Platform: { OS: 'ios' },
     NativeModules: {
       DeviceTransferFile: {
         randomBytes: jest.fn(async (byteCount: number) => Buffer.alloc(byteCount, 7).toString('base64')),
+        getPendingTransferFile: jest.fn(async () => pendingTransfer.content),
+        clearPendingTransferFile: jest.fn(async () => {
+          pendingTransfer.content = null;
+        }),
+        __setPendingTransferFile: (content: string | null) => {
+          pendingTransfer.content = content;
+        },
       },
     },
   };
 });
+
+const { NativeModules } = jest.requireMock('react-native');
 
 type Row = Record<string, unknown>;
 
@@ -241,6 +256,36 @@ describe('DeviceTransferService', () => {
     });
 
     await expect(restoreDeviceTransferPackage(packageText, '1111-2222-3333-4444')).rejects.toThrow('insert failed');
+    expect(planeAlleErinnerungen).not.toHaveBeenCalled();
+  });
+
+  it('exposes and clears pending transfer files from external attachments', async () => {
+    const archive = makeArchive();
+    const packageText = encryptArchive(archive, '1111-2222-3333-4444', {
+      iterations: 4,
+      saltBase64: Buffer.alloc(16, 1).toString('base64'),
+      ivBase64: Buffer.alloc(16, 2).toString('base64'),
+    });
+
+    NativeModules.DeviceTransferFile.__setPendingTransferFile(packageText);
+
+    await expect(getPendingDeviceTransferFile()).resolves.toBe(packageText);
+    await clearPendingDeviceTransferFile();
+    await expect(getPendingDeviceTransferFile()).resolves.toBeNull();
+  });
+
+  it('does not restore an external package before a valid security code preview', async () => {
+    const db = createDbMock();
+    (getDatabase as jest.Mock).mockResolvedValue(db);
+    const archive = makeArchive();
+    const packageText = encryptArchive(archive, '1111-2222-3333-4444', {
+      iterations: 4,
+      saltBase64: Buffer.alloc(16, 1).toString('base64'),
+      ivBase64: Buffer.alloc(16, 2).toString('base64'),
+    });
+
+    expect(() => previewDeviceTransferPackage(packageText, '9999-2222-3333-4444')).toThrow('Sicherheitscode');
+    expect(db.transaction).not.toHaveBeenCalled();
     expect(planeAlleErinnerungen).not.toHaveBeenCalled();
   });
 });

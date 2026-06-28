@@ -19,6 +19,7 @@ class DeviceTransferFileModule(
 ) : ReactContextBaseJavaModule(reactContext) {
 
   private var pendingPickPromise: Promise? = null
+  private var consumedPendingIntentKey: String? = null
 
   private val activityEventListener: ActivityEventListener = object : BaseActivityEventListener() {
     override fun onActivityResult(activity: Activity, requestCode: Int, resultCode: Int, data: Intent?) {
@@ -71,7 +72,11 @@ class DeviceTransferFileModule(
 
       val shareIntent = Intent(Intent.ACTION_SEND).apply {
         type = "application/octet-stream"
-        putExtra(Intent.EXTRA_SUBJECT, "Mein MediPlan - Sicheres Paket")
+        putExtra(Intent.EXTRA_SUBJECT, "Mein MediPlan - Sicheres Transferpaket")
+        putExtra(
+          Intent.EXTRA_TEXT,
+          "Im Anhang liegt ein verschlüsseltes Mein MediPlan Transferpaket. Den Sicherheitscode bitte getrennt übermitteln.",
+        )
         putExtra(Intent.EXTRA_STREAM, uri)
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
       }
@@ -108,6 +113,44 @@ class DeviceTransferFileModule(
   }
 
   @ReactMethod
+  fun getPendingTransferFile(promise: Promise) {
+    try {
+      val activity = reactContext.currentActivity
+      val intent = activity?.intent
+      val uri = intent?.data
+      if (intent?.action != Intent.ACTION_VIEW || uri == null) {
+        promise.resolve(null)
+        return
+      }
+
+      val key = pendingIntentKey(intent, uri)
+      if (key == consumedPendingIntentKey) {
+        promise.resolve(null)
+        return
+      }
+
+      val content = readTransferUri(uri)
+      if (!looksLikeTransferPackage(content)) {
+        promise.resolve(null)
+        return
+      }
+
+      consumedPendingIntentKey = key
+      promise.resolve(content)
+    } catch (error: Exception) {
+      promise.reject("TRANSFER_PENDING_ERROR", "Sicheres Paket konnte nicht aus dem Anhang gelesen werden: ${error.localizedMessage}", error)
+    }
+  }
+
+  @ReactMethod
+  fun clearPendingTransferFile(promise: Promise) {
+    val intent = reactContext.currentActivity?.intent
+    val uri = intent?.data
+    consumedPendingIntentKey = if (intent != null && uri != null) pendingIntentKey(intent, uri) else consumedPendingIntentKey
+    promise.resolve(null)
+  }
+
+  @ReactMethod
   fun randomBytes(byteCount: Int, promise: Promise) {
     if (byteCount <= 0 || byteCount > 1024) {
       promise.reject("TRANSFER_RANDOM_ERROR", "Ungültige Anzahl Zufallsbytes.")
@@ -125,6 +168,20 @@ class DeviceTransferFileModule(
       .trim('-')
     val base = sanitized.ifBlank { "mein-mediplan-transfer.mmptransfer" }
     return if (base.endsWith(".mmptransfer")) base else "$base.mmptransfer"
+  }
+
+  private fun readTransferUri(uri: Uri): String {
+    return reactContext.contentResolver.openInputStream(uri)?.use { stream ->
+      stream.bufferedReader(Charsets.UTF_8).readText()
+    } ?: throw IllegalArgumentException("Die Datei konnte nicht geöffnet werden.")
+  }
+
+  private fun looksLikeTransferPackage(content: String): Boolean {
+    return content.contains("\"magic\"") && content.contains("MEIN_MEDIPLAN_TRANSFER")
+  }
+
+  private fun pendingIntentKey(intent: Intent, uri: Uri): String {
+    return "${uri}:${intent.getLongExtra("mmp_opened_at", 0L)}"
   }
 
   companion object {

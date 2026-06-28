@@ -28,12 +28,13 @@ import { logger } from '../utils/Logger';
 type Props = NativeStackScreenProps<RootStackParamList, 'DeviceTransfer'>;
 type TransferMode = 'start' | 'send' | 'receive';
 
-export default function DeviceTransferScreen({ navigation }: Props) {
-  const [mode, setMode] = useState<TransferMode>('start');
+export default function DeviceTransferScreen({ navigation, route }: Props) {
+  const [mode, setMode] = useState<TransferMode>(route.params?.mode ?? 'start');
   const [premium, setPremium] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
   const [securityCode, setSecurityCode] = useState('');
-  const [pickedPackage, setPickedPackage] = useState('');
+  const [pickedPackage, setPickedPackage] = useState(route.params?.incomingPackage ?? '');
+  const [incomingPackageDetected, setIncomingPackageDetected] = useState(Boolean(route.params?.incomingPackage));
   const [preview, setPreview] = useState<DeviceTransferPreview | null>(null);
   const [lastCreatedCode, setLastCreatedCode] = useState('');
 
@@ -52,6 +53,14 @@ export default function DeviceTransferScreen({ navigation }: Props) {
     };
   }, []);
 
+  React.useEffect(() => {
+    if (!route.params?.incomingPackage) return;
+    setMode('receive');
+    setPickedPackage(route.params.incomingPackage);
+    setIncomingPackageDetected(true);
+    setPreview(null);
+  }, [route.params?.incomingPackage]);
+
   const normalizedSecurityCode = useMemo(
     () => securityCode.trim().replace(/\s+/g, '').replace(/(.{4})/g, '$1-').replace(/-$/, ''),
     [securityCode],
@@ -66,7 +75,7 @@ export default function DeviceTransferScreen({ navigation }: Props) {
 
       Alert.alert(
         'Sicherheitscode merken',
-        `Notiere diesen Code separat:\n\n${transfer.securityCode}\n\nSende ihn nicht in derselben Nachricht wie das sichere Paket.`,
+        `Notiere diesen Code separat:\n\n${transfer.securityCode}\n\nSende ihn nicht in derselben E-Mail oder Nachricht wie das sichere Paket.`,
         [
           {
             text: 'Sicheres Paket teilen',
@@ -96,6 +105,7 @@ export default function DeviceTransferScreen({ navigation }: Props) {
       const content = await pickDeviceTransferFile();
       if (!content) return;
       setPickedPackage(content);
+      setIncomingPackageDetected(false);
       setPreview(null);
       Alert.alert('Paket ausgewählt', 'Gib jetzt den Sicherheitscode ein, den das alte Gerät angezeigt hat.');
     } catch (error) {
@@ -176,7 +186,7 @@ export default function DeviceTransferScreen({ navigation }: Props) {
           <Text style={styles.heroIcon}>⇄</Text>
           <Text style={styles.title}>Handy wechseln</Text>
           <Text style={styles.subtitle}>
-            Übertrage deine Daten geschützt vom alten auf das neue Handy.
+            Übertrage deine Daten geschützt per E-Mail, Dateien oder Teilen-Menü auf ein neues Handy.
           </Text>
         </View>
 
@@ -192,18 +202,18 @@ export default function DeviceTransferScreen({ navigation }: Props) {
               style={styles.primaryButton}
               onPress={() => setMode('send')}
               accessibilityRole="button"
-              accessibilityLabel="Auf diesem Gerät sind meine Daten"
+              accessibilityLabel="Daten senden"
             >
-              <Text style={styles.primaryButtonText}>Auf diesem Gerät sind meine Daten</Text>
+              <Text style={styles.primaryButtonText}>Daten senden: Paket erstellen und z. B. per E-Mail verschicken</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.secondaryButton}
               onPress={() => setMode('receive')}
               accessibilityRole="button"
-              accessibilityLabel="Auf dieses Gerät sollen meine Daten"
+              accessibilityLabel="Daten empfangen"
             >
-              <Text style={styles.secondaryButtonText}>Auf dieses Gerät sollen meine Daten</Text>
+              <Text style={styles.secondaryButtonText}>Daten empfangen: Anhang öffnen oder Paket auswählen</Text>
             </TouchableOpacity>
 
             <View style={styles.infoBox}>
@@ -217,7 +227,7 @@ export default function DeviceTransferScreen({ navigation }: Props) {
           <View style={styles.section}>
             <StepTitle title="Daten senden" onBack={() => setMode('start')} />
             <Text style={styles.bodyText}>
-              Die App erstellt ein sicheres Paket. Danach kannst du es zum Beispiel über Dateien, AirDrop, Drive oder Mail weitergeben.
+              Die App erstellt ein sicheres Paket. Danach kannst du es über E-Mail, Dateien, AirDrop, Drive oder das Teilen-Menü weitergeben.
             </Text>
             <TouchableOpacity
               style={[styles.primaryButton, busy && styles.disabledButton]}
@@ -232,7 +242,7 @@ export default function DeviceTransferScreen({ navigation }: Props) {
               <View style={styles.codeBox}>
                 <Text style={styles.infoTitle}>Sicherheitscode</Text>
                 <Text style={styles.codeText}>{lastCreatedCode}</Text>
-                <Text style={styles.infoText}>Den Code separat weitergeben, nicht zusammen mit dem sicheren Paket.</Text>
+                <Text style={styles.infoText}>Den Code separat weitergeben, nicht zusammen mit dem sicheren Paket oder in derselben E-Mail.</Text>
               </View>
             ) : null}
             {preview ? <PreviewBox preview={preview} /> : null}
@@ -241,8 +251,15 @@ export default function DeviceTransferScreen({ navigation }: Props) {
           <View style={styles.section}>
             <StepTitle title="Daten empfangen" onBack={() => setMode('start')} />
             <Text style={styles.bodyText}>
-              Wähle das sichere Paket vom alten Gerät oder aus einer wiedergefundenen Sicherung aus und gib danach den Sicherheitscode ein.
+              Öffne einen E-Mail-Anhang mit Mein MediPlan oder wähle das sichere Paket aus Dateien aus. Gib danach den Sicherheitscode ein.
             </Text>
+
+            {incomingPackageDetected ? (
+              <View style={styles.detectedBox}>
+                <Text style={styles.detectedTitle}>Sicheres Paket aus E-Mail erkannt</Text>
+                <Text style={styles.detectedText}>Gib jetzt den Sicherheitscode vom alten Gerät ein. Die Daten werden erst nach Prüfung und Bestätigung übernommen.</Text>
+              </View>
+            ) : null}
 
             <TouchableOpacity
               style={[styles.secondaryButton, busy && styles.disabledButton]}
@@ -257,7 +274,7 @@ export default function DeviceTransferScreen({ navigation }: Props) {
             <View style={styles.infoBox}>
               <Text style={styles.infoTitle}>Auch für Wiederherstellung</Text>
               <Text style={styles.infoText}>
-                Das sichere Paket kann direkt von einem alten Handy kommen oder vorher aus einer älteren Sicherung erzeugt worden sein.
+                Das sichere Paket kann aus E-Mail, Dateien oder direkt von einem alten Handy kommen. Der Sicherheitscode muss getrennt übertragen werden.
               </Text>
             </View>
 
@@ -438,6 +455,24 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 23,
     color: '#333',
+  },
+  detectedBox: {
+    backgroundColor: '#EAF7EF',
+    borderColor: '#27ae60',
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 16,
+  },
+  detectedTitle: {
+    color: '#1f7a45',
+    fontSize: 17,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  detectedText: {
+    color: '#24573a',
+    fontSize: 16,
+    lineHeight: 22,
   },
   bodyText: {
     fontSize: 18,

@@ -3,7 +3,8 @@
  */
 
 import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import { AppState } from 'react-native';
+import { createNavigationContainerRef, NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import HomeScreen from '../screens/HomeScreen';
@@ -20,6 +21,8 @@ import DeviceTransferScreen from '../screens/DeviceTransferScreen';
 import MedicationPlanExportScreen from '../screens/MedicationPlanExportScreen';
 import ErsteSchritteScreen from '../screens/ErsteSchritteScreen';
 import DatenschutzRechtScreen from '../screens/DatenschutzRechtScreen';
+import { clearPendingDeviceTransferFile, getPendingDeviceTransferFile } from '../services/DeviceTransferService';
+import { logger } from '../utils/Logger';
 
 export type RootStackParamList = {
   Home: undefined;
@@ -38,17 +41,45 @@ export type RootStackParamList = {
   ArztUrlaub: undefined;
   Premium: undefined;
   Backup: undefined;
-  DeviceTransfer: undefined;
+  DeviceTransfer: {
+    mode?: 'send' | 'receive';
+    incomingPackage?: string;
+  } | undefined;
   MedicationPlanExport: undefined;
   ErsteSchritte: undefined;
   DatenschutzRecht: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
+const navigationRef = createNavigationContainerRef<RootStackParamList>();
 
 export default function AppNavigator() {
+  const openPendingTransfer = React.useCallback(async () => {
+    try {
+      const incomingPackage = await getPendingDeviceTransferFile();
+      if (!incomingPackage || !navigationRef.isReady()) return;
+
+      await clearPendingDeviceTransferFile();
+      navigationRef.navigate('DeviceTransfer', {
+        mode: 'receive',
+        incomingPackage,
+      });
+    } catch (error) {
+      logger.warn('Externes Transferpaket konnte nicht geöffnet werden:', error);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    const subscription = AppState.addEventListener('change', state => {
+      if (state === 'active') {
+        void openPendingTransfer();
+      }
+    });
+    return () => subscription.remove();
+  }, [openPendingTransfer]);
+
   return (
-    <NavigationContainer>
+    <NavigationContainer ref={navigationRef} onReady={openPendingTransfer} onStateChange={openPendingTransfer}>
       <Stack.Navigator
         initialRouteName="Home"
         screenOptions={{

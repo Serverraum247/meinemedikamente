@@ -487,6 +487,7 @@ class MedicationPlanShare: NSObject {
 @objc(DeviceTransferFile)
 class DeviceTransferFile: NSObject, UIDocumentPickerDelegate {
 
+  private let pendingTransferPackageKey = "MMPPendingTransferPackage"
   private var pickResolve: RCTPromiseResolveBlock?
   private var pickReject: RCTPromiseRejectBlock?
 
@@ -506,7 +507,8 @@ class DeviceTransferFile: NSObject, UIDocumentPickerDelegate {
           return
         }
 
-        let controller = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+        let hint = "Im Anhang liegt ein verschlüsseltes Mein MediPlan Transferpaket. Den Sicherheitscode bitte getrennt übermitteln."
+        let controller = UIActivityViewController(activityItems: [url, hint], applicationActivities: nil)
         controller.popoverPresentationController?.sourceView = presenter.view
         controller.completionWithItemsHandler = { _, _, _, _ in
           resolve(true)
@@ -543,6 +545,22 @@ class DeviceTransferFile: NSObject, UIDocumentPickerDelegate {
       picker.allowsMultipleSelection = false
       presenter.present(picker, animated: true)
     }
+  }
+
+  @objc func getPendingTransferFile(_ resolve: @escaping RCTPromiseResolveBlock,
+                                    rejecter reject: @escaping RCTPromiseRejectBlock) {
+    let content = UserDefaults.standard.string(forKey: pendingTransferPackageKey)
+    guard let content, content.contains("MEIN_MEDIPLAN_TRANSFER") else {
+      resolve(nil)
+      return
+    }
+    resolve(content)
+  }
+
+  @objc func clearPendingTransferFile(_ resolve: @escaping RCTPromiseResolveBlock,
+                                      rejecter reject: @escaping RCTPromiseRejectBlock) {
+    UserDefaults.standard.removeObject(forKey: pendingTransferPackageKey)
+    resolve(nil)
   }
 
   @objc func randomBytes(_ byteCount: NSNumber,
