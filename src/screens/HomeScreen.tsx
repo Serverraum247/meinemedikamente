@@ -39,6 +39,7 @@ import {
   type OffeneEinnahme,
 } from '../services/EinnahmeErinnerungService';
 import { DuplicateEinnahmeError, einnahmeVerbuchen } from '../database/MedikamentController';
+import { getBaldAblaufendeOffenePackungen } from '../database/PackungController';
 import EinnahmeErinnerungModal from '../components/EinnahmeErinnerungModal';
 import EinnahmeNachtragModal from '../components/EinnahmeNachtragModal';
 import { logger } from '../utils/Logger';
@@ -104,6 +105,7 @@ export default function HomeScreen({ navigation }: Props) {
   const [nachtragPhase, setNachtragPhase] = useState<'past' | 'today'>('past');
   const [missedNachtragGroups, setMissedNachtragGroups] = useState<HomeMissedGroup[]>([]);
   const [todayNachtragGroups, setTodayNachtragGroups] = useState<OffeneEinnahmeNachtragGroup[]>([]);
+  const [ablaufendePackungMedikamentIds, setAblaufendePackungMedikamentIds] = useState<Set<string>>(new Set());
   const [heuteKey, setHeuteKey] = useState(() => getLocalDateKey());
   const heuteDatum = useMemo(() => dateFromLocalDateKey(heuteKey), [heuteKey]);
 
@@ -125,6 +127,11 @@ export default function HomeScreen({ navigation }: Props) {
     return medikamenteUnterSchwelle.filter(m => m.person_id === aktivePerson.id);
   }, [medikamenteUnterSchwelle, aktivePerson]);
 
+  const ablaufendePackungenCount = useMemo(() => {
+    const erlaubteIds = new Set(gefilterteMedikamente.map(m => m.id));
+    return Array.from(ablaufendePackungMedikamentIds).filter(id => erlaubteIds.has(id)).length;
+  }, [ablaufendePackungMedikamentIds, gefilterteMedikamente]);
+
   const bedarfsMedikamente = useMemo(() => {
     return gefilterteMedikamente.filter(m => parseEinnahmeplan(m.einnahme_uhrzeiten || '[]').length === 0);
   }, [gefilterteMedikamente]);
@@ -144,6 +151,27 @@ export default function HomeScreen({ navigation }: Props) {
   // Premium-Status einmal laden
   const [premiumStatus, setPremiumStatus] = useState(false);
   useEffect(() => { isPremium().then(setPremiumStatus); }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      if (!premiumStatus) {
+        setAblaufendePackungMedikamentIds(new Set());
+        return () => {
+          active = false;
+        };
+      }
+      getBaldAblaufendeOffenePackungen(30)
+        .then(rows => {
+          if (!active) return;
+          setAblaufendePackungMedikamentIds(new Set(rows.map(row => row.medikament_id)));
+        })
+        .catch(error => logger.warn('Packungs-Verfallswarnungen konnten nicht geladen werden:', error));
+      return () => {
+        active = false;
+      };
+    }, [premiumStatus]),
+  );
 
   const ladeEinnahmeStatus = useCallback(async (datum: Date = heuteDatum) => {
     const [eingenommenIds, offene, ueberfaelligeIds, heutigeEinnahmen] = await Promise.all([
@@ -758,6 +786,17 @@ export default function HomeScreen({ navigation }: Props) {
         >
           <Text style={styles.warnBannerText}>
             ⚠ {gefilterteUnterSchwelle.length} Medikament(e) unter Warnschwelle
+          </Text>
+        </View>
+      )}
+
+      {premiumStatus && ablaufendePackungenCount > 0 && (
+        <View
+          style={styles.warnBanner}
+          accessibilityLiveRegion="polite"
+        >
+          <Text style={styles.warnBannerText}>
+            ⚠ {ablaufendePackungenCount} Packung(en) laufen bald ab
           </Text>
         </View>
       )}

@@ -17,13 +17,14 @@ import {
   ActivityIndicator,
   NativeModules,
   Platform,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Camera } from 'react-native-camera-kit';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 import { normalizePzn, validatePZN } from '../services/BarcodeScannerService';
-import { canScanBarcode, recordBarcodeScan } from '../services/PremiumService';
+import { canScanBarcode, isPremium, recordBarcodeScan } from '../services/PremiumService';
 import { lookupPzn } from '../services/PznLookupService';
 import { showPremiumRequiredAlert } from '../utils/PremiumAlerts';
 import {
@@ -42,13 +43,28 @@ const { MedicationVisionScanner } = NativeModules as {
   };
 };
 
-export default function BarcodeScannerScreen({ navigation }: Props) {
+const { MedicationPackageScanner } = NativeModules as {
+  MedicationPackageScanner?: {
+    scanPackage: () => Promise<MedicationNativeScanResult & { cancelled?: boolean }>;
+  };
+};
+
+export default function BarcodeScannerScreen({ route, navigation }: Props) {
   const [tab, setTab] = useState<TabMode>('kamera');
   const [pznInput, setPznInput] = useState('');
   const [isLookingUp, setIsLookingUp] = useState(false);
   const [lookupResult, setLookupResult] = useState<string | null>(null);
   const [hasScanned, setHasScanned] = useState(false);
+  const [review, setReview] = useState<MedicationScanSuggestion | null>(null);
+  const [reviewName, setReviewName] = useState('');
+  const [reviewPzn, setReviewPzn] = useState('');
+  const [reviewPackungsgroesse, setReviewPackungsgroesse] = useState('');
+  const [reviewVerwendbarBis, setReviewVerwendbarBis] = useState('');
+  const [reviewCharge, setReviewCharge] = useState('');
+  const [reviewSeriennummer, setReviewSeriennummer] = useState('');
+  const nativePackageScannerAvailable = Boolean(MedicationPackageScanner?.scanPackage);
   const appleVisionAvailable = Platform.OS === 'ios' && Boolean(MedicationVisionScanner?.scanMedicationPackage);
+  const target = route.params?.target ?? 'add';
 
   // Barcode vom Kamera-Scanner verarbeiten. Auf iOS ergänzt Apple Vision zusätzlich OCR-Texte.
   const onBarcodeScanned = async (event: any) => {
@@ -131,54 +147,35 @@ export default function BarcodeScannerScreen({ navigation }: Props) {
   };
 
   const handleAppleVisionScan = async () => {
-    if (!MedicationVisionScanner?.scanMedicationPackage) {
+    const scanner = MedicationPackageScanner?.scanPackage ?? MedicationVisionScanner?.scanMedicationPackage;
+    if (!scanner) {
       Alert.alert('Nicht verfügbar', 'Der Packungs-Scan ist auf diesem Gerät nicht verfügbar.');
       return;
     }
 
-    const { allowed } = await canScanBarcode();
-    if (!allowed) {
-      showPremiumRequiredAlert('Mehr als 3 Barcode-Scans pro Tag sind nur mit Premium möglich.', navigation);
+    const premiumActive = await isPremium();
+    if (!premiumActive) {
+      showPremiumRequiredAlert('Packungsdaten wie Verfallsdatum, Charge und Seriennummer sind nur mit Premium möglich.', navigation);
       return;
     }
 
     setIsLookingUp(true);
     try {
-      const nativeResult = await MedicationVisionScanner.scanMedicationPackage();
+      const nativeResult = await scanner();
       setIsLookingUp(false);
       if (nativeResult.cancelled) return;
 
       await recordBarcodeScan();
       const suggestion = buildMedicationScanSuggestion(nativeResult);
 
-      if (suggestion.scannedPZN) {
-        await processPzn(suggestion.scannedPZN, suggestion);
-        return;
-      }
-
-      if (suggestion.suggestedName || suggestion.suggestedActiveIngredient || suggestion.suggestedStrengthValue) {
-        Alert.alert(
-          'Vorschlag erkannt',
-          [
-            suggestion.suggestedName ? `Name: ${suggestion.suggestedName}` : null,
-            suggestion.suggestedActiveIngredient ? `Wirkstoff: ${suggestion.suggestedActiveIngredient}` : null,
-            suggestion.suggestedStrengthValue && suggestion.suggestedStrengthUnit
-              ? `Stärke: ${suggestion.suggestedStrengthValue} ${suggestion.suggestedStrengthUnit}`
-              : null,
-          ].filter(Boolean).join('\n'),
-          [
-            { text: 'Abbrechen', style: 'cancel' },
-            {
-              text: 'Übernehmen',
-              onPress: () => navigation.navigate('AddMedikament', {
-                suggestedName: suggestion.suggestedName,
-                suggestedActiveIngredient: suggestion.suggestedActiveIngredient,
-                suggestedStrengthValue: suggestion.suggestedStrengthValue,
-                suggestedStrengthUnit: suggestion.suggestedStrengthUnit,
-              }),
-            },
-          ],
-        );
+      if (hasAnyPackageSuggestion(suggestion)) {
+        setReview(suggestion);
+        setReviewName(suggestion.suggestedName || '');
+        setReviewPzn(suggestion.scannedPZN || '');
+        setReviewPackungsgroesse(suggestion.suggestedPackungsgroesse || '');
+        setReviewVerwendbarBis(suggestion.scannedVerwendbarBis || '');
+        setReviewCharge(suggestion.scannedCharge || '');
+        setReviewSeriennummer(suggestion.scannedSeriennummer || '');
         return;
       }
 
@@ -187,6 +184,37 @@ export default function BarcodeScannerScreen({ navigation }: Props) {
       setIsLookingUp(false);
       Alert.alert('Scan nicht möglich', error instanceof Error ? error.message : 'Der Packungs-Scan konnte nicht gestartet werden.');
     }
+  };
+
+  const handleApplyReview = () => {
+    if (!review) return;
+    const params = {
+      scannedPZN: reviewPzn.trim(),
+      suggestedName: reviewName.trim(),
+      suggestedActiveIngredient: review.suggestedActiveIngredient,
+      suggestedStrengthValue: review.suggestedStrengthValue,
+      suggestedStrengthUnit: review.suggestedStrengthUnit,
+      scannedProduktCode: review.scannedProduktCode,
+      scannedCharge: reviewCharge.trim(),
+      scannedSeriennummer: reviewSeriennummer.trim(),
+      scannedVerwendbarBis: reviewVerwendbarBis.trim(),
+      suggestedPackungsgroesse: reviewPackungsgroesse.trim(),
+    };
+
+    if (target === 'nachkauf' && route.params?.medikamentId) {
+      navigation.navigate('Nachkauf', {
+        medikamentId: route.params.medikamentId,
+        scannedPZN: params.scannedPZN,
+        scannedProduktCode: params.scannedProduktCode,
+        scannedCharge: params.scannedCharge,
+        scannedSeriennummer: params.scannedSeriennummer,
+        scannedVerwendbarBis: params.scannedVerwendbarBis,
+        suggestedPackungsgroesse: params.suggestedPackungsgroesse,
+      });
+      return;
+    }
+
+    navigation.navigate('AddMedikament', params);
   };
 
   // Manuelle Eingabe
@@ -225,6 +253,37 @@ export default function BarcodeScannerScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView style={styles.container}>
+      {review ? (
+        <ScrollView contentContainerStyle={styles.reviewContent} keyboardShouldPersistTaps="handled">
+          <Text style={styles.reviewTitle} accessibilityRole="header">Bitte prüfen</Text>
+          <Text style={styles.reviewIntro}>
+            Die App hat Daten auf der Packung erkannt. Bitte kontrolliere alles vor dem Übernehmen.
+          </Text>
+          <ReviewInput label="Name" value={reviewName} onChangeText={setReviewName} placeholder="Nicht erkannt" />
+          <ReviewInput label="PZN" value={reviewPzn} onChangeText={setReviewPzn} placeholder="Nicht erkannt" keyboardType="number-pad" />
+          <ReviewInput label="Packungsgröße" value={reviewPackungsgroesse} onChangeText={setReviewPackungsgroesse} placeholder="Nicht erkannt" keyboardType="decimal-pad" />
+          <ReviewInput label="Verwendbar bis" value={reviewVerwendbarBis} onChangeText={setReviewVerwendbarBis} placeholder="YYYY-MM-DD" />
+          <ReviewInput label="Charge" value={reviewCharge} onChangeText={setReviewCharge} placeholder="Nicht erkannt" />
+          <ReviewInput label="Seriennummer" value={reviewSeriennummer} onChangeText={setReviewSeriennummer} placeholder="Nicht erkannt" />
+          <TouchableOpacity
+            style={styles.appleVisionButton}
+            onPress={handleApplyReview}
+            accessibilityRole="button"
+            accessibilityLabel="Vorschläge übernehmen"
+          >
+            <Text style={styles.appleVisionButtonText}>Übernehmen</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.secondaryButton}
+            onPress={() => setReview(null)}
+            accessibilityRole="button"
+            accessibilityLabel="Nochmal scannen"
+          >
+            <Text style={styles.secondaryButtonText}>Nochmal scannen</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      ) : (
+        <>
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerIcon}>📷</Text>
@@ -260,11 +319,11 @@ export default function BarcodeScannerScreen({ navigation }: Props) {
       {/* Kamera-Modus */}
       {tab === 'kamera' && (
         <View style={styles.cameraContainer}>
-          {appleVisionAvailable ? (
+          {nativePackageScannerAvailable || appleVisionAvailable ? (
             <View style={styles.appleVisionBox}>
               <Text style={styles.appleVisionTitle}>Packung scannen</Text>
               <Text style={styles.appleVisionText}>
-                Erkennt Barcodes, PZN und Text auf Packung oder Blister. Name, Wirkstoff und Stärke werden nur vorgeschlagen.
+                Premium erkennt DataMatrix, PZN, Text, Verfallsdatum und Charge als Vorschlag.
               </Text>
               <TouchableOpacity
                 style={styles.appleVisionButton}
@@ -363,7 +422,52 @@ export default function BarcodeScannerScreen({ navigation }: Props) {
       >
         <Text style={styles.cancelButtonText}>Abbrechen</Text>
       </TouchableOpacity>
+        </>
+      )}
     </SafeAreaView>
+  );
+}
+
+function hasAnyPackageSuggestion(suggestion: MedicationScanSuggestion): boolean {
+  return Boolean(
+    suggestion.scannedPZN ||
+      suggestion.scannedProduktCode ||
+      suggestion.scannedCharge ||
+      suggestion.scannedSeriennummer ||
+      suggestion.scannedVerwendbarBis ||
+      suggestion.suggestedPackungsgroesse ||
+      suggestion.suggestedName ||
+      suggestion.suggestedActiveIngredient ||
+      suggestion.suggestedStrengthValue,
+  );
+}
+
+function ReviewInput({
+  label,
+  value,
+  onChangeText,
+  placeholder,
+  keyboardType,
+}: {
+  label: string;
+  value: string;
+  onChangeText: (value: string) => void;
+  placeholder: string;
+  keyboardType?: 'default' | 'number-pad' | 'decimal-pad';
+}) {
+  return (
+    <View style={styles.fieldGroup}>
+      <Text style={styles.label}>{label}</Text>
+      <TextInput
+        style={styles.input}
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor="#999"
+        keyboardType={keyboardType}
+        accessibilityLabel={label}
+      />
+    </View>
   );
 }
 
@@ -417,6 +521,23 @@ const styles = StyleSheet.create({
   camera: {
     flex: 1,
   },
+  reviewContent: {
+    flexGrow: 1,
+    padding: 20,
+    backgroundColor: '#f8f8f6',
+  },
+  reviewTitle: {
+    fontSize: 30,
+    fontWeight: '800',
+    color: '#1a1a2e',
+    marginBottom: 8,
+  },
+  reviewIntro: {
+    fontSize: 17,
+    lineHeight: 24,
+    color: '#555',
+    marginBottom: 18,
+  },
   appleVisionBox: {
     flex: 1,
     justifyContent: 'center',
@@ -449,6 +570,16 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 24,
     fontWeight: '800',
+  },
+  secondaryButton: {
+    marginTop: 12,
+    padding: 16,
+    alignItems: 'center',
+  },
+  secondaryButtonText: {
+    color: '#1a1a2e',
+    fontSize: 18,
+    fontWeight: '700',
   },
   scanHint: {
     position: 'absolute',

@@ -33,10 +33,27 @@ export type RootStackParamList = {
     suggestedActiveIngredient?: string;
     suggestedStrengthValue?: string;
     suggestedStrengthUnit?: string;
+    scannedProduktCode?: string;
+    scannedCharge?: string;
+    scannedSeriennummer?: string;
+    scannedVerwendbarBis?: string;
+    suggestedPackungsgroesse?: string;
   } | undefined;
   EditMedikament: { medikamentId: string };
-  BarcodeScanner: undefined;
-  Nachkauf: { medikamentId: string };
+  BarcodeScanner: {
+    target?: 'add' | 'nachkauf';
+    medikamentId?: string;
+    premiumPackageScan?: boolean;
+  } | undefined;
+  Nachkauf: {
+    medikamentId: string;
+    scannedPZN?: string;
+    scannedProduktCode?: string;
+    scannedCharge?: string;
+    scannedSeriennummer?: string;
+    scannedVerwendbarBis?: string;
+    suggestedPackungsgroesse?: string;
+  };
   Settings: undefined;
   ArztUrlaub: undefined;
   Premium: undefined;

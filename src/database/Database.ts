@@ -13,7 +13,7 @@ SQLite.DEBUG(true);
 SQLite.enablePromise(true);
 
 const DATABASE_NAME = 'meine_medikamente.db';
-const DATABASE_VERSION = 17; // V17: Arzt-Telefon um Landesvorwahl erweitert
+const DATABASE_VERSION = 18; // V18: strukturierte Packungs-Scan-Daten
 
 export interface MedikamentRow {
   id: string;
@@ -88,6 +88,10 @@ export interface PackungRow {
   medikament_id: string;
   groesse: number;           // REAL – Stück pro Packung (z.B. 50)
   pzn: string;               // PZN dieser spezifischen Packung
+  produkt_code: string;      // DataMatrix/GS1 Produktcode
+  charge: string;            // Chargen-/Batchnummer
+  seriennummer: string;      // Packungs-Seriennummer
+  verwendbar_bis: string;    // ISO-Date, leer wenn unbekannt
   ist_ersatzprodukt: number; // 0=Original, 1=Ersatzprodukt
   ersatz_name: string;       // Optional, z.B. "Ibuprofen AbZ 400"
   gekauft_am: string;        // ISO Date
@@ -204,6 +208,10 @@ class Database {
         medikament_id      TEXT NOT NULL,
         groesse            REAL NOT NULL,
         pzn                TEXT NOT NULL DEFAULT '',
+        produkt_code       TEXT NOT NULL DEFAULT '',
+        charge             TEXT NOT NULL DEFAULT '',
+        seriennummer       TEXT NOT NULL DEFAULT '',
+        verwendbar_bis     TEXT NOT NULL DEFAULT '',
         ist_ersatzprodukt  INTEGER NOT NULL DEFAULT 0,
         ersatz_name        TEXT NOT NULL DEFAULT '',
         gekauft_am         TEXT NOT NULL DEFAULT (datetime('now')),
@@ -254,6 +262,7 @@ class Database {
     await this.migrateV14toV15();
     await this.migrateV15toV16();
     await this.migrateV16toV17();
+    await this.migrateV17toV18();
   }
 
   /**
@@ -331,6 +340,10 @@ class Database {
           medikament_id      TEXT NOT NULL,
           groesse            REAL NOT NULL,
           pzn                TEXT NOT NULL DEFAULT '',
+          produkt_code       TEXT NOT NULL DEFAULT '',
+          charge             TEXT NOT NULL DEFAULT '',
+          seriennummer       TEXT NOT NULL DEFAULT '',
+          verwendbar_bis     TEXT NOT NULL DEFAULT '',
           ist_ersatzprodukt  INTEGER NOT NULL DEFAULT 0,
           ersatz_name        TEXT NOT NULL DEFAULT '',
           gekauft_am         TEXT NOT NULL DEFAULT (datetime('now')),
@@ -661,6 +674,26 @@ class Database {
       );
       logger.log('[DB] Migration V16->V17: telefon_landesvorwahl Spalte in aerzte hinzugefuegt');
     }
+  }
+
+  /**
+   * Migration V17 -> V18: Strukturierte Packungsdaten aus Premium-Scan.
+   */
+  private async migrateV17toV18(): Promise<void> {
+    const packungCols = await this.getColumnNames('packungen');
+    const additions: Array<[string, string]> = [
+      ['produkt_code', "TEXT NOT NULL DEFAULT ''"],
+      ['charge', "TEXT NOT NULL DEFAULT ''"],
+      ['seriennummer', "TEXT NOT NULL DEFAULT ''"],
+      ['verwendbar_bis', "TEXT NOT NULL DEFAULT ''"],
+    ];
+
+    for (const [column, definition] of additions) {
+      if (!packungCols.includes(column)) {
+        await this.db!.executeSql(`ALTER TABLE packungen ADD COLUMN ${column} ${definition};`);
+      }
+    }
+    logger.log('[DB] Migration V17->V18: Packungs-Scan-Spalten geprueft');
   }
 }
 

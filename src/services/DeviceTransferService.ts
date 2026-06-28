@@ -5,8 +5,8 @@ import { getDatabase, type MedikamentRow } from '../database/Database';
 import { planeAlleErinnerungen } from './ErinnerungsService';
 import { version as APP_VERSION } from '../../package.json';
 
-const TRANSFER_FORMAT_VERSION = 1;
-const DB_SCHEMA_VERSION = 17;
+const TRANSFER_FORMAT_VERSION = 2;
+const DB_SCHEMA_VERSION = 18;
 const MIN_SUPPORTED_IMPORTER_VERSION = 1;
 const FILE_EXTENSION = 'mmptransfer';
 const DEFAULT_KDF_ITERATIONS = 120000;
@@ -63,6 +63,10 @@ const TABLE_COLUMNS: Record<TableName, string[]> = {
     'medikament_id',
     'groesse',
     'pzn',
+    'produkt_code',
+    'charge',
+    'seriennummer',
+    'verwendbar_bis',
     'ist_ersatzprodukt',
     'ersatz_name',
     'gekauft_am',

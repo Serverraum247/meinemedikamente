@@ -34,4 +34,37 @@ describe('buildMedicationScanSuggestion', () => {
     expect(buildMedicationScanSuggestion({ barcode: 'PZN - 00078597' }).scannedPZN).toBe('00078597');
     expect(buildMedicationScanSuggestion({ textLines: ['PZN 00078597'] }).scannedPZN).toBe('00078597');
   });
+
+  it('extracts structured package data from OCR text', () => {
+    const suggestion = buildMedicationScanSuggestion({
+      textLines: [
+        'PC 04150096336005',
+        'SN 9ZMBBNUAA',
+        'Ch.-B. V43884',
+        'verwendbar bis 07/2027',
+      ],
+    });
+
+    expect(suggestion.scannedProduktCode).toBe('04150096336005');
+    expect(suggestion.scannedPZN).toBe('09633600');
+    expect(suggestion.scannedSeriennummer).toBe('9ZMBBNUAA');
+    expect(suggestion.scannedCharge).toBe('V43884');
+    expect(suggestion.scannedVerwendbarBis).toBe('2027-07-31');
+  });
+
+  it('extracts product data and expiry from a GS1 DataMatrix payload', () => {
+    const suggestion = buildMedicationScanSuggestion({
+      barcodes: [{
+        format: 'data-matrix',
+        value: '01041501004221201728113010HA5K00210361247721801',
+      }],
+      textLines: ['Jede Filmtablette enthält Lercanidipinhydrochlorid 10 mg'],
+    });
+
+    expect(suggestion.scannedProduktCode).toBe('04150100422120');
+    expect(suggestion.scannedPZN).toBe('10042212');
+    expect(suggestion.scannedCharge).toBe('HA5K00');
+    expect(suggestion.scannedSeriennummer).toBe('0361247721801');
+    expect(suggestion.scannedVerwendbarBis).toBe('2028-11-30');
+  });
 });

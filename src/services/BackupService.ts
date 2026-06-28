@@ -142,10 +142,12 @@ async function importLocalData(backupData: BackupData): Promise<number> {
     const rows = (backupData as any)[table] || [];
 
     try {
+      const availableColumns = await getTableColumns(table);
       await db.executeSql(`DELETE FROM ${table}`);
 
       for (const row of rows) {
-        const columns = Object.keys(row);
+        const columns = Object.keys(row).filter(column => availableColumns.includes(column));
+        if (columns.length === 0) continue;
         const values = columns.map(column => row[column]);
         const placeholders = columns.map(() => '?').join(',');
         await db.executeSql(
@@ -163,6 +165,20 @@ async function importLocalData(backupData: BackupData): Promise<number> {
   }
 
   return medCount;
+}
+
+async function getTableColumns(table: string): Promise<string[]> {
+  const db = await getDatabase();
+  try {
+    const result = await db.executeSql(`PRAGMA table_info(${table})`);
+    const columns: string[] = [];
+    for (let i = 0; i < result[0].rows.length; i++) {
+      columns.push(result[0].rows.item(i).name);
+    }
+    return columns;
+  } catch {
+    return [];
+  }
 }
 
 // ============================================================

@@ -28,6 +28,8 @@ import { MedikamentRow } from '../database/Database';
 import { nachkaufErfassen } from '../database/PackungController';
 import { parseDeFloat } from '../utils/FloatUtils';
 import { announceChange } from '../utils/AccessibilityHelpers';
+import { isPremium } from '../services/PremiumService';
+import { showPremiumRequiredAlert } from '../utils/PremiumAlerts';
 import { logger } from '../utils/Logger';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Nachkauf'>;
@@ -39,6 +41,11 @@ export default function NachkaufScreen({ route, navigation }: Props) {
   const [medikament, setMedikament] = useState<MedikamentRow | null>(null);
   const [groesse, setGroesse] = useState('');
   const [pzn, setPzn] = useState('');
+  const [produktCode, setProduktCode] = useState('');
+  const [charge, setCharge] = useState('');
+  const [seriennummer, setSeriennummer] = useState('');
+  const [verwendbarBis, setVerwendbarBis] = useState('');
+  const [premium, setPremium] = useState(false);
   const [istErsatzprodukt, setIstErsatzprodukt] = useState(false);
   const [ersatzName, setErsatzName] = useState('');
 
@@ -50,6 +57,29 @@ export default function NachkaufScreen({ route, navigation }: Props) {
       navigation.setOptions({ title: `Nachkauf: ${found.name}` });
     }
   }, [medikamente, medikamentId, navigation]);
+
+  useEffect(() => {
+    isPremium().then(setPremium);
+  }, []);
+
+  useEffect(() => {
+    if (route.params?.suggestedPackungsgroesse && !groesse) {
+      setGroesse(route.params.suggestedPackungsgroesse);
+    }
+    if (route.params?.scannedPZN) setPzn(route.params.scannedPZN);
+    if (route.params?.scannedProduktCode) setProduktCode(route.params.scannedProduktCode);
+    if (route.params?.scannedCharge) setCharge(route.params.scannedCharge);
+    if (route.params?.scannedSeriennummer) setSeriennummer(route.params.scannedSeriennummer);
+    if (route.params?.scannedVerwendbarBis) setVerwendbarBis(route.params.scannedVerwendbarBis);
+  }, [
+    groesse,
+    route.params?.scannedCharge,
+    route.params?.scannedPZN,
+    route.params?.scannedProduktCode,
+    route.params?.scannedSeriennummer,
+    route.params?.scannedVerwendbarBis,
+    route.params?.suggestedPackungsgroesse,
+  ]);
 
   const handleSave = async () => {
     if (!medikament) return;
@@ -72,6 +102,12 @@ export default function NachkaufScreen({ route, navigation }: Props) {
         pzn.trim(),
         istErsatzprodukt,
         ersatzName.trim(),
+        {
+          produkt_code: produktCode.trim(),
+          charge: charge.trim(),
+          seriennummer: seriennummer.trim(),
+          verwendbar_bis: verwendbarBis.trim(),
+        },
       );
       // Bestand wurde in nachkaufErfassen bereits aktualisiert
 
@@ -111,6 +147,32 @@ export default function NachkaufScreen({ route, navigation }: Props) {
         </View>
 
         {/* Packungsgröße */}
+        <View style={styles.scanCard}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.scanTitle}>Packung scannen</Text>
+            <Text style={styles.hint}>Premium erkennt PZN, Verfallsdatum und Charge als Vorschlag.</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.scanButton}
+            onPress={() => {
+              if (!premium) {
+                showPremiumRequiredAlert('Packungsdaten wie Verfallsdatum und Charge sind nur mit Premium möglich.', navigation);
+                return;
+              }
+              navigation.navigate('BarcodeScanner', {
+                target: 'nachkauf',
+                medikamentId,
+                premiumPackageScan: true,
+              });
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Packung scannen"
+          >
+            <Text style={styles.scanButtonText}>Scannen</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Packungsgröße */}
         <View style={styles.fieldGroup}>
           <Text style={styles.label} accessibilityRole="header">Packungsgröße *</Text>
           <TextInput
@@ -125,6 +187,45 @@ export default function NachkaufScreen({ route, navigation }: Props) {
           />
           <Text style={styles.hint}>Anzahl der Tabletten/Kapseln in der Packung</Text>
         </View>
+
+        {premium ? (
+          <View style={styles.premiumBox}>
+            <Text style={styles.label} accessibilityRole="header">Premium-Packungsdaten</Text>
+            <TextInput
+              style={styles.input}
+              value={verwendbarBis}
+              onChangeText={setVerwendbarBis}
+              placeholder="Verwendbar bis, z.B. 2027-07-31"
+              placeholderTextColor="#999"
+              accessibilityLabel="Verwendbar bis"
+            />
+            <TextInput
+              style={styles.input}
+              value={charge}
+              onChangeText={setCharge}
+              placeholder="Charge"
+              placeholderTextColor="#999"
+              accessibilityLabel="Charge"
+            />
+            <TextInput
+              style={styles.input}
+              value={seriennummer}
+              onChangeText={setSeriennummer}
+              placeholder="Seriennummer"
+              placeholderTextColor="#999"
+              accessibilityLabel="Seriennummer"
+            />
+            <TextInput
+              style={styles.input}
+              value={produktCode}
+              onChangeText={setProduktCode}
+              placeholder="Produktcode"
+              placeholderTextColor="#999"
+              keyboardType="number-pad"
+              accessibilityLabel="Produktcode"
+            />
+          </View>
+        ) : null}
 
         {/* PZN */}
         <View style={styles.fieldGroup}>
@@ -228,6 +329,42 @@ const styles = StyleSheet.create({
     fontSize: 36,
     fontWeight: '700',
     color: '#1a1a2e',
+  },
+  scanCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 2,
+    borderColor: '#1a1a2e',
+  },
+  scanTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#1a1a2e',
+  },
+  scanButton: {
+    backgroundColor: '#1a1a2e',
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 18,
+  },
+  scanButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  premiumBox: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 20,
+    gap: 10,
+    borderWidth: 2,
+    borderColor: '#d6a800',
   },
   fieldGroup: {
     marginBottom: 20,

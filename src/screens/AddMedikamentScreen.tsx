@@ -43,6 +43,7 @@ import {
 } from '../utils/Einnahmeplan';
 import { getMaxReminderSlots, isPremium } from '../services/PremiumService';
 import { getAllAerzte } from '../database/ArztController';
+import { erstpackungErstellen } from '../database/PackungController';
 import type { ArztRow } from '../database/Database';
 import PremiumGate from '../components/PremiumGate';
 import { logger } from '../utils/Logger';
@@ -158,8 +159,12 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
     const suggestedActiveIngredient = route.params?.suggestedActiveIngredient;
     const suggestedStrengthValue = route.params?.suggestedStrengthValue;
     const suggestedStrengthUnit = route.params?.suggestedStrengthUnit;
+    const suggestedPackungsgroesse = route.params?.suggestedPackungsgroesse;
     if (scannedPZN && !pzn) {
       setPzn(scannedPZN);
+    }
+    if (suggestedPackungsgroesse && !packungsgroesse) {
+      setPackungsgroesse(suggestedPackungsgroesse);
     }
     if (suggestedName && !name) {
       setName(suggestedName);
@@ -179,8 +184,10 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
     route.params?.scannedPZN,
     route.params?.suggestedActiveIngredient,
     route.params?.suggestedName,
+    route.params?.suggestedPackungsgroesse,
     route.params?.suggestedStrengthUnit,
     route.params?.suggestedStrengthValue,
+    packungsgroesse,
     staerkeEinheit,
     staerkeWert,
     zusatz,
@@ -266,6 +273,23 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
         staerke_einheit: isCombination ? '' : staerkeEinheit,
       });
 
+      if (
+        packungsFloat > 0 &&
+        (
+          route.params?.scannedProduktCode ||
+          route.params?.scannedCharge ||
+          route.params?.scannedSeriennummer ||
+          route.params?.scannedVerwendbarBis
+        )
+      ) {
+        await erstpackungErstellen(id, packungsFloat, pzn.trim(), bestandFloat || packungsFloat, {
+          produkt_code: route.params?.scannedProduktCode || '',
+          charge: route.params?.scannedCharge || '',
+          seriennummer: route.params?.scannedSeriennummer || '',
+          verwendbar_bis: route.params?.scannedVerwendbarBis || '',
+        });
+      }
+
       announceChange('Medikament wurde gespeichert');
       Alert.alert(
         'Gespeichert',
@@ -294,6 +318,10 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
     packungsgroesse,
     premium,
     pzn,
+    route.params?.scannedCharge,
+    route.params?.scannedProduktCode,
+    route.params?.scannedSeriennummer,
+    route.params?.scannedVerwendbarBis,
     staerkeEinheit,
     staerkeWert,
     warnungAb,
@@ -358,12 +386,12 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
           <View style={styles.scanHeroTextWrap}>
             <Text style={styles.scanHeroTitle}>Packung scannen</Text>
             <Text style={styles.scanHeroSubtitle}>
-              Optional: Barcode, PZN oder Text auf der Packung erkennen und als Vorschlag übernehmen.
+              Premium: Barcode, DataMatrix, Text und Verfallsdatum als Vorschlag erkennen.
             </Text>
           </View>
           <TouchableOpacity
             style={styles.scanHeroButton}
-            onPress={() => navigation.navigate('BarcodeScanner')}
+            onPress={() => navigation.navigate('BarcodeScanner', { target: 'add', premiumPackageScan: true })}
             activeOpacity={0.75}
             accessibilityRole="button"
             accessibilityLabel="Packung scannen"

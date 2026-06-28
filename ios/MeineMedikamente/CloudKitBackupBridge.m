@@ -34,6 +34,13 @@ RCT_EXTERN_METHOD(scanMedicationPackage:(RCTPromiseResolveBlock)resolve
 
 @end
 
+@interface RCT_EXTERN_MODULE(MedicationPackageScanner, NSObject)
+
+RCT_EXTERN_METHOD(scanPackage:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
+@end
+
 @interface RCT_EXTERN_MODULE(MedicationPlanShare, NSObject)
 
 RCT_EXTERN_METHOD(sharePdf:(NSString *)title

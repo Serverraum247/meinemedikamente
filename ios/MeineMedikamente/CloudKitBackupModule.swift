@@ -236,7 +236,7 @@ class MedicationVisionScanner: NSObject {
 
       let controller = DataScannerViewController(
         recognizedDataTypes: [
-          .barcode(symbologies: [.ean13, .ean8, .code39, .code128, .qr]),
+          .barcode(symbologies: [.ean13, .ean8, .code39, .code128, .qr, .dataMatrix]),
           .text(languages: ["de-DE", "en-US"], textContentType: nil)
         ],
         qualityLevel: .balanced,
@@ -358,8 +358,6 @@ extension MedicationVisionScanner: DataScannerViewControllerDelegate {
       case .barcode(let barcode):
         if let value = barcode.payloadStringValue, !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
           recognizedBarcode = value
-          finishScan()
-          return
         }
       case .text(let text):
         let value = text.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -370,6 +368,14 @@ extension MedicationVisionScanner: DataScannerViewControllerDelegate {
         continue
       }
     }
+  }
+}
+
+@objc(MedicationPackageScanner)
+class MedicationPackageScanner: MedicationVisionScanner {
+  @objc func scanPackage(_ resolve: @escaping RCTPromiseResolveBlock,
+                         rejecter reject: @escaping RCTPromiseRejectBlock) {
+    scanMedicationPackage(resolve, rejecter: reject)
   }
 }
 

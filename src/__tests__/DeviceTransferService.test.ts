@@ -85,6 +85,10 @@ const tableRows: Record<string, Row[]> = {
       medikament_id: 'med-1',
       groesse: 50,
       pzn: '',
+      produkt_code: '04150096336005',
+      charge: 'V43884',
+      seriennummer: '9ZMBBNUAA',
+      verwendbar_bis: '2027-07-31',
       ist_ersatzprodukt: 0,
       ersatz_name: '',
       gekauft_am: '2026-06-01',
@@ -198,6 +202,12 @@ describe('DeviceTransferService', () => {
     expect(archive.data.personen).toHaveLength(1);
     expect(archive.data.personen[0].avatar_uri).toBe('');
     expect(archive.data.medikamente[0].person_id).toBe('person-1');
+    expect(archive.data.packungen[0]).toEqual(expect.objectContaining({
+      produkt_code: '04150096336005',
+      charge: 'V43884',
+      seriennummer: '9ZMBBNUAA',
+      verwendbar_bis: '2027-07-31',
+    }));
     expect(archive.data.einstellungen).toEqual([
       { key: 'einnahmeplan_default_uhrzeiten', value: '{"morgens":"07:30"}' },
       { key: 'aktive_person_id', value: 'person-1' },

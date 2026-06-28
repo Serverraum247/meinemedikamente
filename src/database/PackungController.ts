@@ -9,6 +9,13 @@
 import { database, getDatabase, PackungRow } from './Database';
 import { updateBestand, getMedikamentById } from './MedikamentController';
 
+export interface PackungScanMetadata {
+  produkt_code?: string;
+  charge?: string;
+  seriennummer?: string;
+  verwendbar_bis?: string;
+}
+
 /**
  * Neue Packung nach Kauf anlegen und Bestand auffüllen
  */
@@ -18,6 +25,7 @@ export async function nachkaufErfassen(
   pzn: string,
   istErsatzprodukt: boolean,
   ersatzName?: string,
+  scanMetadata: PackungScanMetadata = {},
 ): Promise<PackungRow> {
   const db = await getDatabase();
   const id = generateUUID();
@@ -26,9 +34,21 @@ export async function nachkaufErfassen(
 
   // Packung anlegen
   await db.executeSql(
-    `INSERT INTO packungen (id, medikament_id, groesse, pzn, ist_ersatzprodukt, ersatz_name, gekauft_am, menge_verbleibend)
-     VALUES (?, ?, ?, ?, ?, ?, datetime('now'), ?)`,
-    [id, medikamentId, groesse, pzn || med.pzn, istErsatzprodukt ? 1 : 0, ersatzName || '', groesse],
+    `INSERT INTO packungen (id, medikament_id, groesse, pzn, produkt_code, charge, seriennummer, verwendbar_bis, ist_ersatzprodukt, ersatz_name, gekauft_am, menge_verbleibend)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?)`,
+    [
+      id,
+      medikamentId,
+      groesse,
+      pzn || med.pzn,
+      scanMetadata.produkt_code || '',
+      scanMetadata.charge || '',
+      scanMetadata.seriennummer || '',
+      scanMetadata.verwendbar_bis || '',
+      istErsatzprodukt ? 1 : 0,
+      ersatzName || '',
+      groesse,
+    ],
   );
 
   // Bestand des Medikaments erhöhen
@@ -40,6 +60,10 @@ export async function nachkaufErfassen(
     medikament_id: medikamentId,
     groesse,
     pzn: pzn || med.pzn,
+    produkt_code: scanMetadata.produkt_code || '',
+    charge: scanMetadata.charge || '',
+    seriennummer: scanMetadata.seriennummer || '',
+    verwendbar_bis: scanMetadata.verwendbar_bis || '',
     ist_ersatzprodukt: istErsatzprodukt ? 1 : 0,
     ersatz_name: ersatzName || '',
     gekauft_am: new Date().toISOString(),
@@ -104,6 +128,26 @@ export async function getOffenePackungenCount(medikamentId: string): Promise<num
   return count;
 }
 
+export async function getBaldAblaufendeOffenePackungen(daysAhead = 30): Promise<PackungRow[]> {
+  const db = await getDatabase();
+  const results = await db.executeSql(
+    `SELECT * FROM packungen
+     WHERE menge_verbleibend > 0
+       AND verwendbar_bis != ''
+       AND date(verwendbar_bis) <= date('now', ?)
+     ORDER BY date(verwendbar_bis) ASC`,
+    [`+${daysAhead} days`],
+  );
+
+  const rows: PackungRow[] = [];
+  results.forEach(result => {
+    for (let i = 0; i < result.rows.length; i++) {
+      rows.push(result.rows.item(i));
+    }
+  });
+  return rows;
+}
+
 /**
  * Packungen eines Medikaments löschen (bei Medikament-Löschung)
  */
@@ -119,8 +163,43 @@ export async function erstpackungErstellen(
   medikamentId: string,
   groesse: number,
   pzn: string,
+  mengeVerbleibend?: number,
+  scanMetadata: PackungScanMetadata = {},
 ): Promise<PackungRow> {
-  return nachkaufErfassen(medikamentId, groesse, pzn, false, '');
+  const db = await getDatabase();
+  const id = generateUUID();
+  const remaining = mengeVerbleibend ?? groesse;
+
+  await db.executeSql(
+    `INSERT INTO packungen (id, medikament_id, groesse, pzn, produkt_code, charge, seriennummer, verwendbar_bis, ist_ersatzprodukt, ersatz_name, gekauft_am, menge_verbleibend)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, '', datetime('now'), ?)`,
+    [
+      id,
+      medikamentId,
+      groesse,
+      pzn,
+      scanMetadata.produkt_code || '',
+      scanMetadata.charge || '',
+      scanMetadata.seriennummer || '',
+      scanMetadata.verwendbar_bis || '',
+      remaining,
+    ],
+  );
+
+  return {
+    id,
+    medikament_id: medikamentId,
+    groesse,
+    pzn,
+    produkt_code: scanMetadata.produkt_code || '',
+    charge: scanMetadata.charge || '',
+    seriennummer: scanMetadata.seriennummer || '',
+    verwendbar_bis: scanMetadata.verwendbar_bis || '',
+    ist_ersatzprodukt: 0,
+    ersatz_name: '',
+    gekauft_am: new Date().toISOString(),
+    menge_verbleibend: remaining,
+  };
 }
 
 // --- Hilfsfunktion ---

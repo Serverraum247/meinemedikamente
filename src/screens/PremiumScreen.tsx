@@ -18,7 +18,7 @@ const FEATURES: FeatureItem[] = [
   { icon: '📊', label: 'Bestands-Warnung', freeText: 'Nein', premiumText: 'Ja', isPremiumOnly: true },
   { icon: '📅', label: 'Arzt-Urlaub-Prävention', freeText: 'Ansehen', premiumText: 'Verwalten + Anrufen', isPremiumOnly: true },
   { icon: '✏️', label: 'Bestand korrigieren', freeText: 'Nein', premiumText: 'Ja', isPremiumOnly: true },
-  { icon: '📷', label: 'Barcode-Scanner', freeText: '3 pro Tag', premiumText: 'Unbegrenzt', isPremiumOnly: true },
+  { icon: '📷', label: 'Packung scannen', freeText: 'Basis', premiumText: 'DataMatrix, Text, Verfallsdatum', isPremiumOnly: true },
   { icon: '🗓️', label: 'Kalender-Termine', freeText: 'Nein', premiumText: 'Ja', isPremiumOnly: true },
   { icon: '⏰', label: 'Erinnerungen', freeText: 'Standard', premiumText: 'Unbegrenzt', isPremiumOnly: true },
   { icon: '🕐', label: 'Uhrzeiten', freeText: 'Standard', premiumText: 'Individuell', isPremiumOnly: true },

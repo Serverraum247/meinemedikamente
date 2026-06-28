@@ -76,6 +76,23 @@ import {
 
 type Props = NativeStackScreenProps<RootStackParamList, 'MedikamentDetail'>;
 
+function formatPackungDate(value: string): string {
+  if (!value) return '';
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString('de-DE', { month: '2-digit', year: 'numeric' });
+}
+
+function isExpiringSoon(value: string, mengeVerbleibend: number): boolean {
+  if (!value || Number(mengeVerbleibend) <= 0) return false;
+  const expiry = new Date(`${value}T23:59:59`);
+  if (Number.isNaN(expiry.getTime())) return false;
+  const now = new Date();
+  const warningUntil = new Date(now);
+  warningUntil.setDate(warningUntil.getDate() + 30);
+  return expiry <= warningUntil;
+}
+
 async function resolveSlotFuerBestaetigung(
   medikament: MedikamentRow,
   plan: EinnahmeSlot[],
@@ -759,6 +776,29 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
                     <Text style={styles.packungValue}>{letztePackung.pzn}</Text>
                   </View>
                 ) : null}
+                {premium && letztePackung.verwendbar_bis ? (
+                  <View style={styles.packungRow}>
+                    <Text style={styles.packungLabel}>Verwendbar bis</Text>
+                    <Text style={styles.packungValue}>{formatPackungDate(letztePackung.verwendbar_bis)}</Text>
+                  </View>
+                ) : null}
+                {premium && isExpiringSoon(letztePackung.verwendbar_bis, letztePackung.menge_verbleibend) ? (
+                  <View style={styles.expiryWarning}>
+                    <Text style={styles.expiryWarningText}>Packung läuft bald ab.</Text>
+                  </View>
+                ) : null}
+                {premium && letztePackung.charge ? (
+                  <View style={styles.packungRow}>
+                    <Text style={styles.packungLabel}>Charge</Text>
+                    <Text style={styles.packungValue}>{letztePackung.charge}</Text>
+                  </View>
+                ) : null}
+                {premium && letztePackung.seriennummer ? (
+                  <View style={styles.packungRow}>
+                    <Text style={styles.packungLabel}>Seriennummer</Text>
+                    <Text style={styles.packungValue}>{letztePackung.seriennummer}</Text>
+                  </View>
+                ) : null}
 
             {/* Packungshistorie einklappbar */}
                 {packungsHistorie.length > 1 && (
@@ -785,6 +825,11 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
                           Ersatz: {p.ersatz_name || 'Ja'}
                         </Text>
                       )}
+                      {premium && p.verwendbar_bis ? (
+                        <Text style={styles.packungHistErsatz}>
+                          Verwendbar bis {formatPackungDate(p.verwendbar_bis)}
+                        </Text>
+                      ) : null}
                     </View>
                     <Text style={styles.packungHistGroesse}>
                       {p.groesse} {medikament.einheit}
@@ -1599,6 +1644,19 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#1a1a2e',
+  },
+  expiryWarning: {
+    backgroundColor: '#fff4e5',
+    borderRadius: 10,
+    padding: 10,
+    marginVertical: 6,
+    borderWidth: 1,
+    borderColor: '#f39c12',
+  },
+  expiryWarningText: {
+    color: '#8a4b00',
+    fontSize: 15,
+    fontWeight: '700',
   },
   ersatzBadge: {
     backgroundColor: '#fef9e7',
