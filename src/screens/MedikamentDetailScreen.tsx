@@ -1257,21 +1257,27 @@ function ActionRow({
       accessibilityLabel={`${label}: ${value}`}
       accessibilityHint={accessibilityHint}
     >
-      <Text
-        style={[styles.actionRowLabel, danger && styles.actionRowDangerText]}
-        numberOfLines={2}
-      >
-        {label}
-      </Text>
-      <View style={styles.actionRowRight}>
+      <View style={styles.actionRowContent}>
+        <Text
+          style={[styles.actionRowLabel, danger && styles.actionRowDangerText]}
+          maxFontSizeMultiplier={1.25}
+        >
+          {label}
+        </Text>
         <Text
           style={[styles.actionRowValue, danger && styles.actionRowDangerText]}
-          numberOfLines={1}
+          maxFontSizeMultiplier={1.25}
         >
           {value}
         </Text>
-        <Text style={[styles.actionRowChevron, danger && styles.actionRowDangerText]}>›</Text>
       </View>
+      <Text
+        style={[styles.actionRowChevron, danger && styles.actionRowDangerText]}
+        accessibilityElementsHidden
+        importantForAccessibility="no"
+      >
+        ›
+      </Text>
     </TouchableOpacity>
   );
 }
@@ -1745,7 +1751,7 @@ const styles = StyleSheet.create({
     borderColor: '#D8DEE6',
   },
   actionRow: {
-    minHeight: 58,
+    minHeight: 72,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -1753,37 +1759,35 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
     borderColor: '#E6EAF0',
-    paddingVertical: 12,
+    paddingVertical: 14,
     paddingHorizontal: 14,
     marginTop: 8,
     gap: 12,
   },
-  actionRowLabel: {
+  actionRowContent: {
     flex: 1,
-    flexShrink: 1,
+    minWidth: 0,
+  },
+  actionRowLabel: {
     fontSize: 17,
     color: '#1F2933',
     fontWeight: '700',
-    lineHeight: 22,
-  },
-  actionRowRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    flexShrink: 1,
-    maxWidth: '46%',
+    lineHeight: 23,
   },
   actionRowValue: {
     fontSize: 15,
     color: '#5F6B7A',
     fontWeight: '700',
-    flexShrink: 1,
+    lineHeight: 20,
+    marginTop: 3,
   },
   actionRowChevron: {
+    width: 24,
     fontSize: 24,
     color: '#9AA5B1',
     fontWeight: '700',
     lineHeight: 26,
+    textAlign: 'right',
   },
   actionRowDangerText: {
     color: '#B42318',
