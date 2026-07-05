@@ -18,6 +18,15 @@ run_with_timeout() {
   fi
 }
 
+if [[ -d ".worktrees" ]]; then
+  printf 'warning: nested .worktrees directory detected in app root; keep worktrees outside the Metro/Gradle project when possible\n' >&2
+fi
+
+if [[ -d "android/app/build" ]] && find android/app/build -name '* 2*' -print -quit | grep -q .; then
+  printf 'warning: duplicate local Android build artifacts detected (* 2*); removing android/app/build before rebuild\n' >&2
+  rm -rf android/app/build
+fi
+
 printf 'Checking build environment before Android build...\n'
 RN_CONFIG_TIMEOUT_SECONDS="${RN_CONFIG_TIMEOUT_SECONDS:-30}" \
 FULL_RN_CONFIG_TIMEOUT_SECONDS="${FULL_RN_CONFIG_TIMEOUT_SECONDS:-45}" \
