@@ -94,8 +94,8 @@ android {
         applicationId applicationIdOverride ?: baseApplicationId
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 62
-        versionName "0.1.61"
+        versionCode 63
+        versionName "0.1.62"
         manifestPlaceholders = [usesCleartextTraffic: "false"]
     }
     signingConfigs {

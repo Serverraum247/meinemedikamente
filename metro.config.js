@@ -12,6 +12,8 @@ function escapeForRegExp(value) {
 }
 
 const blockedRoots = [
+  '.git',
+  '.worktrees',
   'android',
   'ios',
   'docs',
