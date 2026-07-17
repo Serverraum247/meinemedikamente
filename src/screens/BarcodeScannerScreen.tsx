@@ -18,6 +18,7 @@ import {
   NativeModules,
   Platform,
   ScrollView,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Camera } from 'react-native-camera-kit';
@@ -254,7 +255,15 @@ export default function BarcodeScannerScreen({ route, navigation }: Props) {
   return (
     <SafeAreaView style={styles.container}>
       {review ? (
-        <ScrollView contentContainerStyle={styles.reviewContent} keyboardShouldPersistTaps="handled">
+        <KeyboardAvoidingView
+          style={styles.keyboardAvoidingContainer}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+        <ScrollView
+          contentContainerStyle={styles.reviewContent}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+        >
           <Text style={styles.reviewTitle} accessibilityRole="header">Bitte prüfen</Text>
           <Text style={styles.reviewIntro}>
             Die App hat Daten auf der Packung erkannt. Bitte kontrolliere alles vor dem Übernehmen.
@@ -282,7 +291,12 @@ export default function BarcodeScannerScreen({ route, navigation }: Props) {
             <Text style={styles.secondaryButtonText}>Nochmal scannen</Text>
           </TouchableOpacity>
         </ScrollView>
+        </KeyboardAvoidingView>
       ) : (
+        <KeyboardAvoidingView
+          style={styles.keyboardAvoidingContainer}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
         <>
       {/* Header */}
       <View style={styles.header}>
@@ -423,6 +437,7 @@ export default function BarcodeScannerScreen({ route, navigation }: Props) {
         <Text style={styles.cancelButtonText}>Abbrechen</Text>
       </TouchableOpacity>
         </>
+        </KeyboardAvoidingView>
       )}
     </SafeAreaView>
   );
@@ -475,6 +490,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8f8f6',
+  },
+  keyboardAvoidingContainer: {
+    flex: 1,
   },
   header: {
     padding: 16,

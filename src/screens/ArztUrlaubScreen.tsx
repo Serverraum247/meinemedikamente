@@ -351,9 +351,13 @@ const ArztUrlaubScreen: React.FC<ArztUrlaubScreenProps> = ({ navigation }) => {
     <SafeAreaView style={styles.safeArea}>
       <KeyboardAvoidingView
         style={styles.keyboardAvoidingContainer}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+      >
         {/* ---------- Header ---------- */}
         <View style={styles.header}>
           {navigation ? (
@@ -538,7 +542,10 @@ const ArztUrlaubScreen: React.FC<ArztUrlaubScreenProps> = ({ navigation }) => {
           animationType="slide"
           onRequestClose={() => setMenueOffen(false)}
         >
-          <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView
+            style={styles.modalOverlay}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          >
             <View style={styles.modalContent}>
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>Arzt auswählen</Text>
@@ -593,7 +600,7 @@ const ArztUrlaubScreen: React.FC<ArztUrlaubScreenProps> = ({ navigation }) => {
                 <Text style={styles.neuArztButtonText}>+ Neuen Arzt anlegen</Text>
               </TouchableOpacity>
             </View>
-          </View>
+          </KeyboardAvoidingView>
         </Modal>
 
         {/* Neuen Arzt anlegen (Modal) */}
@@ -603,7 +610,10 @@ const ArztUrlaubScreen: React.FC<ArztUrlaubScreenProps> = ({ navigation }) => {
           animationType="slide"
           onRequestClose={() => setNeuenArztAnlegen(false)}
         >
-          <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView
+            style={styles.modalOverlay}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          >
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>Neuen Arzt anlegen</Text>
 
@@ -666,7 +676,7 @@ const ArztUrlaubScreen: React.FC<ArztUrlaubScreenProps> = ({ navigation }) => {
                 </TouchableOpacity>
               </View>
             </View>
-          </View>
+          </KeyboardAvoidingView>
         </Modal>
 
         <Modal

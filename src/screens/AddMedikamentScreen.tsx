@@ -374,13 +374,13 @@ export default function AddMedikamentScreen({ navigation, route }: Props) {
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
         style={styles.keyboardAvoidingContainer}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <ScrollView
           style={styles.scroll}
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
-          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'none'}
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
         >
         <View style={styles.scanHero}>
           <View style={styles.scanHeroTextWrap}>

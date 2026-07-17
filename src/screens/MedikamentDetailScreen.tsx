@@ -21,6 +21,7 @@ import {
   Modal,
   TextInput,
   Linking,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -936,7 +937,10 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
         animationType="slide"
         onRequestClose={() => setKorrekturModal(false)}
       >
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Bestandskorrektur</Text>
             <Text style={styles.modalHint}>
@@ -981,7 +985,7 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       <Modal
@@ -990,7 +994,10 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
         animationType="slide"
         onRequestClose={() => setNachtragModal(false)}
       >
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Einnahme nachtragen</Text>
             <Text style={styles.modalHint}>
@@ -1080,7 +1087,7 @@ export default function MedikamentDetailScreen({ route, navigation }: Props) {
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );

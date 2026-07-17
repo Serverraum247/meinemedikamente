@@ -17,6 +17,8 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
+  KeyboardAvoidingView,
+  Platform,
   Alert,
   Switch,
 } from 'react-native';
@@ -137,14 +139,22 @@ export default function NachkaufScreen({ route, navigation }: Props) {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        {/* Aktueller Bestand */}
-        <View style={styles.bestandCard}>
-          <Text style={styles.bestandLabel} accessibilityRole="header">Aktueller Bestand</Text>
-          <Text style={styles.bestandWert}>
-            {medikament.aktueller_bestand} {medikament.einheit}
-          </Text>
-        </View>
+      <KeyboardAvoidingView
+        style={styles.keyboardAvoidingView}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <ScrollView
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+        >
+          {/* Aktueller Bestand */}
+          <View style={styles.bestandCard}>
+            <Text style={styles.bestandLabel} accessibilityRole="header">Aktueller Bestand</Text>
+            <Text style={styles.bestandWert}>
+              {medikament.aktueller_bestand} {medikament.einheit}
+            </Text>
+          </View>
 
         {/* Packungsgröße */}
         <View style={styles.scanCard}>
@@ -282,17 +292,22 @@ export default function NachkaufScreen({ route, navigation }: Props) {
           </Text>
         </View>
 
-        {/* Speichern */}
+        </ScrollView>
+
+        {/* Der Aktionsbereich bleibt bei geöffneter Tastatur sichtbar. */}
+        <View style={styles.actionBar}>
         <TouchableOpacity
           style={styles.saveButton}
           onPress={handleSave}
           activeOpacity={0.7}
           accessibilityRole="button"
           accessibilityLabel="Nachkauf speichern"
+          accessibilityHint="Speichert die Packungsgröße und erhöht den Bestand"
         >
           <Text style={styles.saveButtonText}>Nachkauf speichern</Text>
         </TouchableOpacity>
-      </ScrollView>
+        </View>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -302,6 +317,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f5f5f5',
   },
+  keyboardAvoidingView: {
+    flex: 1,
+  },
   center: {
     flex: 1,
     justifyContent: 'center',
@@ -309,7 +327,15 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 16,
-    paddingBottom: 40,
+    paddingBottom: 24,
+  },
+  actionBar: {
+    backgroundColor: '#f5f5f5',
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#d0d0d0',
   },
   bestandCard: {
     backgroundColor: '#fff',
@@ -416,13 +442,14 @@ const styles = StyleSheet.create({
     color: '#2c3e50',
   },
   saveButton: {
-    backgroundColor: '#27ae60',
+    backgroundColor: '#1a1a2e',
     borderRadius: 16,
     padding: 22,
     alignItems: 'center',
-    marginTop: 8,
     minHeight: 64,
     justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#27ae60',
   },
   saveButtonText: {
     fontSize: 24,
